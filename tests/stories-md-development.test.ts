@@ -1,15 +1,16 @@
 /**
  * Bald-Eagle 2026-11-12 (D2, D5, D6, D7): Morning Download remembers what it
- * said; a story we ran comes back only for a new event (spin-offs too); the
- * outlet signal counts direct big-outlet feeds only; the side-by-side final
- * rank orders the cut, and a failed final rank keeps the margin order.
- * Offline: PGlite with the stories and intake schemas, stub Jev and writer.
+ * said; a story we ran comes back only for a new event (WC6); the outlet
+ * signal counts direct big-outlet feeds only and reaches the news chain's
+ * shortlist. Offline: PGlite with the stories and intake schemas, stub Jev and
+ * the news chain stubs (tests/stories-md-news-stubs.ts).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { bigOutletsOf, outletCount } from '@/lib/intake/outlets';
-import { buildMorningDownload, MAX_BUILDERS } from '@/lib/stories/build/morning-download';
+import type { BuildDeps } from '@/lib/stories/build/common';
+import { buildMorningDownload } from '@/lib/stories/build/morning-download';
 import { createStoriesJev } from '@/lib/stories/jev';
 import { schemaSql } from '@/lib/stories/local-db';
 import { readWhatWeSaid } from '@/lib/stories/md-development';
@@ -19,6 +20,7 @@ import { DEFAULT_SETTINGS } from '@/lib/stories/settings';
 import type { StoryCandidate } from '@/lib/stories/sources/reels';
 
 import { harnessDb, stubJev, stubPhotos, stubWriter } from './stories-harness';
+import { newsStubs, writerMaterial } from './stories-md-news-stubs';
 
 const NOW = new Date('2026-11-12T08:00:00Z');
 const DATE = '2026-11-12';
@@ -62,34 +64,19 @@ async function article(db: Db, i: number, n: number, at: Date, o: { sourceId?: s
   );
 }
 
-const materialOf = (params: Record<string, unknown>) => {
-  const m = /<material>\n([\s\S]*)\n<\/material>/.exec(String((params.messages as Array<{ content: string }>)[0]!.content));
-  return JSON.parse(m![1]!) as Array<Record<string, unknown>>;
-};
-
-async function mdDeps(db: Db, stories: StoryCandidate[], o: { jev?: (k: string, state: unknown) => number; order?: (items: Array<Record<string, unknown>>) => string[] | Error } = {}) {
+async function mdDeps(db: Db, stories: StoryCandidate[], o: { jev?: (k: string, state: unknown) => number } = {}) {
   const { set } = await requestSet(db, { series: 'morning_download', nyDate: DATE, trigger: 'click', style: DEFAULT_SETTINGS.series.morning_download.style });
   await claimNextRequested(db);
   const jev = stubJev((k, state) => (o.jev?.(k, state) ?? (k === 'supported' ? 0.9 : 0.1)));
-  const written: Array<Array<Record<string, unknown>>> = [];
-  const write = stubWriter({
-    submit_headlines: (params) => {
-      const items = materialOf(params);
-      written.push(items);
-      return {
-        stories: items.map((s) => ({ key: s.key, headline: `${String(s.headline)} today. It matters.`, source_verb: 'via', source_name: 'Outlet', subjects: [], visual: { kind: 'thematic', query: 'q' }, alt_visuals: [] })),
-        opener_visual: { kind: 'setting', query: 'office' },
-      };
-    },
-    submit_order: (params) => {
-      const items = materialOf(params);
-      const out = o.order ? o.order(items) : items.map((x) => String(x.id));
-      if (out instanceof Error) throw out;
-      return { order: out };
-    },
-  });
-  const deps = { db, sourceDb: db, jev: createStoriesJev(jev, db), write, photos: stubPhotos(), settings: DEFAULT_SETTINGS, now: NOW, setId: set.id, nyDate: DATE, pool: { stories, numbers: [], unbriefed: [], leads: [] }, intake: true };
-  return { deps, jev, write, written };
+  // Every pool story is top tier with a good photo, ranked in pool order.
+  const stubs = await newsStubs(stories.map((c) => ({ headline: c.headline, top: true, photo: 'good' as const })));
+  const deps: BuildDeps = {
+    db, sourceDb: db, jev: createStoriesJev(jev, db), write: stubWriter({}), photos: stubPhotos(), settings: DEFAULT_SETTINGS, now: NOW, setId: set.id, nyDate: DATE,
+    pool: { stories, leads: [] }, intake: true, news: stubs.news,
+  };
+  /** What the writer was given (its first call's material). */
+  const written = () => stubs.calls.writer.filter((p) => (p.tools as Array<{ name: string }>)[0]!.name === 'propose_angles').slice(0, 1).map(writerMaterial);
+  return { deps, jev, written };
 }
 
 const keysOf = (r: Awaited<ReturnType<typeof buildMorningDownload>>) => (r.ok ? (r.payload.stories as Array<{ key: string }>).map((s) => s.key) : []);
@@ -113,15 +100,16 @@ test('development: new articles and new_event ≥ bar let it back in; the writer
   await article(db, 0, 1, new Date(POSTED.getTime() + 86_400_000));
   const { deps, jev, written } = await mdDeps(db, [cand(0, 0.9), cand(1, 0.8), cand(2, 0.7)], { jev: (k) => (k === 'new_event' ? DEVELOPMENT_BAR + 0.2 : k === 'supported' ? 0.9 : 0.1) });
   const r = await buildMorningDownload(deps);
-  assert.ok(r.ok);
+  assert.ok(r.ok, r.ok ? '' : r.skip);
   assert.ok(keysOf(r).includes('x.test/0'));
   const call = devCalls(jev)[0]!;
   // No stored headline column (older row): the story frame's headline is what we said.
   assert.equal((call.state as { we_said: string }).we_said, 'Alpha did a thing. It mattered.');
   assert.match(JSON.stringify(call.state), /Alpha update 1/);
-  const alpha = written[0]!.find((s) => String(s.headline).startsWith('Alpha'))!;
-  assert.deepEqual((alpha.we_already_said as { headline: string }).headline, 'Alpha did a thing. It mattered.');
-  assert.match(String(alpha.text), /^New since we ran it:\nSome Outlet: Alpha update 1/);
+  // WC6: the writer (lib/news-writer) gets what we already said, and the new articles before the earlier coverage.
+  const alpha = written()[0]!.find((s) => s.source_headline.startsWith('Alpha'))!;
+  assert.equal(alpha.we_already_said, 'Alpha did a thing. It mattered.');
+  assert.match(alpha.text, /^New since we ran it:\nSome Outlet: Alpha update 1/);
   const story = (r.payload.stories as Array<{ key: string; storyId?: string; we_already_said?: unknown }>).find((s) => s.key === 'x.test/0')!;
   assert.equal(story.storyId, sid(0));
   assert.ok(story.we_already_said);
@@ -135,28 +123,6 @@ test('development: new articles but new_event < bar keeps it out', async () => {
   const r = await buildMorningDownload(deps);
   assert.deepEqual(keysOf(r), ['x.test/1', 'x.test/2']);
   assert.equal(devCalls(jev).length, 1);
-});
-
-test('development: a spin-off the same-event check ties to a story we ran goes through the same test', async () => {
-  for (const newEvent of [0.3, 0.9]) {
-    const { db } = await setup();
-    await ranStory0(db, 'Alpha did a thing. It mattered.');
-    // Story 3 is a separate intake story about the same event (shares the name "Alpha").
-    await article(db, 3, 1, new Date(POSTED.getTime() + 86_400_000));
-    const spin = cand(3, 0.85, null, { headline: 'Alpha faces a new question', body: 'Alpha follow-up.' });
-    const { deps, jev } = await mdDeps(db, [spin, cand(1, 0.8), cand(2, 0.7)], {
-      jev: (k, state) => (k === 'same_event' ? (JSON.stringify(state).includes('Alpha did a thing') ? 0.95 : 0.1) : k === 'new_event' ? newEvent : k === 'supported' ? 0.9 : 0.1),
-    });
-    const r = await buildMorningDownload(deps);
-    const calls = devCalls(jev);
-    assert.equal(calls.length, 1, 'the spin-off took the development test');
-    assert.equal((calls[0]!.state as { we_said: string }).we_said, 'Alpha did a thing. It mattered.');
-    if (newEvent < DEVELOPMENT_BAR) assert.ok(!keysOf(r).includes('x.test/3'));
-    else {
-      assert.ok(keysOf(r).includes('x.test/3'));
-      assert.ok((r.ok && (r.payload.stories as Array<{ key: string; we_already_said?: unknown }>).find((s) => s.key === 'x.test/3')!.we_already_said));
-    }
-  }
 });
 
 test('development: an older row with no headline anywhere stays blocked (as before)', async () => {
@@ -205,37 +171,18 @@ test('outlets: only direct big-outlet feeds count; one Google News search hit re
   assert.deepEqual(await outletCount(db, [sid(0), sid(1)], since), { count: 3, outlets: ['BBC News', 'CBS News', 'Reuters'] });
 });
 
-test('final rank: the cut follows the side-by-side order (builder cap kept), with cached instructions', async () => {
+test('outlets: the big-outlet signal reaches the news chain\'s shortlist with the story\'s own outlet', async () => {
   const { db } = await setup();
-  await article(db, 6, 1, new Date(NOW.getTime() - 3_600_000), { sourceId: 'feed:reuters-tech' });
-  // Margin order: 0, 4 (builder), 1, 5 (builder), 6 (builder), 2, 3. The model's order puts 3 first and 0 last.
-  const stories = [...[0.9, 0.8, 0.7, 0.6].map((m, i) => cand(i, m, 0.1)), ...[0.95, 0.9, 0.85].map((b, i) => cand(4 + i, 0.2, b))];
-  const want = [3, 6, 2, 5, 1, 4, 0];
-  const at = (x: Record<string, unknown>) => want.indexOf(NAMES.indexOf(String(x.headline).split(' ')[0]!));
-  const { deps, write } = await mdDeps(db, stories, { order: (items) => [...items].sort((a, b) => at(a) - at(b)).map((x) => String(x.id)) });
+  await article(db, 1, 1, new Date(NOW.getTime() - 3_600_000), { sourceId: 'feed:reuters-tech' });
+  const { deps } = await mdDeps(db, [cand(0, 0.9), cand(1, 0.8), cand(2, 0.7)]);
+  const seen = new Map<string, string[]>();
+  const ask = deps.news!.jevAsk;
+  deps.news = { ...deps.news!, jevAsk: async (req, o) => { const st = req.state as { headline: string; outlets: string[] }; seen.set(st.headline, st.outlets); return ask(req, o); } };
   const r = await buildMorningDownload(deps);
-  assert.ok(r.ok);
-  // 3, 6 (builder), 2, 5 (builder), 1; 4 is skipped: two builders already.
-  assert.deepEqual(keysOf(r), ['x.test/3', 'x.test/6', 'x.test/2', 'x.test/5', 'x.test/1']);
-  assert.ok(keysOf(r).filter((k) => ['x.test/4', 'x.test/5', 'x.test/6'].includes(k)).length <= MAX_BUILDERS);
-  const req = write.calls.find((c) => (c.tools as Array<{ name: string }>).some((t) => t.name === 'submit_order'))! as { system: Array<{ cache_control?: unknown }>; tools: Array<{ cache_control?: unknown }>; model: string };
-  assert.ok(req.system[0]!.cache_control && req.tools.at(-1)!.cache_control);
-  assert.equal(req.model, DEFAULT_SETTINGS.models.copy);
-  // The outlet signal reached the final rank.
-  const golf = materialOf(req as unknown as Record<string, unknown>).find((x) => String(x.headline).startsWith('Golf'))!;
-  assert.deepEqual(golf.big_outlets, ['Reuters']);
-  assert.equal(r.payload.final_rank, 'ok');
-});
-
-test('final rank: a failed call keeps the margin order and logs it', async () => {
-  const { db } = await setup();
-  const stories = [...[0.9, 0.8, 0.7, 0.6].map((m, i) => cand(i, m, 0.1)), ...[0.95, 0.9, 0.85].map((b, i) => cand(4 + i, 0.2, b))];
-  const { deps } = await mdDeps(db, stories, { order: () => new Error('overloaded') });
-  const r = await buildMorningDownload(deps);
-  assert.ok(r.ok);
-  assert.deepEqual(keysOf(r), ['x.test/0', 'x.test/4', 'x.test/1', 'x.test/5', 'x.test/2']);
-  assert.ok((r.payload.log as string[]).some((l) => /^final rank failed, margin order kept: .*overloaded/.test(l)));
-  assert.equal(r.payload.final_rank, 'margin order');
+  assert.ok(r.ok, r.ok ? '' : r.skip);
+  assert.deepEqual(seen.get('Bravo story number 1'), ['Outlet', 'Reuters']);
+  assert.deepEqual(seen.get('Alpha story number 0'), ['Outlet']);
+  assert.deepEqual((r.payload.stories as Array<{ key: string; big_outlets?: string[] }>).find((s) => s.key === 'x.test/1')!.big_outlets, ['Reuters']);
 });
 
 test('development (S5): a story we ran 10 days ago is found by its intake story; commentary stays out, a new event comes back', async () => {
@@ -258,8 +205,8 @@ test('development (S5): a story we ran 10 days ago is found by its intake story;
       assert.ok(r.candidates.some((c) => /no new event/.test(String(c.reason))));
     } else {
       assert.ok(keysOf(r).includes('x.test/0'));
-      const alpha = written[0]!.find((x) => String(x.headline).startsWith('Alpha'))!;
-      assert.equal((alpha.we_already_said as { headline: string }).headline, 'Alpha did a thing. It mattered.');
+      const alpha = written()[0]!.find((x) => x.source_headline.startsWith('Alpha'))!;
+      assert.equal(alpha.we_already_said, 'Alpha did a thing. It mattered.');
     }
   }
 });

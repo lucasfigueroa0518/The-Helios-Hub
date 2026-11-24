@@ -1,76 +1,72 @@
 /**
- * Helios Morning Download (plan §5.1; S-03, S-04, S-14, S-15, S-22, S-29).
+ * Helios Morning Download (plan §5.1; S-03, S-14, S-15, S-22, S-29), on the locked news chain
+ * (planning/MD-LFD Revisions/WIRING-CONTRACT.md, Phase 2 Owner D, 2026-11-24).
  *
- *   pool     the series' open ideas in stories.pool (lib/stories/pool.ts:
- *            reels top 10 by net + blockbusters, carousel qualified in the
- *            last 30 hours, refreshed nightly, Warning and Callout ideas left
- *            out); drop what another set of the same date holds (R13)
- *   develop  Bald-Eagle 2026-11-12 (D2, D5): a story we ran (its intake
- *            story at any age; a key-only story in the last SAID_DAYS days),
- *            or a spin-off the same-event check ties to one,
- *            is a candidate again only with articles first seen after it
- *            posted and md-development@1 `new_event` ≥ DEVELOPMENT_BAR; it
- *            then carries what we already said (lib/stories/md-development.ts).
- *            Replaces "any member shown in 3 days → the whole story dropped"
- *   merge    one Jev same-event check per cross-system pair sharing a name
- *   rank     one major-news@2 call per candidate → score (the source adds
- *            nothing); up to 5 clear the bar, else the top 2 (S-04).
- *            Intake mode (consumer switch 'intake'): no rank call. The
- *            intake's stored major-news and story-builder scores feed one
- *            lead queue by margin (leadOf), builders at most 2 of 5, at
- *            least 2 stories as before; a pool row without stored scores (a
- *            seed, a legacy row) still gets the one major-news call
- *   outlets  intake mode: the big direct-feed outlets carrying each story in
- *            the last 24 h, spin-offs folded in (lib/intake/outlets.ts), shown
- *            to the final rank (never added to the score)
- *   final    intake mode: md-final-rank@1 orders the top ≤10 side by side
- *            (D6); the lead queue takes 2–5 from that order. A failed call
- *            keeps the margin order and is logged
- *   write    md-headlines@5 (one Sonnet call), length and sentence checks; a
- *            returning story's material has we_already_said and its new
- *            articles' text first
- *   ground   md-grounding@1 per headline; a miss gets one rewrite, a second
- *            miss drops the story; fewer than 2 left skips the day
- *   photos   a carousel item keeps the photo its design stage already
- *            chose (S-29). Every other frame, including the opener, is found
- *            together by that stage (search, contact sheet, Jev photo-fit,
- *            pick). The opener never repeats a story frame's photo (S-14)
- *
- * Weights and the bar are first values (S-63), to calibrate on real runs.
+ *   pool       the series' open ideas in stories.pool (lib/stories/pool.ts); drop what another set of the same date
+ *              holds (R13). Intake mode: one intake story's reels and carousel sides are one story (code, no Jev)
+ *   develop    Bald-Eagle 2026-11-12 (D2, D5; WC6): a story we ran (its intake story at any age; a key-only story in
+ *              the last SAID_DAYS days) is a candidate again only with articles first seen after it posted and
+ *              md-development@1 `new_event` ≥ DEVELOPMENT_BAR; it then carries what we already said
+ *              (lib/stories/md-development.ts), which the writer reads as we_already_said
+ *   outlets    intake mode: the big direct-feed outlets carrying each story in the last 24 h (lib/intake/outlets.ts),
+ *              shown to the shortlist with the story's own outlets
+ *   shortlist  lib/news-ranker/shortlist: one Jev R8 call per story, best first; the top SHORTLIST_TOP go on
+ *   spin-offs  lib/news-ranker/repeats (SAME_EVENT): a top story that is a different article about a story we ran
+ *              goes through the development test above and stays out unless it is a real new development
+ *   rerank     lib/news-ranker/rerank (news-rerank@1, Opus): grades, duplicates, crowds, top tier, the editor's angle;
+ *              the window label is the New York date
+ *   cleanup    lib/news-ranker/posts: duplicates and crowds out (their URLs feed the photo finder); the first
+ *              CHECK_DEPTH are checked for media
+ *   media      per checked story in parallel: lib/news-photos findStoryPhoto (the carousel's own photo, S-29, joins
+ *              as an extra candidate; the used-photo ledger and size floor hold, WC12) and the video finder
+ *   verdict    WC3: golden video, good photo or good video → good; usable photo → usable; else none
+ *   choose     choosePosts: walk in rerank order, stop at the first story that is not top tier, post top-tier stories
+ *              with good media; under 2, usable (then media-less, WC5) checked stories fill in rank order. A golden
+ *              video never carries a story past the top-tier stop (WC1)
+ *   write      lib/news-writer writeStories('md'): blind angles → the editor's angles → write → Haiku fact check, one
+ *              rewrite for failed facts and over-cap copy (WC9). The frame reads "<headline>. <body>" so the
+ *              renderer bolds the headline; the source line is code's ("via <outlet>")
+ *   frames     the media ladder (golden video → photo → good video, mdMedia); a photo is fitted to the band
+ *              (fitToBand: decideBand + bandFrame) and stored, Photo.contained set (the renderer's CONTAINED_FADE).
+ *              The cover peeks at the story photos and rotates its headline (MC14, MC16)
  */
-import { MAJOR_NEWS, MD_GROUNDING, SAME_EVENT } from '@/lib/stories/questions';
-import { MD_HEADLINES, material, type MdHeadlinesOut } from '@/lib/stories/prompts';
+import crypto from 'node:crypto';
+
+import { checkWindow, choosePosts, cleanup, type MediaVerdict } from '@/lib/news-ranker/posts';
+import { rerank, RERANK_ID, RERANK_MODEL } from '@/lib/news-ranker/rerank';
+import { findSpinOffs } from '@/lib/news-ranker/repeats';
+import { shortlist, SHORTLIST_ID, SHORTLIST_TOP, type ChainStory } from '@/lib/news-ranker/shortlist';
+import { keepWithMedia, mdMedia, type MdMedia } from '@/lib/news-ranker/media-ladder';
+import { leadOf, MAJOR_NEWS_BAR } from '@/lib/news-ranker/scores';
+import { fitToBand, findStoryPhoto, type Candidate, type GradedPhoto, type PhotoResult } from '@/lib/news-photos';
+import { WRITER_ID, WRITER_MODEL, writeStories } from '@/lib/news-writer';
+import { nextOpenerPromise } from '@/lib/stories/render/copy';
 import type { FrameData, Photo, StoryData } from '@/lib/stories/render/types';
-import { sameDayKeys, type NewCandidate } from '@/lib/stories/repository';
+import { recordCost, sameDayKeys, type NewCandidate } from '@/lib/stories/repository';
 import { morningDownloadCarousel, recentPhotoUses } from '@/lib/stories/sources/carousel';
 import { dedupe, morningDownloadReels, type StoryCandidate } from '@/lib/stories/sources/reels';
-import { leadOf, MAJOR_NEWS_BAR, SAME_EVENT_BAR, majorNewsScore } from '@/lib/stories/scores';
-import { writeStructured } from '@/lib/stories/writer';
 import { OUTLET_WINDOW_HOURS, outletCounts, type OutletSignal } from '@/lib/intake/outlets';
 import { developmentTest, newArticlesSince, readWhatWeSaid, saidAbout, type Said } from '@/lib/stories/md-development';
-import { FINAL_RANK_MAX, finalRank } from '@/lib/stories/md-final-rank';
+import { MD_VIDEO_CONCURRENCY } from '@/lib/stories/video';
+import type { VideoFind } from '@/lib/video-finder/find';
+import { lastOpenerPromise, nextBackdrop, openerDate, shortIds, toFrames, type BuildDeps, type BuildResult, type NewsChainDeps } from './common';
 
-import { clearsFloor, SLIDE_MIN_SHORT_SIDE } from '@/lib/social/photos/size';
-import { findSetOrEach } from '@/lib/stories/photos';
-import { nextBackdrop, openerDate, sentenceCount, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
-
-// The major-news weights and bars live in lib/stories/scores.ts (shared with LFD and the intake); re-exported for old importers.
-export { MAJOR_NEWS_BAR, MAJOR_NEWS_WEIGHTS, SAME_EVENT_BAR, majorNewsScore } from '@/lib/stories/scores';
-export const GROUNDING_BAR = 0.6;
+// The weights, bars and namesIn live in lib/news-ranker/scores.ts (shared with LFD and the intake); re-exported for old importers.
+export { GROUNDING_BAR, MAJOR_NEWS_BAR, MAJOR_NEWS_WEIGHTS, namesIn, SAME_EVENT_BAR, majorNewsScore } from '@/lib/news-ranker/scores';
 export const MAX_STORIES = 5;
 export const MIN_STORIES = 2;
-/** Intake mode: builder stories hold at most this many of the set's places (Phase 1 plan, MD lead queue). */
+/** The old intake lead queue's builder limit; kept for scripts/intake/replay.ts and its tests, not on the build path. */
 export const MAX_BUILDERS = 2;
 const BODY_CHARS = 9000; // ~1,500 words (plan §5.1)
+/** Stories whose photo is looked for at once (each grades its candidates in parallel). */
+const PHOTO_CONCURRENCY = 4;
+/** The band photo's signed URL lives this long (the render reads it; the frame's own JPEG replaces it after). */
+const PHOTO_URL_SEC = 7 * 86_400;
 
 export type Sources = { reels: () => Promise<StoryCandidate[]>; carousel: () => Promise<StoryCandidate[]> };
 
-const NAME = /\b[A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*\b/g;
-const STOP = new Set(['The', 'A', 'An', 'This', 'That', 'AI', 'In', 'On', 'At', 'For', 'With', 'And', 'But', 'How', 'Why', 'What', 'New', 'Its', 'It']);
-/** Proper names in a headline, for the cheap pre-filter before the Jev merge check. */
-export function namesIn(text: string): Set<string> {
-  return new Set((text.match(NAME) ?? []).flatMap((n) => n.split(/\s+/)).filter((w) => w.length > 2 && !STOP.has(w)));
-}
+/* ── The pre-chain picks (S-04, Bald-Eagle D6). Not on the build path since the news chain (2026-11-24); kept for
+   scripts/intake/replay.ts and the lab tests that compare against them. ── */
 
 /** S-04: every story that clears the bar, up to 5; fewer than 2 clear → the top 2 anyway. */
 export function chooseStories<T extends { score: number }>(ranked: T[]): T[] {
@@ -86,7 +82,7 @@ export function leadFor(c: Leadable, now: Date) {
   return leadOf({ major: c.score, builder: c.intake?.builder ?? null, eventDate: c.intake?.eventDate ? new Date(c.intake.eventDate) : null }, now);
 }
 
-/** Intake mode: the stories that lead in a lane, best margin first (what the final rank compares). */
+/** Intake mode: the stories that lead in a lane, best margin first. */
 export function leadQueue<T extends Leadable>(ranked: T[], now: Date): Array<{ c: T; lead: NonNullable<ReturnType<typeof leadFor>> }> {
   return ranked
     .map((c) => ({ c, lead: leadFor(c, now) }))
@@ -94,13 +90,9 @@ export function leadQueue<T extends Leadable>(ranked: T[], now: Date): Array<{ c
     .sort((a, b) => b.lead.margin - a.lead.margin);
 }
 
-/**
- * Intake mode: one lead queue, up to 5, builders at most MAX_BUILDERS; fewer than 2 lead → the best major scores
- * fill to 2 (S-04's minimum, as chooseStories). The queue runs in `order` (story keys, the final rank's) when given,
- * any leading story it leaves out after the ordered ones by margin; without it, by margin (Bald-Eagle D6).
- */
+/** One lead queue, up to 5, builders at most MAX_BUILDERS; fewer than 2 lead → the best major scores fill to 2. */
 export function chooseLeads<T extends Leadable & { key?: string }>(ranked: T[], now: Date, order?: readonly string[]): T[] {
-  const at = (c: T) => {
+  const at = (c: { key?: string }) => {
     const i = order && c.key !== undefined ? order.indexOf(c.key) : -1;
     return i < 0 ? Infinity : i;
   };
@@ -120,6 +112,13 @@ export function chooseLeads<T extends Leadable & { key?: string }>(ranked: T[], 
   return [...picked, ...rest].slice(0, MIN_STORIES);
 }
 
+/* ── The build ── */
+
+async function eachLimited<T>(items: T[], n: number, fn: (t: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) await fn(items[next++]!); }));
+}
+
 /** A story we ran that is back for a new event (Bald-Eagle D2): what we said, the new articles' text, the Jev reading. */
 type Returning = { said: Said; text: string; newEvent: number };
 
@@ -128,7 +127,7 @@ function storyIdsOf(c: StoryCandidate, r: Returning | undefined): string[] {
   return [...new Set([c.intake?.storyId, r?.said.storyId].filter((x): x is string => Boolean(x)))];
 }
 
-/** The source text the writer and the grounding check read: a returning story's new articles first, then its own text. */
+/** The source text the chain reads: a returning story's new articles first, then its own text. */
 function textOf(c: StoryCandidate, returning: ReadonlyMap<string, Returning>): string {
   const r = returning.get(c.key);
   return r ? `New since we ran it:\n${r.text}\n\nEarlier coverage:\n${c.body}` : c.body;
@@ -146,7 +145,7 @@ function mergeSameIntakeStory(pool: StoryCandidate[]): StoryCandidate[] {
       out.push(c);
       continue;
     }
-    // As the same-event merge: the carousel side comes first (photo, outlets); the reels side adds its outlet and blockbuster.
+    // The carousel side comes first (photo, outlets); the reels side adds its outlet and blockbuster.
     keep.alsoFrom = [...(keep.alsoFrom ?? []), c.sourceName];
     keep.blockbuster = Math.max(keep.blockbuster ?? 0, c.blockbuster ?? 0);
     if (!keep.photo && c.photo) keep.photo = c.photo;
@@ -154,7 +153,21 @@ function mergeSameIntakeStory(pool: StoryCandidate[]): StoryCandidate[] {
   return out;
 }
 
+/** WC3: the media verdict the walk reads. A golden or good video counts as good (it never reorders); a usable photo is usable. */
+export function mdVerdict(m: { video: VideoFind['tier'] | 'none'; photo: GradedPhoto['tier'] | 'none' }): MediaVerdict {
+  if (m.video === 'golden' || m.photo === 'good' || m.video === 'good') return 'good';
+  if (m.photo === 'usable') return 'usable';
+  return 'none';
+}
+
+/** The frame's line: the writer's headline (a final period added if missing) then its body, so splitLead bolds the headline. */
+export function frameCopy(headline: string, body: string): string {
+  const h = headline.trim();
+  return `${/[.!?]["”’)]?$/.test(h) ? h : `${h}.`} ${body.trim()}`.trim();
+}
+
 export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): Promise<BuildResult> {
+  const news: NewsChainDeps | undefined = deps.news;
   const pooled = deps.pool;
   const src: Sources =
     sources ??
@@ -163,6 +176,8 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
       : { reels: () => morningDownloadReels(deps.sourceDb, deps.nyDate), carousel: () => morningDownloadCarousel(deps.sourceDb, deps.now) });
   const log: string[] = [];
   const candidates: NewCandidate[] = [];
+  const cost = (vendor: 'anthropic' | 'jev', component: string, usd: number, model?: string) =>
+    usd > 0 ? recordCost(deps.db, { setId: deps.setId, vendor, component, usd, ...(model ? { model } : {}) }) : Promise.resolve();
   // R13: another live set of this date holds it → out, no test. Earlier days go through the development test below.
   const sameDay = await sameDayKeys(deps.db, 'morning_download', deps.nyDate, deps.setId);
   const [reels, carousel] = await Promise.all([src.reels().catch(() => []), src.carousel().catch(() => [])]);
@@ -177,243 +192,253 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     throw new Error(`Morning Download: what we said is unreadable (${err instanceof Error ? err.message : String(err)}); not building a set that could repeat stories`);
   });
 
-  // Bald-Eagle D2/D5: a story we ran comes back only for a new event; it then carries what we already said.
+  // Bald-Eagle D2/D5 (WC6): a story we ran comes back only for a new event; it then carries what we already said.
   const returning = new Map<string, Returning>();
-  const block = (c: StoryCandidate, reason: string) => {
-    candidates.push({ origin: c.origin, ref: c.ref, payload: { headline: c.headline, url: c.url, source: c.sourceName, native: c.nativeScore }, jev: null, score: null, chosen: false, reason });
-    log.push(`develop: "${c.headline.slice(0, 60)}" out: ${reason}`);
-  };
   const readArticles = (ids: readonly string[], since: Date) => newArticlesSince(deps.sourceDb, ids, since);
-  const test = async (c: StoryCandidate, s: Said, how: 'ran' | 'spin-off') => {
-    const v = await developmentTest({ jev: deps.jev, setId: deps.setId, said: s, storyIds: c.intake?.storyId ? [c.intake.storyId] : [], readArticles });
-    if (!v.back) return (block(c, how === 'ran' ? v.reason : `spin-off of a story we ran; ${v.reason.replace(/^ran before; /, '')}`), false);
-    returning.set(c.key, { said: s, text: v.text, newEvent: v.newEvent });
-    log.push(`develop: "${c.headline.slice(0, 60)}" back (${how}, new_event ${v.newEvent.toFixed(2)}, ${v.articles.length} new article(s))`);
-    return true;
-  };
   const unblocked: StoryCandidate[] = [];
   for (const c of pool) {
     const s = saidAbout(c, said);
-    if (!s || (await test(c, s, 'ran'))) unblocked.push(c);
+    if (!s) { unblocked.push(c); continue; }
+    const v = await developmentTest({ jev: deps.jev, setId: deps.setId, said: s, storyIds: c.intake?.storyId ? [c.intake.storyId] : [], readArticles });
+    if (!v.back) {
+      candidates.push({ origin: c.origin, ref: c.ref, payload: { headline: c.headline, url: c.url, source: c.sourceName, native: c.nativeScore }, jev: null, score: null, chosen: false, reason: v.reason });
+      log.push(`develop: "${c.headline.slice(0, 60)}" out: ${v.reason}`);
+      continue;
+    }
+    returning.set(c.key, { said: s, text: v.text, newEvent: v.newEvent });
+    log.push(`develop: "${c.headline.slice(0, 60)}" back (new_event ${v.newEvent.toFixed(2)}, ${v.articles.length} new article(s))`);
+    unblocked.push(c);
   }
   pool = unblocked;
-  // Spin-offs: an intake story the same-event check ties to a story we ran (one Jev call per pair sharing a name).
-  const latestSaid = [...new Map([...said].sort((a, b) => a.postedAt.getTime() - b.postedAt.getTime()).map((s) => [s.storyId ?? s.key, s])).values()].filter((s) => s.headline);
-  const spun = new Set<string>();
-  for (const c of pool) {
-    if (returning.has(c.key) || saidAbout(c, said)) continue;
-    for (const s of latestSaid) {
-      if (![...namesIn(s.headline!)].some((n) => namesIn(c.headline).has(n))) continue;
-      const res = await deps.jev.ask({ component: 'md-spin-off', set: SAME_EVENT, setId: deps.setId, state: { story_a: { headline: s.headline!, untrusted_content: s.headline! }, story_b: { headline: c.headline, untrusted_content: c.body.slice(0, 1200) } } });
-      if (res.answers.same_event.noul < SAME_EVENT_BAR) continue;
-      if (!(await test(c, s, 'spin-off'))) spun.add(c.key);
-      break;
-    }
-  }
-  pool = pool.filter((c) => !spun.has(c.key));
-
-  // One event is one story, from either system. Jev only sees pairs that share a name.
-  // Each kept story collects the intake stories folded into it (its outlet signal reads them all).
-  const folded = new Map<string, Set<string>>(pool.map((c) => [c.key, new Set(storyIdsOf(c, returning.get(c.key)))]));
-  const dropped = new Set<string>();
-  for (let i = 0; i < pool.length; i++) {
-    if (dropped.has(pool[i]!.key)) continue;
-    for (let j = i + 1; j < pool.length; j++) {
-      const other = pool[j]!;
-      if (dropped.has(other.key)) continue;
-      const shared = [...namesIn(pool[i]!.headline)].some((n) => namesIn(other.headline).has(n));
-      if (!shared) continue;
-      const res = await deps.jev.ask({ component: 'md-merge', set: SAME_EVENT, setId: deps.setId, state: { story_a: { headline: pool[i]!.headline, untrusted_content: pool[i]!.body.slice(0, 1200) }, story_b: { headline: other.headline, untrusted_content: other.body.slice(0, 1200) } } });
-      if (res.answers.same_event.noul < SAME_EVENT_BAR) continue;
-      const keepOther = !pool[i]!.photo && Boolean(other.photo);
-      const drop = keepOther ? pool[i]! : other;
-      const keep = keepOther ? other : pool[i]!;
-      dropped.add(drop.key);
-      keep.alsoFrom = [...(keep.alsoFrom ?? []), drop.sourceName];
-      keep.blockbuster = Math.max(keep.blockbuster ?? 0, drop.blockbuster ?? 0);
-      for (const id of folded.get(drop.key) ?? []) folded.get(keep.key)!.add(id);
-      // A development of a story we ran stays one: the merged story keeps what we already said.
-      if (!returning.has(keep.key) && returning.has(drop.key)) returning.set(keep.key, returning.get(drop.key)!);
-    }
-  }
-  pool = pool.filter((c) => !dropped.has(c.key));
   if (pool.length < MIN_STORIES) return { ok: false, skip: `only ${pool.length} new stories in the pool`, candidates };
 
-  // Outlet signal (Bald-Eagle D7): big direct-feed outlets in the last 24 h, spin-offs folded in. Shown to the final rank only.
+  // Outlet signal (Bald-Eagle D7): big direct-feed outlets in the last 24 h, shown to the shortlist with the story's own.
   let outlets = new Map<string, OutletSignal>();
   if (deps.intake) {
-    const groups = new Map(pool.map((c) => [c.key, [...(folded.get(c.key) ?? [])]]));
+    const groups = new Map(pool.map((c) => [c.key, storyIdsOf(c, returning.get(c.key))]));
     outlets = await outletCounts(deps.sourceDb, groups, new Date(deps.now.getTime() - OUTLET_WINDOW_HOURS * 3_600_000)).catch((err) => {
       log.push(`outlets: unreadable (${err instanceof Error ? err.message : String(err)})`);
       return new Map<string, OutletSignal>();
     });
   }
 
-  // Rank with one major-news node (S-03). Intake mode reads the scores the intake stored instead.
-  const ranked: Array<StoryCandidate & { score: number; answers: Record<string, number> }> = [];
-  for (const c of pool) {
-    const stored = deps.intake && c.intake && c.intake.major !== null ? c.intake : null;
-    const big = outlets.get(c.key);
-    const extra = { ...(big ? { big_outlets: big.count } : {}), ...(returning.has(c.key) ? { new_event: returning.get(c.key)!.newEvent } : {}) };
-    if (stored) {
-      ranked.push({ ...c, score: stored.major!, answers: { major_news: stored.major!, ...(stored.builder !== null ? { story_builder: stored.builder } : {}), ...extra } });
+  if (!news) return { ok: false, skip: 'the news chain is not wired (no news deps)', candidates };
+
+  // The chain sees short ids ("s1", …), never the story keys: a model does not echo a 300-character Google News slug intact.
+  const { items, byId } = shortIds(pool, 's');
+  const chain: ChainStory[] = items.map(({ id, item: c }) => ({
+    id,
+    headline: c.headline,
+    text: textOf(c, returning).slice(0, BODY_CHARS),
+    outlets: [...new Set([c.sourceName, ...(c.alsoFrom ?? []), ...(outlets.get(c.key)?.outlets ?? [])])],
+    published: c.publishedAt,
+    url: c.url,
+  }));
+
+  // Shortlist (Jev R8) → rerank (Opus) over the top SHORTLIST_TOP.
+  const sl = await shortlist(chain, { jev: news.jevAsk, component: 'md-shortlist' });
+  await cost('jev', SHORTLIST_ID, sl.costUsd);
+  log.push(`shortlist: ${sl.ranked.length} of ${chain.length} scored; top ${Math.min(SHORTLIST_TOP, sl.ranked.length)} to the rerank`);
+  const shortScore = new Map(sl.ranked.map((s) => [s.id, s]));
+
+  // Spin-offs: a different article about a story we ran. SAME_EVENT on the shortlist's top (pairs sharing a name) against
+  // the latest of each story we said with a headline; a hit goes through the development test and stays out unless it
+  // is a real new development.
+  const latestSaid = [...new Map([...said].sort((a, b) => a.postedAt.getTime() - b.postedAt.getTime()).map((s) => [s.storyId ?? s.key, s])).values()].filter((s) => s.headline);
+  const unsaid = sl.ranked.slice(0, SHORTLIST_TOP).filter((s) => { const c = byId.get(s.id)!; return !returning.has(c.key) && !saidAbout(c, said); });
+  const spin = await findSpinOffs(unsaid.map((s) => ({ id: s.id, headline: s.headline, text: s.text })), latestSaid, { jev: news.jevAsk, component: 'md-spin-off' });
+  await cost('jev', 'md-spin-off', spin.costUsd);
+  const spunOut = new Set<string>();
+  for (const [id, s] of spin.hits) {
+    const c = byId.get(id)!;
+    const v = await developmentTest({ jev: deps.jev, setId: deps.setId, said: s, storyIds: c.intake?.storyId ? [c.intake.storyId] : [], readArticles });
+    if (!v.back) {
+      const reason = `spin-off of a story we ran; ${v.reason.replace(/^ran before; /, '')}`;
+      spunOut.add(id);
+      candidates.push({ origin: c.origin, ref: c.ref, payload: { headline: c.headline, url: c.url, source: c.sourceName, native: c.nativeScore }, jev: null, score: null, chosen: false, reason });
+      log.push(`develop: "${c.headline.slice(0, 60)}" out: ${reason}`);
       continue;
     }
-    const res = await deps.jev.ask({
-      component: 'md-rank',
-      set: MAJOR_NEWS,
-      setId: deps.setId,
-      state: { headline: c.headline, outlets: [c.sourceName, ...(c.alsoFrom ?? [])], published: c.publishedAt, story: { untrusted_content: textOf(c, returning).slice(0, BODY_CHARS) } },
-    });
-    const answers = Object.fromEntries(Object.entries(res.answers).map(([k, v]) => [k, (v as { noul: number }).noul]));
-    ranked.push({ ...c, score: majorNewsScore(res.answers as Record<string, { noul: number }>), answers: { ...answers, ...extra } });
+    returning.set(c.key, { said: s, text: v.text, newEvent: v.newEvent });
+    log.push(`develop: "${c.headline.slice(0, 60)}" back (spin-off, new_event ${v.newEvent.toFixed(2)}, ${v.articles.length} new article(s))`);
   }
+  // A spin-off that is back reads its new articles first, as any returning story does.
+  const top = sl.ranked.slice(0, SHORTLIST_TOP).filter((s) => !spunOut.has(s.id))
+    .map((s) => (spin.hits.has(s.id) ? { ...s, text: textOf(byId.get(s.id)!, returning).slice(0, BODY_CHARS) } : s));
+  const rr = await rerank(top, { create: news.create, windowLabel: deps.nyDate });
+  await cost('anthropic', RERANK_ID, rr.costUsd, RERANK_MODEL);
+  const graded = new Map(rr.graded.map((g) => [g.id, g]));
+  const { kept, merged } = cleanup(rr.graded);
+  const window = checkWindow(kept);
+  log.push(`rerank: ${rr.graded.length} graded, ${kept.length} after cleanup; checked ${window.map((g) => `${g.id}${g.grade.top_tier ? '*' : ''}`).join(' ')}`);
 
-  // Final rank (Bald-Eagle D6): the top ≤10 of the lead queue side by side; the cut is taken from its order.
-  // It only reorders stories already in the lead queue (a story under both bars never reaches it); accepted in review.
-  let order: string[] | undefined;
-  if (deps.intake) {
-    const top = leadQueue(ranked, deps.now).slice(0, FINAL_RANK_MAX);
-    if (top.length >= 2) {
-      try {
-        order = await finalRank(
-          { write: deps.write, db: deps.db, setId: deps.setId, model: deps.settings.models.copy },
-          top.map(({ c, lead }) => {
-            const r = returning.get(c.key);
-            return {
-              key: c.key, headline: c.headline, excerpt: textOf(c, returning), major: c.intake?.major ?? c.score, builder: c.intake?.builder ?? null, lane: lead.lane,
-              bigOutlets: outlets.get(c.key)?.outlets ?? [], weAlreadySaid: r ? { headline: r.said.headline!, posted_at: r.said.postedAt.toISOString() } : null,
-            };
-          }),
-        );
-        log.push(`final rank: ${order.map((k) => top.findIndex((x) => x.c.key === k) + 1).join(' ')} (margin positions)`);
-      } catch (err) {
-        log.push(`final rank failed, margin order kept: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-  }
-  const chosen = deps.intake ? chooseLeads(ranked, deps.now, order) : chooseStories(ranked);
-  if (deps.intake) log.push(`lead queue: ${chosen.map((c) => leadFor(c, deps.now)?.lane ?? 'fill').join(', ')}`);
-  const chosenKeys = new Set(chosen.map((c) => c.key));
-  for (const c of ranked) candidates.push({ origin: c.origin, ref: c.ref, payload: { headline: c.headline, url: c.url, source: c.sourceName, native: c.nativeScore }, jev: c.answers, score: c.score, chosen: chosenKeys.has(c.key), reason: chosenKeys.has(c.key) ? null : 'below the cut' });
-
-  // Write, check lengths, ground.
-  const byKey = new Map(chosen.map((c) => [c.key, c]));
-  // The writer sees short ids, never the story keys (shortIds); its stories come back under their keys.
-  const writeFor = async (list: typeof chosen, note?: string) => {
-    const { items, byId } = shortIds(list, 's');
-    const out = (await writeStructured<MdHeadlinesOut>({
-      create: deps.write, db: deps.db, setId: deps.setId, component: MD_HEADLINES.id, model: deps.settings.models.copy, system: MD_HEADLINES.system, tool: MD_HEADLINES.tool,
-      user: `${note ? `${note}\n\n` : ''}${material(items.map(({ id, item: c }) => {
-        const r = returning.get(c.key);
-        return { key: id, headline: c.headline, outlet: c.sourceName, also_reported_by: c.alsoFrom ?? [], published: c.publishedAt, url: c.url, ...(r ? { we_already_said: { headline: r.said.headline, posted_at: r.said.postedAt.toISOString() } } : {}), text: textOf(c, returning).slice(0, BODY_CHARS) };
-      }))}`,
-    })).value;
-    return { ...out, stories: out.stories.flatMap((s) => (byId.has(s.key) ? [{ ...s, key: byId.get(s.key)!.key }] : [])) };
-  };
-  const first = await writeFor(chosen);
-  // md-headlines@4/@5: a bold hook sentence (target 60, code allows 70) then one proof sentence, 200 in all.
-  const ok = (h: string) => h.length <= 200 && sentenceCount(h) === 2 && (h.split(/(?<=[.!?])\s+/)[0] ?? '').length <= 70;
-  const oneEach = (list: typeof first.stories) => {
-    const seen = new Set<string>();
-    return list.filter((s) => byKey.has(s.key) && !seen.has(s.key) && (seen.add(s.key), true));
-  };
-  let written = oneEach(first.stories);
-  const grounded: typeof written = [];
-  const ground = async (s: (typeof written)[number]) => {
-    const c = byKey.get(s.key)!;
-    const res = await deps.jev.ask({ component: 'md-grounding', set: MD_GROUNDING, setId: deps.setId, state: { headline: s.headline, source: { untrusted_content: textOf(c, returning).slice(0, BODY_CHARS) } } });
-    return ok(s.headline) && res.answers.supported.noul >= GROUNDING_BAR;
-  };
-  // A story the writer left out gets the same one rewrite as a grounding miss.
-  const misses: typeof chosen = chosen.filter((c) => !written.some((s) => s.key === c.key));
-  if (misses.length) log.push(`writer: ${misses.length} story(ies) left out`);
-  for (const s of written) (await ground(s)) ? grounded.push(s) : misses.push(byKey.get(s.key)!);
-  if (misses.length) {
-    log.push(`grounding: ${misses.length} rewrite(s)`);
-    const again = await writeFor(misses, 'Each of these stories had no headline last time, or its headline made a claim the source does not support, or was not exactly two sentences (a hook of at most 60 characters, then the proof) within 200 characters. Write one headline for each, with every claim stated in the source or following directly from it.');
-    for (const s of oneEach(again.stories).filter((x) => misses.some((m) => m.key === x.key))) if (await ground(s)) grounded.push(s);
-  }
-  written = chosen.map((c) => grounded.find((g) => g.key === c.key)).filter((x): x is (typeof written)[number] => Boolean(x));
-  if (written.length < MIN_STORIES) return { ok: false, skip: `only ${written.length} headline(s) passed grounding`, candidates };
-
-  // A carousel item keeps the photo its own design stage already chose (S-29), when it
-  // clears a slide's size floor (size.ts, 2026-10-14). Every other frame, including the
-  // opener, is found together by that same stage; the opener goes first, so it is the
-  // set's cover and gets the cover's rules (no logo, 1080, promotion).
-  // CI-32: the ledger holds photos published in the last 20 days; Bald-Eagle D3 also holds
-  // photos chosen by items waiting to post, labelled by who holds them (a carousel post by its
-  // story id, which is this candidate's ref). So a kept photo stays while only its own story's
-  // carousel holds it, and is dropped once a published post or any other waiting item does.
+  // Media for the checked stories, photos and videos side by side.
   const uses = await recentPhotoUses(deps.sourceDb, deps.now).catch(() => new Map<string, Set<string>>());
-  const held = new Set(uses.keys());
-  const keptUrls = new Set<string>();
-  const kept: Array<Photo | null> = written.map((s) => {
-    const c = byKey.get(s.key)!;
-    const stored = c.photo;
-    if (!stored) return null;
-    const otherStory = [...(uses.get(stored.url) ?? [])].some((id) => id !== c.ref);
-    if (otherStory || keptUrls.has(stored.url)) return null;
-    keptUrls.add(stored.url);
-    held.add(stored.url);
-    return { src: stored.url, credit: stored.credit, kind: 'scene' };
-  });
-  const keptNote: Array<string | null> = written.map(() => null);
-  for (const [i, k] of kept.entries()) {
-    if (!k || !deps.photos.size) continue;
-    const floor = await clearsFloor({ url: k.src, width: null, height: null }, SLIDE_MIN_SHORT_SIDE, deps.photos.size);
-    if (floor.ok) continue;
-    keptNote[i] = `the carousel post's photo is too small (${floor.size}; needs ${SLIDE_MIN_SHORT_SIDE}) → searched instead`;
-    kept[i] = null;
+  const photoOf = new Map<string, PhotoResult>();
+  const videos = new Map<string, VideoFind>();
+  await Promise.all([
+    eachLimited(window, PHOTO_CONCURRENCY, async (g) => {
+      const c = byId.get(g.id)!;
+      // CI-32 (WC12) + Bald-Eagle D3: a photo another post published or holds is out; the carousel's own photo stays for its own story.
+      const usedReason = (url: string) => {
+        const by = [...(uses.get(url) ?? [])].filter((id) => id !== c.ref);
+        return by.length ? `held by ${by[0]}` : null;
+      };
+      const extra: Candidate[] = c.photo ? [{ src: c.photo.url, source: 'extra', credit: c.photo.credit }] : [];
+      const r = await findStoryPhoto(
+        { id: g.id, headline: g.headline, text: g.text, url: g.url, duplicateUrls: (merged.get(g.id) ?? []).map((d) => d.url) },
+        { ...news.photo, create: news.create, usedReason },
+        { extra },
+      ).catch((err): PhotoResult => ({ id: g.id, tier: 'none', pick: null, brief: null, costUsd: 0, log: [`photo finder failed: ${err instanceof Error ? err.message : String(err)}`] }));
+      photoOf.set(g.id, r);
+    }),
+    deps.video
+      ? eachLimited(window, MD_VIDEO_CONCURRENCY, async (g) => {
+        const c = byId.get(g.id)!;
+        const f = await deps.video!.find({ id: c.key, headline: c.headline, url: c.url, body: textOf(c, returning).slice(0, 3000), eventDate: c.intake?.eventDate ?? c.publishedAt?.slice(0, 10) ?? null })
+          .catch((err) => (log.push(`video: ${c.headline.slice(0, 50)} failed: ${err instanceof Error ? err.message : String(err)}`), null));
+        if (f) videos.set(g.id, f);
+      })
+      : Promise.resolve(),
+  ]);
+  await cost('jev', 'news-photos', [...photoOf.values()].reduce((s, r) => s + r.costUsd, 0));
+  // One photo shows once a day: a lower-ranked story that picked the same picture loses it.
+  const picked = new Set<string>();
+  for (const g of window) {
+    const r = photoOf.get(g.id);
+    if (!r?.pick) continue;
+    if (picked.has(r.pick.src)) { r.log.push(`pick dropped: a higher-ranked story shows ${r.pick.src}`); photoOf.set(g.id, { ...r, tier: 'none', pick: null }); continue; }
+    picked.add(r.pick.src);
   }
-  const openerSource = byKey.get(written[0]!.key)!;
-  const requests = [
-    { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: held, cover: true },
-    ...written.flatMap((s, i) =>
-      kept[i]
-        ? []
-        : [{ kind: s.visual.kind, query: s.visual.query, subjects: s.subjects, storyDate: byKey.get(s.key)!.publishedAt?.slice(0, 10) ?? null, sourceUrls: [byKey.get(s.key)!.url], exclude: held, alts: s.alt_visuals ?? [], copy: s.headline }],
-    ),
-  ];
-  let designed: Array<Photo | null> = [];
-  const trace: string[][] = [];
-  try {
-    designed = await findSetOrEach(deps.photos, requests, trace);
-  } catch (err) {
-    log.push(`photo set: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  const openerPhoto = designed[0] ?? null;
-  let n = 1;
-  const storyFrames: StoryData[] = written.map((s, i) => {
-    const photo = kept[i] ?? designed[n++] ?? null;
-    return { role: 'story', headline: s.headline.trim(), source: { verb: s.source_verb, name: s.source_name }, ...(photo ? { photo } : {}) };
-  });
-  // Why each frame has the photo it has (or none): the design stage's steps, by frame.
-  let t = 1;
-  const photoLog = [
-    { frame: 'opener', ...(openerPhoto ? { picked: openerPhoto.src } : {}), steps: trace[0] ?? [] },
-    ...written.map((s, i) => (kept[i] ? { frame: `story ${i + 1}`, picked: kept[i]!.src, steps: ["kept the carousel post's photo (S-29)"] } : { frame: `story ${i + 1}`, ...(storyFrames[i]!.photo ? { picked: storyFrames[i]!.photo!.src } : {}), steps: [...(keptNote[i] ? [keptNote[i]!] : []), ...(trace[t++] ?? [])] })),
-  ];
+  const verdict = (id: string) => mdVerdict({ video: videos.get(id)?.tier ?? 'none', photo: photoOf.get(id)?.pick?.tier ?? 'none' });
+  const postIds = choosePosts(kept, verdict, { min: MIN_STORIES, max: MAX_STORIES });
+  log.push(`media: ${window.map((g) => `${g.id} ${verdict(g.id)}`).join(', ')}; posts ${postIds.join(' ') || 'none'}`);
+  if (deps.video) log.push(`video: checked ${window.length}, golden ${[...videos.values()].filter((v) => v.tier === 'golden').length}, good ${[...videos.values()].filter((v) => v.tier === 'good').length}`);
 
-  const data: FrameData[] = [{ role: 'opener', date: openerDate(deps.nyDate), storyCount: storyFrames.length, ...(openerPhoto ? { photo: openerPhoto } : {}) }, ...storyFrames, { role: 'closer' }];
+  // Candidate rows for every story the chain saw; `posted` is filled once the frames are final.
+  const posted = new Set<string>();
+  const candidateRows = (): NewCandidate[] => [
+    ...candidates,
+    ...items.filter(({ id }) => !spunOut.has(id)).map(({ id, item: c }) => {
+      const s = shortScore.get(id);
+      const g = graded.get(id);
+      const reason = posted.has(id) ? null
+        : !s ? 'shortlist call failed'
+          : !g ? 'below the shortlist'
+            : g.grade.duplicate_of ? `duplicate of ${byId.get(g.grade.duplicate_of)?.key ?? g.grade.duplicate_of}`
+              : !kept.includes(g) ? 'crowded out by a higher-ranked story'
+                : !window.includes(g) ? 'below the check window'
+                  : postIds.includes(id) ? 'dropped after the pick (writer or media)'
+                    : `not posted (${g.grade.top_tier ? 'top tier' : 'not top tier'}, media ${verdict(id)})`;
+      return {
+        origin: c.origin, ref: c.ref, payload: { headline: c.headline, url: c.url, source: c.sourceName, native: c.nativeScore },
+        jev: s ? { shortlist_cool: s.cool, shortlist_value: s.value, shortlist_final: s.final, ...(g ? { cool: g.grade.cool, value: g.grade.value, top_tier: g.grade.top_tier ? 1 : 0 } : {}) } : null,
+        score: g ? g.grade.cool + g.grade.value : (s?.final ?? null), chosen: posted.has(id), reason,
+      };
+    }),
+  ];
+  if (postIds.length < MIN_STORIES) return { ok: false, skip: `only ${postIds.length} story(ies) to post after the rerank`, candidates: candidateRows() };
+
+  // Write (W12 writer, editor angles = the rerank's).
+  const posts = postIds.map((id) => graded.get(id)!);
+  const wr = await writeStories(
+    'md',
+    posts.map((g) => ({ key: g.id, headline: g.headline, text: g.text, weAlreadySaid: returning.get(byId.get(g.id)!.key)?.said.headline ?? null })),
+    Object.fromEntries(posts.map((g) => [g.id, g.grade.angle])),
+    { create: news.create },
+  );
+  await cost('anthropic', WRITER_ID, wr.costUsd, WRITER_MODEL);
+  log.push(...wr.log.map((l) => `writer: ${l}`));
+  let written = wr.written;
+  if (written.length < MIN_STORIES) return { ok: false, skip: `only ${written.length} story(ies) passed the fact check`, candidates: candidateRows() };
+
+  // The band photo (D24 revised, WC11): fitted, stored, `contained` for the renderer's CONTAINED_FADE.
+  const bandPhoto = async (id: string, pick: GradedPhoto, steps: string[]): Promise<Photo | null> => {
+    try {
+      const original = await news.photo.fetchImage(pick.src).catch(() => null);
+      const fit = await fitToBand(original ?? pick.jpeg, { jev: news.photo.jev, upscaler: news.upscaler, tmpDir: news.tmpDir });
+      await cost('jev', 'news-photos-band', fit.costUsd);
+      const slug = crypto.createHash('sha1').update(`${byId.get(id)!.key} ${pick.src}`).digest('hex').slice(0, 12);
+      const path = `sets/${deps.setId}/photos/${slug}.jpg`;
+      await news.storage.upload(path, fit.jpeg, 'image/jpeg');
+      const src = await news.storage.sign(path, PHOTO_URL_SEC);
+      steps.push(`band: ${fit.contained ? 'contained' : 'cover'}${fit.upscaled ? ', upscaled' : ''}${fit.note ? ` (${fit.note})` : ''}`);
+      return { src, sourceUrl: pick.src, credit: pick.credit, kind: 'scene', ...(fit.contained ? { contained: true } : {}) };
+    } catch (err) {
+      steps.push(`band fit failed (${err instanceof Error ? err.message : String(err)}); no photo`);
+      return null;
+    }
+  };
+
+  // The media ladder (D16): golden video → photo → good video → the story drops (unless the day would fall under
+  // MIN_STORIES; then the best-ranked media-less stories stay as type frames, WC5).
+  const storyFrames: StoryData[] = [];
+  const photoLog: Array<{ frame: string; picked?: string; steps: string[] }> = [];
+  const media: Array<MdMedia | null> = [];
+  for (const [i, w] of written.entries()) {
+    const c = byId.get(w.key)!;
+    const found = videos.get(w.key);
+    const pick = photoOf.get(w.key)?.pick ?? null;
+    const steps = [...(photoOf.get(w.key)?.log ?? [])];
+    let frame: StoryData = { role: 'story', headline: frameCopy(w.headline, w.body), source: { verb: 'via', name: c.sourceName } };
+    let shown: string | undefined;
+    let m = mdMedia({ video: found?.tier ?? 'none', photo: Boolean(pick) });
+    if (m === 'video') {
+      const stored = found?.clip && deps.video
+        ? await deps.video.store(found.clip, found.tier === 'golden' ? 'golden' : 'good', c.key).catch((err) => (steps.push(`video: could not fit or store the clip: ${err instanceof Error ? err.message : String(err)}`), null))
+        : null;
+      if (stored && found?.clip) {
+        frame = { ...frame, photo: stored.poster, video: stored.video };
+        shown = found.clip.sourceUrl;
+        steps.push(`video: ${found.tier} clip (${stored.video.fit} fit, ${stored.video.seconds}s) from ${found.clip.site}: ${found.clip.sourceUrl}`);
+      } else m = pick ? 'photo' : null;
+    }
+    if (m === 'photo' && pick) {
+      const photo = await bandPhoto(w.key, pick, steps);
+      if (photo) { frame = { ...frame, photo }; shown = pick.src; } else m = null;
+    }
+    storyFrames.push(frame);
+    media.push(m);
+    photoLog.push({ frame: `story ${i + 1}`, ...(shown ? { picked: shown } : {}), steps });
+  }
+  const keep = keepWithMedia(media, MIN_STORIES);
+  const noMedia = written.filter((_, i) => !keep.includes(i));
+  if (noMedia.length) log.push(`media: dropped ${noMedia.length} story(ies) with no photo or video: ${noMedia.map((s) => s.headline.slice(0, 40)).join(' | ')}`);
+  written = keep.map((i) => written[i]!);
+  const frames = keep.map((i) => storyFrames[i]!);
+  const photoFrames = keep.map((i, n) => ({ ...photoLog[i]!, frame: `story ${n + 1}` }));
+  for (const w of written) posted.add(w.key);
+
+  // The cover shows every story's own photo, blurred under a question mark (MC14); it draws no opener photo.
+  // Its headline rotates on from the last set's (MC16).
+  const promise = nextOpenerPromise(await lastOpenerPromise(deps.db, deps.setId), frames.length);
+  const data: FrameData[] = [{ role: 'opener', date: openerDate(deps.nyDate), storyCount: frames.length, promise, peek: frames.map((f) => f.photo ?? null) }, ...frames, { role: 'closer' }];
   const backdrop = await nextBackdrop(deps.db, 'morning_download', deps.setId);
+  const keyOf = (id: string) => byId.get(id)!.key;
   return {
     ok: true,
     payload: {
       // storyId and the headline here are what a later set reads as "what we said" (md-development.ts) until this set publishes.
-      stories: written.map((s) => {
-        const c = byKey.get(s.key)!;
-        const r = returning.get(s.key);
-        const big = outlets.get(s.key);
-        return { key: s.key, headline: s.headline, url: c.url, source: s.source_name, score: ranked.find((x) => x.key === s.key)!.score, ...(c.intake?.storyId ? { storyId: c.intake.storyId } : {}), ...(big ? { big_outlets: big.outlets } : {}), ...(r ? { we_already_said: { headline: r.said.headline, posted_at: r.said.postedAt.toISOString(), new_event: r.newEvent } } : {}) };
+      stories: written.map((w, n) => {
+        const c = byId.get(w.key)!;
+        const g = graded.get(w.key)!;
+        const r = returning.get(c.key);
+        const big = outlets.get(c.key);
+        return {
+          key: c.key, headline: frames[n]!.headline, url: c.url, source: c.sourceName, score: g.grade.cool + g.grade.value, top_tier: g.grade.top_tier, angle: w.angle, angle_from: w.chosen,
+          ...(c.intake?.storyId ? { storyId: c.intake.storyId } : {}), ...(big ? { big_outlets: big.outlets } : {}),
+          ...(r ? { we_already_said: { headline: r.said.headline, posted_at: r.said.postedAt.toISOString(), new_event: r.newEvent } } : {}),
+        };
       }),
       pool: pool.length,
-      ...(deps.intake ? { final_rank: order ? 'ok' : 'margin order' } : {}),
+      ...(wr.dropped.length ? { writer_dropped: wr.dropped.map((d) => ({ key: keyOf(d.key), reason: d.reason })) } : {}),
+      ...(wr.over.length ? { writer_over_cap: wr.over.map(keyOf) } : {}),
       log,
-      photo_log: photoLog,
+      photo_log: photoFrames,
+      ...(deps.video ? { video_log: [...videos.entries()].map(([id, v]) => ({ key: keyOf(id), tier: v.tier, candidates: v.candidates, usd: Math.round(v.costUsd * 10_000) / 10_000, ...(v.clip ? { clip: v.clip.sourceUrl, site: v.clip.site } : {}), trace: v.trace.slice(0, 12) })) } : {}),
     },
     frames: toFrames(data, backdrop),
-    candidates,
-    historyKeys: written.map((s) => s.key),
+    candidates: candidateRows(),
+    historyKeys: written.map((w) => keyOf(w.key)),
   };
 }

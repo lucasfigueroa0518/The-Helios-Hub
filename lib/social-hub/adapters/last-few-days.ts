@@ -192,6 +192,7 @@ const DROP_REASON: Record<string, string> = {
   'image-failed': 'its photo failed to load',
   unfinished: 'still waiting when the rounds ran out',
   'vision-rejected': "the vision check said its photo doesn't show the story",
+  'video-boost': 'a story with real footage took its slot',
 };
 
 /**

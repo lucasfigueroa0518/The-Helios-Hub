@@ -169,6 +169,21 @@ function LfdLogo({ src }: { src: string }) {
 
 
 function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
+  const image = slide.lfdCover?.image;
+  if (image) {
+    const hook = slide.lfdCover?.hook ?? { text: LFD_HOOK_LINES.join(' '), accent: LFD_HOOK_LINES[2] };
+    return (
+      <div className="lfd-cover lfd-cover--ai">
+        <div className="lfd-cover-art"><img className="lfd-img" src={image.url} alt="" data-photo-kind="scene" /></div>
+        <div className="lfd-brand-rule"><span>HELIOS</span></div>
+        <div className="lfd-cover-copy lfd-cover-copy--ai">
+          <Fit as="h1" className="lfd-hook lfd-hook--ai" min={64}><LfdMarked text={hook.text} highlight={hook.accent ?? ''} names={[]} /></Fit>
+          <p className="lfd-kicker">{LFD_KICKER}</p>
+        </div>
+        <LfdArrow />
+      </div>
+    );
+  }
   const meme = slide.lfdCover?.meme;
   if (meme) {
     const box = lfdCoverMemeBox(meme.aspect);
@@ -213,7 +228,6 @@ function LfdStorySlide({ slide }: { slide: SlideCopy }) {
   const memeShaped = slide.photoKind === 'meme' && !!slide.photoAspect;
   return (
     <div className="lfd-story">
-      <div className="lfd-chip"><img src="/social/helios-mark.png" alt="" /><span>Helios</span></div>
       <div className={memeShaped ? 'lfd-story-body lfd-story-body--meme' : 'lfd-story-body'}>
         <div className="lfd-text">
           {s.setup && <Fit as="p" className="lfd-setup" min={LFD_MIN.setup}><LfdMarked text={s.setup} highlight="" names={s.names} /></Fit>}

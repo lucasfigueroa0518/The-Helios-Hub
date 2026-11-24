@@ -59,6 +59,10 @@ export type SetBuilderDeps = {
   };
   /** Tests swap a series builder for a stub. */
   builders?: Partial<Record<Series, (d: BuildDeps) => Promise<BuildResult>>>;
+  /** Morning Download's video finder for one set (MD-LFD D16–D19, lib/stories/video.ts). Absent: photos only. */
+  video?: (setId: string) => Promise<import('@/lib/stories/video').StoryVideoDeps | null>;
+  /** Morning Download's news chain clients (shortlist, rerank, photos, writer). Absent: Morning Download skips. */
+  news?: import('./common').NewsChainDeps;
 };
 
 export type SetBuildOutcome = { status: 'ready' | 'skipped' | 'failed'; detail: string; flagged?: boolean };
@@ -90,13 +94,19 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     const jev = createStoriesJev(deps.jevTransport, deps.db);
     const order = ORDER_OF[series];
     const onIntake = order ? modes?.[order] === 'intake' : false;
-    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, ...(deps.opponent ? { opponent: deps.opponent } : {}), photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}) };
+    const video = series === 'morning_download' && deps.video ? await deps.video(setId).catch((err) => (deps.log?.(`video: off for this set: ${err instanceof Error ? err.message : String(err)}`), null)) : null;
+    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, ...(deps.opponent ? { opponent: deps.opponent } : {}), photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}), ...(video ? { video } : {}), ...(series === 'morning_download' && deps.news ? { news: deps.news } : {}) };
     const builder = deps.builders?.[series] ?? BUILDERS[series];
     if (!builder) {
       await markSkipped(deps.db, setId, `${series} is retired: no new sets are built`);
       return { status: 'skipped', detail: `${series} is retired` };
     }
-    const result = await builder(bd);
+    const result = await builder(bd).finally(async () => {
+      // The video finder's spend (Haiku, Jev, Serper) counts whether or not the build posts.
+      const spent = video?.spent();
+      const lines = spent ? ([['anthropic', spent.anthropic], ['jev', spent.jev], ['web_search', spent.search]] as const) : [];
+      for (const [vendor, usd] of lines) if (usd > 0) await recordCost(deps.db, { setId, vendor, component: 'md-video-finder', usd }).catch(() => {});
+    });
     if (!result.ok) {
       await deps.db.query(`UPDATE stories.sets SET payload = payload || $2::jsonb WHERE id = $1`, [setId, JSON.stringify({ candidates: result.candidates.length })]);
       await markSkipped(deps.db, setId, result.skip);

@@ -23,14 +23,17 @@ import { entriesFor, lfdPostPhotos, withHashes, type PhotoHashDeps } from '@/lib
 import { recordUsedPhotos } from '@/lib/photos/used';
 
 import { lfdItemId } from './items';
+import type { LfdSavedVideo } from './types';
+import { videoCheck } from './video';
 
 export async function queueLfdPublish(query: Query, postId: string, trigger: PublishTrigger): Promise<Queued> {
-  const { rows } = await query(`SELECT id::text AS id, status, caption, slide_objects FROM lfd.posts WHERE id = $1`, [postId]);
+  const { rows } = await query(`SELECT id::text AS id, status, caption, slide_objects, stories FROM lfd.posts WHERE id = $1`, [postId]);
   const post = rows[0];
   if (!post) return { queued: false, note: 'The post is gone.', terminal: true };
   if (post.status === 'published') return { queued: false, note: 'This Last Few Days post is already published.', terminal: true, alreadyPublished: true };
   if (post.status !== 'review') return { queued: false, note: `Only posts in review publish (this one is ${post.status}).`, terminal: true };
-  const objects = (Array.isArray(post.slide_objects) ? post.slide_objects : []) as string[];
+  // A video slide (MD-LFD D19) posts its MP4 in place of its JPEG while the slide is still what the MP4 shows.
+  const objects = withVideoSlides((Array.isArray(post.slide_objects) ? post.slide_objects : []) as string[], Array.isArray(post.stories) ? post.stories : []);
   // The engine's caption already ends with the credits block (lib/lfd/post.ts captionFor).
   const caption = String(post.caption ?? '').trim();
   const problem = checkFeedPayload(objects, caption);
@@ -38,6 +41,23 @@ export async function queueLfdPublish(query: Query, postId: string, trigger: Pub
   const itemId = await lfdItemId(query, postId);
   if (!itemId) return { queued: false, note: 'The post is gone.', terminal: true };
   return queueFeedAttempt(query, { vertical: 'last_few_days', itemId, trigger, caption, imageObjects: objects });
+}
+
+/**
+ * The publish payload's objects: story i is slide i + 2 (slide 1 is the cover). A story saved with a video
+ * (`stories[i].video`, lib/lfd/run.ts) posts that MP4 when its words and photo still match the check it was made with;
+ * a revision that changed either posts the slide's JPEG instead.
+ */
+export function withVideoSlides(objects: readonly string[], stories: ReadonlyArray<Record<string, unknown>>): string[] {
+  const out = [...objects];
+  stories.forEach((s, i) => {
+    const v = s.video as Partial<LfdSavedVideo> | undefined;
+    const photo = s.photo as { src?: unknown } | undefined;
+    if (!v?.object || !v.check || i + 1 >= out.length || typeof photo?.src !== 'string') return;
+    const check = videoCheck({ setup: String(s.setup ?? ''), headline: String(s.headline ?? ''), body: String(s.body ?? ''), photo: { src: photo.src } });
+    if (check === v.check) out[i + 1] = v.object;
+  });
+  return out;
 }
 
 export function failStaleLfdAttempts(query: Query): Promise<void> {

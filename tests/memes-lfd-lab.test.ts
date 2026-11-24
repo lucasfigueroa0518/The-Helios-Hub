@@ -25,6 +25,7 @@ import { STORY_TAGS, stripOutlet, tagsFromScores, TAGGER_VERSION, type StoryTags
 import type { JevAsk, JevResult } from '@/lib/social/jev/client';
 import type { HubQuery } from '@/lib/social-hub/db';
 
+import { stubNewsChain } from './fixtures/lfd/news-chain';
 import { seedCarouselRun, seedReelsIdea, seedScore, resetSeed } from './fixtures/lfd/seed';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -282,24 +283,15 @@ test('the gate and the fault scorer are not part of the generation regime', asyn
 
 const NOW = new Date('2026-10-13T07:00:00Z');
 
-function writer() {
-  return async (p: Anthropic.MessageCreateParamsNonStreaming) => {
-    if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
-      return { id: 'v', type: 'message', role: 'assistant', model: 'h', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input: { shows_story_subject: true, generic_stock: false, reason: 'ok' } }] } as unknown as Anthropic.Message;
-    }
-    const user = String((p.messages.at(-1) as { content: unknown }).content);
-    const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string }> };
-    const stories = material.stories.map((s) => ({ key: s.key, setup: '', headline: s.headline.slice(0, 60), highlight: '', names: [], body: 'It happened this week. More is coming', photo: { kind: 'company', query: s.headline, subjects: [], alts: [] } }));
-    return { id: 'm', type: 'message', role: 'assistant', model: 's', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
-  };
+/** The engine's own Claude calls: the slide vision check passes (the news chain's steps are stubbed through `deps.news`). */
+function vision() {
+  return (async () => ({ id: 'v', type: 'message', role: 'assistant', model: 'h', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input: { shows_story_subject: true, generic_stock: false, reason: 'ok' } }] }) as unknown as Anthropic.Message) as LfdRunDeps['create'];
 }
 
 const answer = (answers: Record<string, number>): JevResult => ({ answers: Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { noul: v }])), usage: { input_tokens: 10, output_tokens: 0 }, model: 'j' });
 
-/** Jev for the engine (major news, grounding, same event) and for the lab (tags: "Backfire" headlines are ironic; faults: none). */
+/** Jev for the engine (same event) and for the lab (tags: "Backfire" headlines are ironic; faults: none). */
 const simJev: JevAsk = async (req, meta) => {
-  if (meta.version.startsWith('major-news')) return answer({ happened: 0, news_kind: 0, blockbuster_entity: 0, global_relevance: 0, political_relevance: 0, speculative: 0 });
-  if (meta.version.startsWith('md-grounding')) return answer({ supported: 0.9 });
   if (meta.version.startsWith('meme-story-tags')) return answer({ backfire: /Backfire/.test((req.state as { headline: string }).headline) ? 0.9 : 0.1 });
   if (meta.version.startsWith('meme-faults')) return answer({});
   return answer({ same_event: 0.1 });
@@ -340,8 +332,9 @@ test('a simulation runs the engine with local writes, gates on the graded eviden
   };
   const lfdDeps = async (o: { capUsd: number; now: Date }): Promise<{ deps: LfdRunDeps; spentUsd: () => number }> => ({
     deps: {
-      query: hub, jev: simJev, create: writer(),
-      photos: { usd: 0, find: async () => null, findSet: async (reqs) => reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' as const })) },
+      query: hub, jev: simJev, create: vision(),
+      photos: { usd: 0, find: async () => null },
+      news: stubNewsChain().news,
       fetchFeeds: async () => [], fetchBody: async () => 'b'.repeat(1200), readPage: async (url) => ({ ok: false, url, error: 'stub' }),
       fitCheck, upload: async () => undefined,
       now: o.now, trigger: 'manual', capUsd: o.capUsd, spend: () => ({ claudeUsd: 0.3, jevUsd: 0.01 }),
@@ -392,7 +385,7 @@ test('a simulation runs the engine with local writes, gates on the graded eviden
   const { rows: ev } = await db.query<{ stage: string; message: string; count: number }>(`SELECT stage, message, count FROM memes.lfd_sim_events WHERE sim_id = $1 ORDER BY id`, [id]);
   const stagesSeen = [...new Set(ev.map((e) => e.stage))];
   assert.deepEqual(stagesSeen, ['lfd', 'tags', 'gate', 'briefs', 'memes', 'faults', 'render', 'done']);
-  assert.ok(ev.some((e) => e.message === 'Fact-checking the written copy' && e.count > 1), 'repeated steps fold into one line with a count');
+  assert.ok(ev.some((e) => e.message === 'Checking each slide\'s photo (vision)' && e.count > 1), 'repeated steps fold into one line with a count');
   assert.ok(ev.some((e) => /^Gate at 90% on \d+ graded stories: 2 of 6 pass/.test(e.message)));
   assert.match(ev.at(-1)!.message, /^Done: 2 memes placed/);
   // The engine's own run and post live in the lab database.

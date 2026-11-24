@@ -10,6 +10,7 @@ import { PENDING_ITEMS_SQL, PENDING_UNDATED_DAYS, pendingCandidate, pendingHold,
 import { mediaLibraryKey, readPublishedLedger, readUsedLedger, usedMatch, USED_PHOTO_DAYS } from '@/lib/photos/used';
 import { ledgerFrom, usedReason } from '@/lib/photos/used-guard';
 import { recentPhotoUses, recentUsedPhotoUrls } from '@/lib/stories/sources/carousel';
+import { photoLedgerUrl } from '@/lib/stories/render/types';
 
 const NOW = new Date('2026-11-12T08:00:00Z');
 const BUILT = '2026-11-11T08:00:00Z';
@@ -282,4 +283,17 @@ test('SS-23: AI Trivia and Real or AI? sets are held under their own types; Real
   assert.deepEqual(hold.owners.get('https://w/q.jpg'), [{ vertical: 'ai_trivia', id: 'set-t', idea: null }]);
   const skipped = await pendingHold(query as never, new Date('2026-11-16T12:00:00Z'), { excludeItem: { vertical: 'ai_trivia', id: 'set-t' } });
   assert.equal(skipped.urls.size, 0, 'a rebuild of its own set is not blocked');
+});
+
+test('WC12: a band-fitted Morning Download photo is held and recorded by its source URL, not its signed storage copy', async () => {
+  const stored = 'https://proj.supabase.co/storage/v1/object/sign/stories/sets/set-b/photos/abc.jpg?token=t';
+  const photo = { src: stored, sourceUrl: 'https://news.test/ceo.jpg', credit: 'Photo: Wire', kind: 'scene' as const, contained: true };
+  const row = { vertical: 'stories', id: 'set-b', built_at: BUILT, doc: { series: 'morning_download', frames: [{ seq: 2, role: 'story', photo }, { seq: 3, role: 'story', photo: { src: 'https://img.test/plain.jpg', kind: 'scene' } }] } };
+  assert.deepEqual(pendingCandidate(row)!.photos.map((p) => p.url), ['https://news.test/ceo.jpg', 'https://img.test/plain.jpg']);
+  const hold = await pendingHold((async () => ({ rows: [row] })) as never, NOW);
+  assert.deepEqual(hold.owners.get('https://news.test/ceo.jpg'), [{ vertical: 'stories', id: 'set-b', idea: null }]);
+  assert.equal(hold.urls.has(stored), false);
+  // What the worker records at publish (worker.ts recordPublishedPhoto): the source, else src.
+  assert.equal(photoLedgerUrl(photo), 'https://news.test/ceo.jpg');
+  assert.equal(photoLedgerUrl({ src: 'https://img.test/plain.jpg' }), 'https://img.test/plain.jpg');
 });
