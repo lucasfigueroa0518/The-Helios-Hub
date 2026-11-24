@@ -466,6 +466,19 @@ async function runRefillOnly(
   }
 }
 
+/**
+ * Top the pool up to POOL_TARGET now, outside the nightly cycle (Lucas, 2026-11-24: "fill the pool with 10 ideas
+ * already"): the refill only, held to the refill cap, with no make step, so nothing is promoted or rendered. It is a
+ * cycle row of its own (status 'skipped', like a paused night's refill) for the spend ledger.
+ */
+export async function refillIdeaPoolNow(deps: IdeaCycleDeps): Promise<Omit<IdeaCycleRefill, 'reason'> | { status: 'failed'; cycleId: string; error: string }> {
+  const { db } = deps;
+  const settings = await loadSettings(db);
+  const gate = deps.gate ?? (await readExplainersGate(db, false));
+  const st: RunState = { movesQ: deps.moves ?? movesQuery(db), settings, gate, event: deps.event ?? consoleEvent, placedJobs: new Set(), pinsChecked: false, capped: false, refilled: false, refillCapped: false };
+  return runRefillOnly(deps, st, nyDate(deps.now));
+}
+
 /** One date's cycle: fill `day` once (lead > 0: a date made ahead; 0: today, a person's forced run). */
 async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead: number): Promise<IdeaCycleDateResult> {
   const { db } = deps;

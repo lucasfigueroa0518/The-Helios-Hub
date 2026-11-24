@@ -10,7 +10,7 @@ import type { EntryType, Questions, SystemOneResult } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
 import { BUCKETS, BUCKET_IDS, RENDERED_BUCKETS, normalizeTerm, topicBucket } from '@/lib/explainers/ideas/coverage';
-import { addAndEvaluateTopics, frameMissingPoolTopics, runIdeaCycle } from '@/lib/explainers/ideas/cycle';
+import { addAndEvaluateTopics, frameMissingPoolTopics, refillIdeaPoolNow, runIdeaCycle } from '@/lib/explainers/ideas/cycle';
 import { CURRICULUM } from '@/lib/explainers/ideas/curriculum';
 import { SYLLABUS } from '@/lib/explainers/ideas/syllabus';
 import { sameTermTopic, trimPool } from '@/lib/explainers/ideas/evaluate';
@@ -284,4 +284,18 @@ test('frameMissingPoolTopics frames pool topics that lack a frame in one call, a
   const row = await getTopic(db, bare);
   assert.equal(row?.bucket, 'web-and-apis');
   assert.equal(row?.scope, 'S', 'the scope is kept');
+});
+
+test('refillIdeaPoolNow tops the pool up to ten and promotes or renders nothing', async () => {
+  const { db } = await scratchExplainersDb();
+  await saveSetting(db, 'auto_render', true);
+  for (const n of [10, 11, 12, 13]) await topic(db, { title: `Waiting ${n}`, term: CURRICULUM[n]!.term, status: 'pool', rank: n });
+  const model = ideas(FRAME, (r) => r.topics.map((t) => t.term));
+  const result = await refillIdeaPoolNow({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
+  assert.equal(result.status, 'refilled', 'error' in result ? result.error : '');
+  assert.deepEqual(model.proposals.map((p) => p.topics.length), [3, 3], 'six short: two calls of three');
+  const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`);
+  assert.equal(rows[0]!.n, 0, 'nothing rendered');
+  const promoted = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.topics WHERE status = 'promoted'`);
+  assert.equal(promoted.rows[0]!.n, 0, 'nothing promoted');
 });
