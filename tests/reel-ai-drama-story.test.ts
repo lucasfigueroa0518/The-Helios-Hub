@@ -187,9 +187,9 @@ test('writer user message: the brief, the facts (timeline), the visual inventory
   assert.match(old, /^## The brief\n\nOld text\./);
 });
 
-test('submit_script: title, hook, rungs, peak, landing, close question, central, pronounce; no engine, turn or spine ids', () => {
+test('submit_script: title, hook, rungs, peak, landing, close question, central; no respellings, no engine, turn or spine ids', () => {
   const schema = SUBMIT_SCRIPT_TOOL.input_schema as { properties: Record<string, { items?: { properties: Record<string, unknown> } }>; required: string[] };
-  assert.deepEqual(schema.required, ['title', 'hook', 'rungs', 'peak_rung_id', 'landing_rung_id', 'close_question', 'central', 'pronounce']);
+  assert.deepEqual(schema.required, ['title', 'hook', 'rungs', 'peak_rung_id', 'landing_rung_id', 'close_question', 'central']);
   assert.deepEqual(Object.keys(schema.properties.rungs!.items!.properties), ['id', 'purpose', 'lines']);
 });
 
