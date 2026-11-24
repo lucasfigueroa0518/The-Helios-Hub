@@ -1,0 +1,157 @@
+{
+ "file": "b033dd11-new-props.js",
+ "job": "b033dd11-007c-48ad-9475-561de62e3279",
+ "topic": "frontend vs backend",
+ "added_at": "2026-11-17T02:00:18.386Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "restaurant swinging kitchen door with a round porthole window": {
+   "source_name": "restaurant swinging kitchen door with a round porthole window",
+   "tags": {
+    "is": "a dark charcoal restaurant swinging door leaf in a pale frame, a round porthole window high in its middle, a steel kick plate at the bottom and a steel push plate at hand height; shut, or swung open",
+    "setting": [
+     "restaurant",
+     "between a dining room and a kitchen",
+     "cafe back of house"
+    ],
+    "material": "painted wood leaf, steel plates, glass porthole",
+    "parts": [
+     "tall leaf with no knob",
+     "round porthole window",
+     "steel kick plate",
+     "steel push plate",
+     "door frame"
+    ],
+    "not": [
+     "house front door",
+     "panelled interior door with a knob",
+     "elevator door",
+     "ship hatch",
+     "vault door",
+     "fridge door",
+     "saloon half doors"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "paper restaurant order ticket": {
+   "source_name": "paper restaurant order ticket",
+   "tags": {
+    "is": "a small upright white paper order slip with four short handwritten lines, the kind a waiter clips to a kitchen ticket rail",
+    "setting": [
+     "restaurant",
+     "kitchen ticket rail",
+     "waiter's hand",
+     "diner order"
+    ],
+    "material": "paper",
+    "parts": [
+     "small rectangular slip",
+     "four short written lines"
+    ],
+    "not": [
+     "receipt from a till",
+     "cinema ticket",
+     "envelope",
+     "sticky note",
+     "playing card",
+     "price tag",
+     "business card"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "folded paper menu with a yellow cover": {
+   "source_name": "folded paper menu with a yellow cover",
+   "tags": {
+    "is": "a restaurant menu folded and standing upright, a yellow cover with a small paper label and a fold line down its middle",
+    "setting": [
+     "restaurant table",
+     "diner",
+     "cafe"
+    ],
+    "material": "card",
+    "parts": [
+     "yellow cover",
+     "small paper label",
+     "centre fold"
+    ],
+    "not": [
+     "book",
+     "notebook",
+     "brochure rack",
+     "tablet",
+     "greeting card",
+     "folder"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "blue walk-in fridge door with a big steel handle": {
+   "source_name": "blue walk-in fridge door with a big steel handle",
+   "tags": {
+    "is": "the door of a walk-in cold room set in a steel frame: a tall blue steel door with two ribs, a big vertical steel handle and latch, shut, or swung open on shelves of stored food",
+    "setting": [
+     "restaurant kitchen",
+     "commercial kitchen",
+     "cold store"
+    ],
+    "material": "blue painted steel, steel frame and handle",
+    "parts": [
+     "tall blue door",
+     "steel frame",
+     "big vertical handle",
+     "latch block",
+     "two ribs",
+     "shelves of food when open"
+    ],
+    "not": [
+     "home fridge with a freezer drawer",
+     "vending machine",
+     "locker",
+     "safe",
+     "wardrobe",
+     "elevator",
+     "server rack"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "kitchen pass with a heat lamp": {
+   "source_name": "kitchen pass with a heat lamp",
+   "tags": {
+    "is": "a low steel kitchen pass counter with a steel heat-lamp hood hanging on two rods above it, its underside glowing warm, and a short ticket rail on a post at one end",
+    "setting": [
+     "restaurant kitchen",
+     "commercial kitchen line"
+    ],
+    "material": "steel",
+    "parts": [
+     "low steel counter",
+     "heat-lamp hood on two rods",
+     "warm glowing underside",
+     "ticket rail on a post"
+    ],
+    "not": [
+     "bar counter",
+     "shop till counter",
+     "desk lamp",
+     "street light",
+     "hospital bed",
+     "office desk"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

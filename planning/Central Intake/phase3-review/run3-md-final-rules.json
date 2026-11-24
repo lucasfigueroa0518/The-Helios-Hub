@@ -1,0 +1,428 @@
+{
+  "generatedAt": "2026-11-10T05:36:24.067Z",
+  "mode": "go",
+  "capUsd": 0.7,
+  "spentUsd": 0.35350000000000004,
+  "posts": [
+    {
+      "type": "md",
+      "postId": "d1d9ff3f-47bb-4ddf-afb3-4cc953db92d5",
+      "date": "2026-11-09",
+      "status": "ready",
+      "title": "Morning Download: Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huan",
+      "notes": [
+        "subjects are not stored: a person/company/logo query that is just a name becomes the subject",
+        "story text is not stored: the brief is the headline"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.1836,
+      "frames": [
+        {
+          "id": "opener",
+          "label": "opener (cover)",
+          "copy": "",
+          "need": {
+            "id": "opener",
+            "headline": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "brief": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "copy": "",
+            "query": "Google headquarters Googleplex",
+            "kind": "company",
+            "subjects": [],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1029562/nvidia-investigating-jensen-huang-relationship-chinese-spy"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject",
+            "cover": true
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Newspaper_Stack_%288582618448%29.jpg/3840px-Newspaper_Stack_%288582618448%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Babak Farrokhi from Tehran, IRAN, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Google_Campus%2C_Mountain_View%2C_CA.jpg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original",
+            "credit": "Wikipedia (en.wikipedia.org)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Google headquarters Googleplex\" (company); wants moment, article:1, headline:1 ($0.060 of $0.300 left)",
+            "shared: harvest found 16, $0.030 (post total $0.030)",
+            "shared: picked V1 event_photo \"Aerial view of a low-rise campus of office buildings with lawns and parking areas, with no readable sign.\" via Wikipedia (en.wikipedia.org): https://upload.wikimedia.org/wikipedia/commons/e/e2/Google_Campus%2C_Mountain_View%2C_CA.jpg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original"
+          ]
+        },
+        {
+          "id": "story 1",
+          "label": "story 1",
+          "copy": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+          "need": {
+            "id": "story 1",
+            "headline": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "brief": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "copy": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "query": "Jensen Huang",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Jensen Huang",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1029562/nvidia-investigating-jensen-huang-relationship-chinese-spy"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Jensen_huang_stanford_2026-04-30_008.jpg/3840px-Jensen_huang_stanford_2026-04-30_008.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Anderseidesvik, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Jensen Huang\" (person); wants person:jensen-huang, person-event:jensen-huang, moment, article:1, headline:1 ($0.068 of $0.270 left)",
+            "shared: harvest found 17, $0.037 (post total $0.067)",
+            "shared: picked V1 person_photo \"A gray-haired man in a black leather jacket and dark shirt gestures while speaking in a lecture hall; captioned as Jensen Huang, not confirmed.\" via Anderseidesvik, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Jensen_huang_stanford_2026-04-30_008.jpg/3840px-Jensen_huang_stanford_2026-04-30_008.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 2",
+          "label": "story 2",
+          "copy": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+          "need": {
+            "id": "story 2",
+            "headline": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+            "brief": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+            "copy": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+            "query": "Zohran Mamdani",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Zohran Mamdani",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://futurism.com/artificial-intelligence/mamdani-blasts-google-bullying-schools"
+            ],
+            "sourceName": "Futurism",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Zohran_Mamdani_05.25.25_%28b%29.jpg/3840px-Zohran_Mamdani_05.25.25_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Dmitryshein, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Zohran_Mamdani_05.25.25_%28b%29.jpg/3840px-Zohran_Mamdani_05.25.25_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Dmitryshein, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Zohran Mamdani\" (person); wants person:zohran-mamdani, person-event:zohran-mamdani, moment, article:1, headline:1 ($0.078 of $0.233 left)",
+            "shared: harvest found 21, $0.049 (post total $0.116)",
+            "shared: picked V1 person_photo \"A smiling man in a dark suit and blue polka-dot tie against a plain dark backdrop; no name or caption visible in the picture.\" via Dmitryshein, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Zohran_Mamdani_05.25.25_%28b%29.jpg/3840px-Zohran_Mamdani_05.25.25_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 3",
+          "label": "story 3",
+          "copy": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+          "need": {
+            "id": "story 3",
+            "headline": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+            "brief": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+            "copy": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+            "query": "Goldman Sachs",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Goldman Sachs",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://thestateofai.com/news/goldman-sachs-claude-code-traders-bankers"
+            ],
+            "sourceName": "State of AI",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/e/e4/Samuel_Sachs_of_Goldman_Sachs.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Times Wide World Photos, Public domain · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Goldman Sachs\" (company); wants company:goldman-sachs, company-place:goldman-sachs, moment, article:1, headline:1 ($0.092 of $0.184 left)",
+            "shared: harvest found 16, $0.045 (post total $0.161)",
+            "shared: picked V10 event_photo \"A dotted halftone print of an older bearded man in a dark suit and tie; captioned as Samuel Sachs of Goldman Sachs; not confirmed.\" via Times Wide World Photos, Public domain · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/e/e4/Samuel_Sachs_of_Goldman_Sachs.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 4",
+          "label": "story 4",
+          "copy": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+          "need": {
+            "id": "story 4",
+            "headline": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+            "brief": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+            "copy": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+            "query": "DeepSeek",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "DeepSeek",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://arxiv.org/abs/2611.03768"
+            ],
+            "sourceName": "a paper on arXiv",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Datacenter_Server_Racks_%2822370909788%29.jpg/3840px-Datacenter_Server_Racks_%2822370909788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/3/35/Deepseek_login_error.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Unknown authorUnknown author, Public domain · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"DeepSeek\" (company); wants company:deepseek, company-place:deepseek, moment, paper:2611.03768 ($0.139 of $0.139 left)",
+            "shared: harvest found 8, $0.023 (post total $0.184)",
+            "shared: picked V2 event_photo \"The DeepSeek login page in a web browser, with a small notice banner across the top.\" via Unknown authorUnknown author, Public domain · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/3/35/Deepseek_login_error.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "md",
+      "postId": "dd808499-b4c3-4965-9f12-6e37ecce9248",
+      "date": "2026-11-06",
+      "status": "ready",
+      "title": "Morning Download: Meta has paused its planned update to its commercial terms after backlash over l",
+      "notes": [
+        "subjects are not stored: a person/company/logo query that is just a name becomes the subject",
+        "story text is not stored: the brief is the headline"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.1699,
+      "frames": [
+        {
+          "id": "opener",
+          "label": "opener (cover)",
+          "copy": "",
+          "need": {
+            "id": "opener",
+            "headline": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "brief": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "copy": "",
+            "query": "Meta headquarters Menlo Park",
+            "kind": "company",
+            "subjects": [],
+            "storyUrls": [
+              "https://404media.co/meta-generative-ai-commercial-terms-on-pause"
+            ],
+            "sourceName": "404 Media",
+            "storyDate": null,
+            "specificity": "subject",
+            "cover": true
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/56/Facebook_Headquarters%2C_Menlo_Park_%287254478874%29.jpg/3840px-Facebook_Headquarters%2C_Menlo_Park_%287254478874%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Jitze Couperus from Los Altos Hills, California, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Meta_HQ_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Meta Platforms headquarters · InvadingInvader, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Meta headquarters Menlo Park\" (company); wants moment, article:1, headline:1 ($0.060 of $0.300 left)",
+            "shared: harvest found 9, $0.031 (post total $0.031)",
+            "shared: picked V1 event_photo \"Aerial of a low-rise white office campus beside a bay shoreline and a highway, consistent with Meta's Menlo Park campus\" via Meta Platforms headquarters · InvadingInvader, CC BY-SA 4.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/b/bb/Meta_HQ_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 1",
+          "label": "story 1",
+          "copy": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+          "need": {
+            "id": "story 1",
+            "headline": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "brief": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "copy": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "query": "Meta Platforms",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Meta Platforms",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://404media.co/meta-generative-ai-commercial-terms-on-pause"
+            ],
+            "sourceName": "404 Media",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/1/18/Mark_Zuckerberg_F8_2019_Keynote_%2832830578717%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Mark Zuckerberg, Meta Platforms CEO · Anthony Quintano from Westminster, United States, CC BY 2.0 · Wikimedia Commons",
+            "kind": "person",
+            "source": null
+          },
+          "new": {
+            "src": "https://storage.ghost.io/c/0f/76/0f76b548-bc58-4f25-abc3-3f5ebca07da4/content/images/size/w2000/2026/11/Social_Media_Kids_Trial_26050035832286.jpg",
+            "credit": "404 Media (article image)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Meta Platforms\" (company); wants company:meta-platforms, company-place:meta-platforms, moment, article:1, headline:1 ($0.067 of $0.269 left)",
+            "shared: harvest found 9, $0.038 (post total $0.069)",
+            "shared: picked V9 event_photo \"A man in a dark suit and tie, with several other men in suits and a woman in the foreground, walks outdoors past a stone building; captioned as Mark Zuckerberg, not confirmed.\" via 404 Media (article image): https://storage.ghost.io/c/0f/76/0f76b548-bc58-4f25-abc3-3f5ebca07da4/content/images/size/w2000/2026/11/Social_Media_Kids_Trial_26050035832286.jpg"
+          ]
+        },
+        {
+          "id": "story 2",
+          "label": "story 2",
+          "copy": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+          "need": {
+            "id": "story 2",
+            "headline": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+            "brief": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+            "copy": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+            "query": "OpenAI",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "OpenAI",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1028454/openai-data-center-nda"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Datacenter_Server_Racks_%2822370909788%29.jpg/3840px-Datacenter_Server_Racks_%2822370909788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/Screenshot_of_OpenAI_Codex.png/3840px-Screenshot_of_OpenAI_Codex.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Wikideas1, CC0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"OpenAI\" (company); wants company:openai, company-place:openai, moment, article:1, headline:1 ($0.077 of $0.231 left)",
+            "shared: harvest found 14, $0.040 (post total $0.109)",
+            "shared: picked V4 event_photo \"A screenshot of a coding environment with code panes and a map of Wisconsin, apparently from the Codex tool.\" via Wikideas1, CC0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e2/Screenshot_of_OpenAI_Codex.png/3840px-Screenshot_of_OpenAI_Codex.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 3",
+          "label": "story 3",
+          "copy": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+          "need": {
+            "id": "story 3",
+            "headline": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+            "brief": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+            "copy": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+            "query": "Anthropic",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1027652/anthropic-claude-plaid-personal-finance"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Newspaper_Stack_%288582618448%29.jpg/3840px-Newspaper_Stack_%288582618448%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Babak Farrokhi from Tehran, IRAN, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/11/Personal-Finance-in-Claude-hed.jpg?quality=90&strip=all&crop=0%2C10.732984293194%2C100%2C78.534031413613&w=1200",
+            "credit": "The Verge (article image)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic\" (company); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1 ($0.095 of $0.191 left)",
+            "shared: harvest found 6, $0.033 (post total $0.142)",
+            "shared: picked V6 event_photo \"A Beta screenshot titled Personal Finance in Claude with phone mockups showing account and spending previews.\" via The Verge (article image): https://platform.theverge.com/wp-content/uploads/sites/2/2026/11/Personal-Finance-in-Claude-hed.jpg?quality=90&strip=all&crop=0%2C10.732984293194%2C100%2C78.534031413613&w=1200"
+          ]
+        },
+        {
+          "id": "story 4",
+          "label": "story 4",
+          "copy": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+          "need": {
+            "id": "story 4",
+            "headline": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+            "brief": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+            "copy": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+            "query": "Google DeepMind",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Google DeepMind",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash"
+            ],
+            "sourceName": "Google's blog",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://media.wired.com/photos/66900a63fc84cb0d65446d72/3:2/w_2560%2Cc_limit/Deepmind-Robotics-Chatbot-Business-2021265856.jpg",
+            "credit": "WIRED (www.wired.com)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Google DeepMind\" (company); wants company:google-deepmind, company-place:google-deepmind, moment, article:1, page:1 ($0.158 of $0.158 left)",
+            "shared: harvest found 6, $0.028 (post total $0.170)",
+            "shared: picked V4 event_photo \"DeepMind logo over a blue screen filled with binary code\" via WIRED (www.wired.com): https://media.wired.com/photos/66900a63fc84cb0d65446d72/3:2/w_2560%2Cc_limit/Deepmind-Robotics-Chatbot-Business-2021265856.jpg"
+          ]
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}

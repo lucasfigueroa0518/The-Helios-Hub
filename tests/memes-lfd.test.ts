@@ -53,7 +53,7 @@ const longCandidate = {
   blockbuster: 0,
   firstSeen: null,
   alsoFrom: [],
-  major: null,
+  major: null, builder: null, eventDate: null,
 };
 
 function fakeQuery(handlers: Array<{ match: RegExp; rows: unknown[] }>): HubQuery {

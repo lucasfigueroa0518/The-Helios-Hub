@@ -9,17 +9,20 @@
  * search, contact sheet, Jev photo-fit, then the slide pick, with the
  * close-up vision check on Haiku 5.5 (S-70; priced by Stories, lib/stories/cost.ts).
  *
- * Photo bank (DECISIONS_LOG D49): with a `bank`, every find offers its
- * vetted candidates (the pick, and identity-verified headshots, second
- * photos, CEOs, headquarters and logos) with runKind 'story'. Stories run
- * only the metadata pre-screen, not the close-up vision check, so their
- * offers carry no close-up pass unless a vision verdict was recorded. The
- * bank's reader also joins the search (off until its finder_source switch
- * is flipped). Offering never blocks or fails a find.
+ * Photo bank (DECISIONS_LOG D49): with a `bank`, every find and every set
+ * offers its vetted candidates (the picks, and identity-verified headshots,
+ * second photos, CEOs, headquarters and logos) with runKind 'story', places
+ * numbered in order across the finder's run. A single find runs only the
+ * metadata pre-screen, so its offers carry no close-up pass unless a vision
+ * verdict was recorded; a set (Morning Download, Last Few Days) keeps the
+ * design stage's tags, fit and close-up verdicts, and never offers a
+ * candidate its checks rejected. The bank's reader also joins the search
+ * (gated by its finder_source switch). Offering never blocks or fails a find.
  */
 import { createSizeProbe, type SizeProbe } from '@/lib/social/photos/size';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { PhotoBank } from '@/lib/media-library/bank';
+import type { RunKind } from '@/lib/media-library/types';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
 import { photosForDraft } from '@/lib/social/photos/design';
 import { detectFacesLive } from '@/lib/social/photos/faces';
@@ -33,6 +36,8 @@ import { priceCall } from '@/lib/stories/cost';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { readPage, type PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Photo } from '@/lib/stories/render/types';
+import { firstUnused, memoLedger } from '@/lib/photos/used-guard';
+import type { UsedLedger } from '@/lib/photos/used';
 
 export type PhotoRequest = {
   kind: string;
@@ -44,7 +49,7 @@ export type PhotoRequest = {
   alts?: Array<{ kind: string; query: string }>;
   /** The frame's own words (its headline), so the set's slide and pivot checks judge a photo against what the frame says, not just the request. */
   copy?: string;
-  /** Never pick these (photos used in the last 7 days, or already in this set). */
+  /** Never pick these (photos published in the last 20 days, CI-32, or already in this set). */
   exclude: Set<string>;
   /**
    * This frame is the set's cover (a Morning Download opener): only on the first request of a set, it gets the
@@ -117,7 +122,50 @@ export function storyVetted(seq: number, request: { kind: VisualKind; query: str
   return out;
 }
 
-export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch; create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>; bank?: PhotoBank; runRef?: string } = {}): PhotoFinder {
+/**
+ * A set's vetted candidates for the photo bank, by the single find's rule (storyVetted): the photos the set uses,
+ * and the identity-verified ones it doesn't. A candidate the design stage rejected is never offered.
+ * `finals[k]` is place k + 1's photo URL after the design stage (promotion included); `offset` numbers the set's
+ * places after the finder's earlier finds. Pure.
+ */
+export function setVetted(offset: number, vetted: VettedPhoto[], finals: Array<string | null>): VettedPhoto[] {
+  const used = new Set(finals.filter((u): u is string => Boolean(u)));
+  const out: VettedPhoto[] = [];
+  for (const v of vetted) {
+    if (v.outcome === 'rejected') continue;
+    const url = v.candidate.url;
+    // Its own place's photo, or a winner promoted to the cover (it stays listed under the place it was found for).
+    const picked = finals[v.slide - 1] === url || (v.outcome === 'picked' && used.has(url));
+    const outcome = picked ? 'picked' : v.candidate.verified && IDENTITY_LANES.has(v.candidate.lane) ? 'verified' : null;
+    if (!outcome) continue;
+    out.push({ ...v, slide: offset + v.slide, outcome });
+  }
+  return out;
+}
+
+export function createLivePhotoFinder(
+  opts: {
+    jev?: JevAsk;
+    http?: typeof fetch;
+    create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
+    bank?: PhotoBank;
+    runRef?: string;
+    /** The bank sightings' run kind (SS-24): 'ai_trivia' for an AI Trivia build; default 'story' (Morning Download). */
+    runKind?: Extract<RunKind, 'story' | 'ai_trivia'>;
+    /** The set's design stage (tests stub it; default photosForDraft). */
+    design?: typeof photosForDraft;
+    /**
+     * The used-photo ledger (CI-32; live: liveUsedLedger), read once per finder. A pick whose picture was published in
+     * the last 20 days (another URL, a resized copy) gives way to the next candidate. Absent: the requests' URL
+     * excludes only.
+     */
+    used?: () => Promise<UsedLedger>;
+  } = {},
+): PhotoFinder {
+  const ledger = opts.used ? memoLedger(opts.used) : null;
+  // One finder per build: the bank reader's cached ledger (a minute per process) is read fresh for it.
+  opts.bank?.reader.invalidate?.();
+  const readLedger = async () => (ledger ? await ledger().catch(() => undefined) : undefined);
   let usd = 0;
   // The photo bank's run: this finder (one Stories build), its requests numbered in order.
   const runRef = opts.runRef ?? `stories-build:${new Date().toISOString()}`;
@@ -202,7 +250,7 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
         caption: line(''),
         edit_notes: [],
       };
-      const designed = await photosForDraft(draft, brief, pages, {
+      const designed = await (opts.design ?? photosForDraft)(draft, brief, pages, {
         jev: tallied,
         http: opts.http ?? fetch,
         size,
@@ -211,8 +259,23 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
         ...(vision ? { vision } : {}),
         ...(tagSheet ? { tagSheet } : {}),
         ...(opts.bank ? { bank: opts.bank.reader } : {}),
-      }, { recent: exclude, storyDate, plainCover: !live[0]!.cover });
+      }, { recent: exclude, storyDate, plainCover: !live[0]!.cover, ...(await readLedger().then((used) => (used ? { used } : {}))) });
       const traces = [designed.cover, ...designed.slides];
+      const offset = seq;
+      seq += live.length;
+      if (opts.bank) {
+        try {
+          opts.bank.offer({
+            runKind: opts.runKind ?? 'story',
+            runRef,
+            subjects: subjects.map((s) => s.name),
+            organizations: subjects.filter((s) => s.type === 'organization').map((s) => s.name),
+            items: setVetted(offset, designed.vetted ?? [], traces.map((t) => t?.photo?.url ?? null)),
+          });
+        } catch {
+          // The bank is best effort: a set never fails over it.
+        }
+      }
       let i = 0;
       return usable.map((r, k) => {
         if (!r) {
@@ -234,13 +297,26 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
       }
       const ctx = newSearchContext(minimalBrief(req), pages, { recent: req.exclude, storyDate: req.storyDate });
       const request = { kind: req.kind as VisualKind, query: req.query };
-      const { candidates } = await searchVisual(request, ctx, { jev: tallied, http: opts.http ?? fetch, ...(recorder.vision ? { vision: recorder.vision } : {}), ...(opts.bank ? { bank: opts.bank.reader } : {}) });
-      const pick = candidates.find((c) => !req.exclude.has(c.url));
+      const deps = { jev: tallied, http: opts.http ?? fetch, ...(recorder.vision ? { vision: recorder.vision } : {}), ...(opts.bank ? { bank: opts.bank.reader } : {}) };
+      const first = await searchVisual(request, ctx, deps);
+      const used = await readLedger();
+      const choose = async (list: Candidate[]) => {
+        const open = list.filter((c) => !req.exclude.has(c.url));
+        return used ? await firstUnused(open, (c) => ({ url: c.url, kind: c.lane === 'logo' ? 'logo' : null }), used, { http: opts.http ?? fetch }) : open[0];
+      };
+      let candidates = first.candidates;
+      let pick = await choose(candidates);
+      // Bald-Eagle D9 (finder_source "first"): the bank answered alone and none of its candidates held up → search online once.
+      if (!pick && first.bankOnly) {
+        const again = await searchVisual(request, ctx, deps, { online: true });
+        candidates = [...candidates, ...again.candidates];
+        pick = await choose(again.candidates);
+      }
       seq++;
       if (opts.bank) {
         try {
           opts.bank.offer({
-            runKind: 'story',
+            runKind: opts.runKind ?? 'story',
             runRef,
             subjects: req.subjects.map((s) => s.name),
             organizations: req.subjects.filter((s) => s.type === 'organization').map((s) => s.name),

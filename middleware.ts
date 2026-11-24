@@ -26,10 +26,16 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api/dashboards/deck/')) return true;
   if (pathname.startsWith('/api/auth')) return true;
   if (pathname === '/api/health') return true;
+  // Keep-warm calls from GitHub Actions: Bearer HUB_WARM_TOKEN, checked in the route.
+  if (pathname === '/api/cron/warm') return true;
   if (pathname === '/api/webhooks/resend') return true;
   if (pathname === '/api/webhooks/agentmail') return true;
   if (pathname === '/api/webhooks/gcp-billing') return true;
   if (pathname.startsWith('/api/public/sender-headshots/')) return true;
+  // The web game export: Bearer HUB_GAME_EXPORT_TOKEN, checked in the route.
+  if (pathname === '/api/public/trivia-game/days') return true;
+  // Counted RSVP redirect for the public events calendar (Resource Tracker RT-2): no session, ever.
+  if (pathname.startsWith('/api/public/go/rsvp/')) return true;
   // Private reel review. The token in the path is the gate. No Auth.js session.
   if (pathname.startsWith('/watch/')) return true;
   if (pathname.startsWith('/api/watch/')) return true;
@@ -39,6 +45,16 @@ function isPublicPath(pathname: string): boolean {
   if (
     process.env.NODE_ENV === 'development'
     && (pathname === '/memes' || pathname.startsWith('/memes/') || pathname.startsWith('/api/memes'))
+  ) return true;
+  // Local Real Case lab (planning/Real Case Reels RC-10), the same rule. Production requires a session.
+  if (
+    process.env.NODE_ENV === 'development'
+    && (pathname === '/real-case' || pathname.startsWith('/real-case/') || pathname.startsWith('/api/real-case'))
+  ) return true;
+  // Local personality lab, the same rule. Production requires a session.
+  if (
+    process.env.NODE_ENV === 'development'
+    && (pathname === '/personality' || pathname.startsWith('/personality/') || pathname.startsWith('/api/personality'))
   ) return true;
   return false;
 }
@@ -62,16 +78,31 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/traffic/')
     || pathname === '/explainers'
     || pathname.startsWith('/explainers/')
+    || pathname === '/reel-ai-drama'
+    || pathname.startsWith('/reel-ai-drama/')
     || pathname === '/reels'
     || pathname.startsWith('/reels/')
     || pathname === '/stories'
     || pathname.startsWith('/stories/')
+    // SS-1: the three Stories-format type pages.
+    || pathname === '/morning-download'
+    || pathname.startsWith('/morning-download/')
+    || pathname === '/ai-trivia'
+    || pathname.startsWith('/ai-trivia/')
+    || pathname === '/real-or-ai'
+    || pathname.startsWith('/real-or-ai/')
     || pathname === '/carousels'
     || pathname.startsWith('/carousels/')
+    || pathname === '/field-notes'
+    || pathname.startsWith('/field-notes/')
     || pathname === '/last-few-days'
     || pathname.startsWith('/last-few-days/')
+    || pathname === '/ai-events'
+    || pathname.startsWith('/ai-events/')
     || pathname === '/memes'
     || pathname.startsWith('/memes/')
+    || pathname === '/real-case'
+    || pathname.startsWith('/real-case/')
     // Social Hub pages (the carousel render preview at /social/render stays as it was).
     || pathname === '/social'
     || (pathname.startsWith('/social/') && !pathname.startsWith('/social/render')
@@ -137,14 +168,24 @@ export const config = {
     '/traffic/:path*',
     '/explainers',
     '/explainers/:path*',
+    '/reel-ai-drama',
+    '/reel-ai-drama/:path*',
     '/reels',
     '/reels/:path*',
     '/stories',
     '/stories/:path*',
+    '/morning-download',
+    '/morning-download/:path*',
+    '/ai-trivia',
+    '/ai-trivia/:path*',
+    '/real-or-ai',
+    '/real-or-ai/:path*',
     '/social',
     '/social/:path*',
     '/memes',
     '/memes/:path*',
+    '/real-case',
+    '/real-case/:path*',
     '/d/:path*',
     '/watch/:path*',
     '/api/:path*',

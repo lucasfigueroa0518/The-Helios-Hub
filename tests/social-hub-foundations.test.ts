@@ -74,7 +74,8 @@ test('New York days across DST and month edges', () => {
   assert.equal(end.getTime() - start!.getTime(), 25 * 3_600_000); // the long day
   assert.equal(isDayKey('2026-02-30'), false);
   assert.equal(isDayKey('0099-01-01'), false);
-  assert.equal(monthOf('0099-05'), monthOf(undefined, new Date('2026-10-08T12:00:00Z')));
+  const oct8 = new Date('2026-10-08T12:00:00Z'); // one clock for both sides, or this fails every month but October
+  assert.equal(monthOf('0099-05', oct8), monthOf(undefined, oct8));
   assert.equal(shiftMonth('2026-01', -1), '2025-12');
 });
 

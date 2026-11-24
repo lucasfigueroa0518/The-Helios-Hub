@@ -124,12 +124,12 @@ export async function loadPublishedStoryKeys(days = PUBLISHED_STORY_HOLD_DAYS): 
      SELECT p.post_idea_id, u.url
        FROM published p
        LEFT JOIN LATERAL (
-         SELECT src.canonical_url AS url
-           FROM reels.post_idea_members m JOIN reels.sources src ON src.id = m.source_id
+         SELECT m.url
+           FROM reels.idea_sources_v m
           WHERE m.post_idea_id = p.post_idea_id
          UNION
-         SELECT unnest(src.citation_urls)
-           FROM reels.post_idea_members m JOIN reels.sources src ON src.id = m.source_id
+         SELECT unnest(m.citation_urls)
+           FROM reels.idea_sources_v m
           WHERE m.post_idea_id = p.post_idea_id
          UNION
          SELECT source->>'url'
@@ -174,10 +174,9 @@ export async function loadWideCopyMisses(nyDate: string): Promise<Set<string>> {
 /** Headlines of reels published in the last `days`, for the web search's do-not-cover list (D-247). */
 export async function recentPublishedHeadlines(days = PUBLISHED_STORY_HOLD_DAYS): Promise<string[]> {
   const { rows } = await dbQuery<{ headline: string }>(
-    `SELECT DISTINCT ON (p.post_idea_id) src.headline
+    `SELECT DISTINCT ON (p.post_idea_id) m.headline
        FROM ${REEL_SCHEDULE} p
-       JOIN reels.post_idea_members m ON m.post_idea_id = p.post_idea_id
-       JOIN reels.sources src ON src.id = m.source_id
+       JOIN reels.idea_sources_v m ON m.post_idea_id = p.post_idea_id
       WHERE p.status = 'published' AND p.publish_at > now() - ($1 || ' days')::interval
       ORDER BY p.post_idea_id, CASE m.role WHEN 'primary' THEN 0 ELSE 1 END, m.joined_at`,
     [String(days)],

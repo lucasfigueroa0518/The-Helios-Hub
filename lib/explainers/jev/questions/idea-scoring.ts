@@ -7,9 +7,11 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  * Explainers 3.0 (EX3-32, EX3-33: beginner concepts favored inside audience_fit,
  * the eight-beat reel, the new visual system); v3 for Explainers 3.1 (the
  * one-minute reel, and Q7 ai_focus, EX3-73), drafted 2026-10-13, awaiting
- * Lucas's approval (R6). Question, state fields, judge rule, and level text are
+ * Lucas's approval (R6); v4 for Explainers 3.9 (EX3-123): analogy_potential asks
+ * for one well-known analogy whose defining trait is the concept, not a drawable
+ * everyday scene. Question, state fields, judge rule, and level text are
  * the register's verbatim (planning/Explainer Reels/DECISIONS.md, "Idea scoring
- * v3"); tests/explainers-questions.test.ts fails if they drift. Levels are
+ * v4"); tests/explainers-questions.test.ts fails if they drift. Levels are
  * indexes 0 to 4. Code applies the weights,
  * gates, and tie-breaks (lib/explainers/scoring.ts), never the model.
  *
@@ -18,7 +20,7 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  */
 export const IDEA_SCORING = defineQuestionSet({
   id: 'explainers-idea-scoring',
-  version: 'explainers-idea-scoring-v3',
+  version: 'explainers-idea-scoring-v4',
   questions: {
     audience_fit: score(
       {
@@ -48,15 +50,15 @@ export const IDEA_SCORING = defineQuestionSet({
     ),
     analogy_potential: score(
       {
-        question: "How naturally can this concept be mapped to one everyday analogy without materially distorting how the concept actually works?",
-        judge: "Reward analogies whose parts map meaningfully onto the technical concept and that can become one full, drawable everyday scene the whole reel revolves around, with the mapping and the example playing out inside it. Do not reward catchy metaphors that break down immediately or teach the wrong mental model.",
+        question: "How naturally can this concept be mapped to one well-known analogy without materially distorting how the concept actually works?",
+        judge: "Reward concepts with one well-known analogy whose defining trait is the concept's defining trait, that can carry the reel: its parts map meaningfully onto the technical concept, and the mapping plays out inside it. Do not reward catchy metaphors that break down immediately or teach the wrong mental model.",
       },
       [
-        "No useful analogy. An everyday analogy would substantially misrepresent the concept or provide no meaningful help.",
+        "No useful analogy. Any well-known analogy would substantially misrepresent the concept or provide no meaningful help.",
         "Forced or misleading analogy. A metaphor can be invented, but important parts of the mapping fail and could leave the viewer with the wrong understanding.",
-        "Workable analogy. There is a reasonable everyday comparison that communicates the central idea, although its limits need careful handling.",
-        "Strong analogy. A familiar situation maps naturally onto the concept's important components and would materially improve comprehension.",
-        "Exceptional analogy. The everyday system maps unusually cleanly onto the technical system and becomes one scene that can carry multiple beats of the reel—including the mapping and the example—without becoming inaccurate.",
+        "Workable analogy. There is a reasonable well-known comparison that communicates the central idea, although its limits need careful handling.",
+        "Strong analogy. A well-known thing maps naturally onto the concept's important components and would materially improve comprehension.",
+        "Exceptional analogy. A well-known thing whose defining trait is the concept's maps unusually cleanly onto the technical system and can carry the reel's analogy and its mapping without becoming inaccurate.",
       ],
     ),
     visual_potential: score(

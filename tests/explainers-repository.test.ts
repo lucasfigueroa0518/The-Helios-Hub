@@ -18,7 +18,7 @@ import {
   listRecentlyRendered,
   nyDate,
   parseTopicList,
-  productionSpendForDay,
+  spendForDay,
   recordCost,
   rejectTopic,
   requestRender,
@@ -58,8 +58,8 @@ test('schema applies and re-applies cleanly', async () => {
   const { rows } = await pg.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'explainers'`,
   );
-  // 10 product tables + posting_schedule, publish_attempts, media_insights (docs/social-overnight.md).
-  assert.equal(rows[0].n, 13);
+  // 10 product tables + posting_schedule, publish_attempts, media_insights (docs/social-overnight.md), cost_breakdown (session B telemetry), first_try_log (first-try lessons).
+  assert.equal(rows[0].n, 15);
 });
 
 test('a database created before the seq columns upgrades in place', async () => {
@@ -93,6 +93,15 @@ test('seeded settings equal the kickoff defaults', async () => {
   assert.equal(DEFAULT_SETTINGS.per_reel_cap_usd, 8);
 });
 
+test('opener_voice (EX6-14): silent by default, spoken brings the line back, nothing else is accepted', async () => {
+  const { db } = await scratchExplainersDb();
+  assert.equal(DEFAULT_SETTINGS.opener_voice, 'silent');
+  assert.equal((await loadSettings(db)).opener_voice, 'silent');
+  assert.equal(await saveSetting(db, 'opener_voice', 'spoken'), 'spoken');
+  assert.equal((await loadSettings(db)).opener_voice, 'spoken');
+  await assert.rejects(saveSetting(db, 'opener_voice', 'loud'), /opener_voice must be silent or spoken/);
+});
+
 test('theme brief v1 is the E-14 text verbatim', async () => {
   const { db } = await scratchExplainersDb();
   const kickoff = fs.readFileSync(
@@ -104,7 +113,7 @@ test('theme brief v1 is the E-14 text verbatim', async () => {
   assert.equal(await loadThemeBrief(db, 'v1'), expected);
 });
 
-test('theme briefs v2 and v3 are the register text verbatim, and a new database starts on v3 (EX3-34)', async () => {
+test('theme briefs v2, v3 and v4 are the register text verbatim, and a new database starts on v4 (EX3-34, EX3-123)', async () => {
   const { db } = await scratchExplainersDb();
   const register = fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
   const between = (from: string, to: string) => {
@@ -112,15 +121,20 @@ test('theme briefs v2 and v3 are the register text verbatim, and a new database 
     assert.ok(start >= 0, from);
     return register.slice(start + from.length, register.indexOf(to, start)).trim();
   };
-  const v3 = between('### Theme brief v3\n\n', '\n\n### Theme brief v2');
-  const v2 = between('### Theme brief v2 (superseded by v3; kept because existing databases still hold it)\n\n', '\n\n### Idea scoring v3');
+  const v4 = between('### Theme brief v4\n\n', '\n\n### Theme brief v3');
+  const v3 = between('### Theme brief v3 (superseded by v4, EX3-123; kept because existing databases still hold it)\n\n', '\n\n### Theme brief v2');
+  const v2 = between('### Theme brief v2 (superseded by v3; kept because existing databases still hold it)\n\n', '\n\n### Idea scoring v4');
+  assert.equal(await loadThemeBrief(db, 'v4'), v4);
   assert.equal(await loadThemeBrief(db, 'v3'), v3);
+  // v4 is v3 with the reel shape's analogy as a well-known one whose defining trait is the concept.
+  assert.equal(v4, v3.replace('one everyday analogy that can carry the whole reel as a single scene', 'one well-known analogy whose defining trait is the concept, that can carry the reel'));
+  assert.notEqual(v4, v3);
   assert.equal(await loadThemeBrief(db, 'v2'), v2);
   assert.match(v3, /Prefer beginner concepts/);
   assert.match(v3, /Skew toward AI\./);
   assert.match(v3, /about a minute/);
   assert.doesNotMatch(v3, /caveat|45-second|accurately in 45 seconds/);
-  assert.equal((await loadSettings(db)).theme_brief_version, 'v3');
+  assert.equal((await loadSettings(db)).theme_brief_version, 'v4');
 });
 
 test('settings validate before they are stored', async () => {
@@ -286,9 +300,18 @@ test('production caps: two renders and $10 per Eastern day; development has neit
   // Idea-pipeline spend alone can exhaust the production day (A-4).
   const roomy = { ...production, daily_render_cap: 5 };
   await recordCost(db, { mode: 'production', vendor: 'anthropic', component: 'idea_generator', usd: 10 });
-  assert.equal(await productionSpendForDay(db, nyDate()), 10);
+  assert.equal(await spendForDay(db, nyDate()), 10);
   assert.deepEqual(
     await requestRender(db, { topicId: c, trigger: 'click', settings: roomy }),
+    { ok: false, reason: 'daily_spend_cap' },
+  );
+  // The spend cap holds in every mode, and development spend counts toward it.
+  const devRoomy = { ...DEFAULT_SETTINGS, daily_spend_cap_usd: 12 };
+  assert.equal(devRoomy.mode, 'development');
+  await recordCost(db, { mode: 'development', vendor: 'heygen', component: 'tts', usd: 3 });
+  assert.equal(await spendForDay(db, nyDate()), 13);
+  assert.deepEqual(
+    await requestRender(db, { topicId: c, trigger: 'click', settings: devRoomy }),
     { ok: false, reason: 'daily_spend_cap' },
   );
 });

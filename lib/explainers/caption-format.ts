@@ -2,7 +2,7 @@
  * Instagram caption shape for Explainer Reels.
  *
  * The writer stores the body only. Code prepends
- * `AI Brain Break Episode N:` when the reel actually publishes, so N is
+ * `AI 101 Episode N:` when the reel actually publishes, so N is
  * how many explainers have gone out, plus this one.
  */
 
@@ -21,11 +21,11 @@ export const CAPTION_MAX_TAGS = 5;
 const HOOK_EPISODE_BUDGET = 999;
 
 const EPISODE_PREFIX =
-  /^(?:AI BRAIN BREAK\s*[-–—]?\s*EPISODE\s+\d+:|AI Brain Break Episode\s+\d+:)\s*/i;
+  /^(?:AI BRAIN BREAK\s*[-–—]?\s*EPISODE\s+\d+:|AI Brain Break Episode\s+\d+:|AI 101 Episode\s+\d+:)\s*/i;
 
 export function episodeLine(episode: number): string {
   if (!Number.isInteger(episode) || episode < 1) throw new Error('episode must be a positive integer');
-  return `AI Brain Break Episode ${episode}:`;
+  return `AI 101 Episode ${episode}:`;
 }
 
 /** Drop a baked-in episode line (old or new wording) so publish can stamp the real number. */
@@ -47,7 +47,7 @@ export function stampCaption(body: string, episode: number): string {
 
 /** Review drawer: the number is a dash until publish fills it in. */
 export function reviewCaption(body: string): string {
-  return `AI Brain Break Episode —:\n\n${stripEpisodePrefix(body)}`;
+  return `AI 101 Episode —:\n\n${stripEpisodePrefix(body)}`;
 }
 
 export function hookPreviewLimit(episode = HOOK_EPISODE_BUDGET): number {
@@ -73,7 +73,7 @@ export function heliosLine(text: string): string {
 }
 
 /** The caption body, or a throw that names which rule it broke. */
-export function parseCaption(raw: unknown): string {
+export function parseCaption(raw: unknown, opts: { heliosLine?: boolean } = {}): string {
   const text = stripEpisodePrefix(typeof raw === 'string' ? raw : '');
   if (!text) throw new Error('caption is empty');
   if (stampCaption(text, HOOK_EPISODE_BUDGET).length > CAPTION_MAX_CHARS) {
@@ -102,11 +102,13 @@ export function parseCaption(raw: unknown): string {
   if (blocks.length < CAPTION_MIN_PARAGRAPHS) {
     throw new Error('caption needs at least the hook, the save prompt or question, and the Helios line');
   }
-  // v5 (per-format comps, 2026-10-19): every caption ends on the Helios line, just before the hashtags.
-  if (!/\bHelios\b/.test(blocks.at(-1) ?? '')) {
-    throw new Error('the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.');
+  // v5 (per-format comps, 2026-10-19): a caption ends on the Helios line, just before the hashtags. Explainers (caption v13) pass false: no such line.
+  if (opts.heliosLine !== false) {
+    if (!/\bHelios\b/.test(blocks.at(-1) ?? '')) {
+      throw new Error('the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.');
+    }
+    if (countEmoji(blocks.at(-1) ?? '') > 0) throw new Error('no emoji in the Helios line');
   }
-  if (countEmoji(blocks.at(-1) ?? '') > 0) throw new Error('no emoji in the Helios line');
 
   const hook = blocks[0] ?? '';
   if (!hook) throw new Error('caption is missing a hook');

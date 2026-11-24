@@ -29,7 +29,8 @@ const driverFor = (q: Query) => lastFewDaysDriver({ query: q, meta: () => meta, 
 test('the publisher releases an approved due Last Few Days post and carries it', async () => {
   const { query } = await openHubTestDb();
   const q = query as unknown as Query;
-  await q(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  // The Live state (D16): Generate (auto_run) and publishing_live both on.
+  await q(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key IN ('auto_run', 'publishing_live')`);
   await q(`INSERT INTO social_hub.settings (key, value) VALUES ('publisher_mode', '"live"'::jsonb) ON CONFLICT (key) DO UPDATE SET value = excluded.value`);
   const id = await seedLfdPost(query);
   assert.equal((await approveLfdPost(q, id, new Date('2026-10-13T07:30:00Z'))).scheduled, true);
@@ -40,10 +41,18 @@ test('the publisher releases an approved due Last Few Days post and carries it',
   assert.equal((await q(`SELECT status FROM social_hub.schedule`)).rows[0].status, 'published');
 });
 
-test('the driver is off while lfd publishing_live is off, and when the lfd schema is missing', async () => {
+test('the driver is live only in the Live state (D16), and off when the lfd schema is missing', async () => {
   const { query } = await openHubTestDb();
   const q = query as unknown as Query;
   assert.equal(await driverFor(q).live(), false);
+  assert.equal(await driverFor(q).requireApproval(), true);
+  // Generate off with Live on reads as paused (contract §3): nothing posts.
+  await q(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  assert.equal(await driverFor(q).live(), false);
+  await q(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
+  assert.equal(await driverFor(q).live(), true);
+  // Approval is always required: a stored false is never read (D16).
+  await q(`UPDATE lfd.settings SET value = 'false'::jsonb WHERE key = 'require_approval'`);
   assert.equal(await driverFor(q).requireApproval(), true);
   const broken: Query = async (text) => {
     if (/lfd\./.test(text)) throw new Error('relation "lfd.settings" does not exist');

@@ -34,8 +34,10 @@ const SUN_1230 = new Date('2026-10-25T16:30:00Z');
 /** Monday 2026-10-26, 9:00 AM New York. */
 const MON_9 = new Date('2026-10-26T13:00:00Z');
 
-async function db(o: { publishingLive?: boolean } = { publishingLive: true }) {
-  const { query } = await openAiEventsDb(o);
+/** The type's state (D16), written as both keys; `mismatch` is Generate off + Live on (reads as paused). Default Live. */
+async function db(o: { state?: 'paused' | 'approval' | 'live' | 'mismatch' } = {}) {
+  const state = o.state ?? 'live';
+  const { query } = await openAiEventsDb(state === 'mismatch' ? { publishingLive: true } : { state });
   return { query, q: query as unknown as Query };
 }
 
@@ -94,18 +96,23 @@ test('two city posts on one Sunday: Miami 6–7 PM, Boston 7–8 PM; a second Mi
   assert.deepEqual(await scheduleAiEventsPost(q, boston2, 'auto', MON_9, '2026-10-26', () => 0).then((o) => o.scheduled), true, 'already booked keeps its slot');
 });
 
-test('approve: publishing off approves only; live books its own Sunday; after that Sunday it approves without a slot', async () => {
-  const off = await db({ publishingLive: false });
-  const a = await seedAiEventsPost(off.query);
-  assert.deepEqual(await approveAiEventsPost(off.q, a, SUN_1230), { scheduled: false, approved: true, note: AI_EVENTS_APPROVED_OFF_NOTE });
-  assert.equal((await off.q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0);
-  assert.equal((await off.q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved');
+test('approve: Paused (or a mismatch) approves only; Approval and Live book its own Sunday; after that Sunday it approves without a slot', async () => {
+  for (const state of ['paused', 'mismatch'] as const) {
+    const off = await db({ state });
+    const a = await seedAiEventsPost(off.query);
+    assert.deepEqual(await approveAiEventsPost(off.q, a, SUN_1230), { scheduled: false, approved: true, note: AI_EVENTS_APPROVED_OFF_NOTE }, state);
+    assert.equal((await off.q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0, state);
+    assert.equal((await off.q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved', state);
+  }
 
-  const live = await db();
-  const b = await seedAiEventsPost(live.query);
-  const booked = await approveAiEventsPost(live.q, b, SUN_1230);
-  assert.equal(booked.scheduled, true);
-  assert.equal((await live.q(`SELECT ny_date::text AS d FROM social_hub.schedule`)).rows[0].d, '2026-10-25');
+  // Approval and Live hold slots (contract §4.3); only Live posts.
+  for (const state of ['approval', 'live'] as const) {
+    const on = await db({ state });
+    const b = await seedAiEventsPost(on.query);
+    const booked = await approveAiEventsPost(on.q, b, SUN_1230);
+    assert.equal(booked.scheduled, true, state);
+    assert.equal((await on.q(`SELECT ny_date::text AS d FROM social_hub.schedule`)).rows[0].d, '2026-10-25', state);
+  }
 
   const late = await db();
   const c = await seedAiEventsPost(late.query);
@@ -127,11 +134,13 @@ test('reject cancels the slot and marks the post; unschedule frees it', async ()
   assert.equal((await q(`SELECT status FROM ai_events.posts WHERE id = $1`, [id])).rows[0].status, 'rejected');
 });
 
-test('Hard publish: refused while publishing is off; live, it approves and queues a force attempt', async () => {
-  const off = await db({ publishingLive: false });
-  const a = await seedAiEventsPost(off.query);
-  assert.deepEqual(await hardPublishAiEventsPost(off.q, a), { queued: false, note: AI_EVENTS_PUBLISHING_OFF_NOTE, terminal: true });
-  assert.equal((await off.q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0);
+test('Hard publish: refused unless Live (Paused, Approval, mismatch); Live, it approves and queues a force attempt', async () => {
+  for (const state of ['paused', 'approval', 'mismatch'] as const) {
+    const off = await db({ state });
+    const a = await seedAiEventsPost(off.query);
+    assert.deepEqual(await hardPublishAiEventsPost(off.q, a), { queued: false, note: AI_EVENTS_PUBLISHING_OFF_NOTE, terminal: true }, state);
+    assert.equal((await off.q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0, state);
+  }
 
   const live = await db();
   const b = await seedAiEventsPost(live.query);

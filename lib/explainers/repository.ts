@@ -1,4 +1,6 @@
 import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
+import { syllabusRank } from '@/lib/explainers/ideas/curriculum';
+import { jobDaySql, jobsHaveTargetDate, jobTargetSql } from '@/lib/explainers/lead';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
 import { syncExplainerApproval } from '@/lib/explainers/publish/items';
 import {
@@ -12,6 +14,7 @@ import {
   type FeedbackRow,
   type JobRow,
   type JobTrigger,
+  type LessonAltitude,
   type LintViolation,
   type TopicOrigin,
   type TopicRow,
@@ -55,11 +58,12 @@ export function normalizeFailureTags(tags: readonly string[]): FailureTag[] {
 }
 
 /**
- * Pool ranking: weighted score, then the E-15 tie-breaks (teachability,
- * accuracy, audience, visual, hook), then the deterministic system field. The
- * older row wins an exact tie, which is E-16's "retain incumbent".
+ * Pool ranking: the syllabus first (curriculum, 2026-11-21: fundamentals before depth; topics off the syllabus last),
+ * then the weighted score and the E-15 tie-breaks (teachability, accuracy, audience, visual, hook), then the
+ * deterministic system field. The older row wins an exact tie, which is E-16's "retain incumbent". Scores stay gates.
  */
-export const POOL_ORDER_BY = `weighted_score DESC NULLS LAST,
+export const POOL_ORDER_BY = `syllabus_rank ASC NULLS LAST,
+  weighted_score DESC NULLS LAST,
   teachability_45s DESC NULLS LAST,
   accuracy_under_simplification DESC NULLS LAST,
   audience_fit DESC NULLS LAST,
@@ -99,6 +103,11 @@ export type NewTopic = {
   sourceUrl?: string | null;
   sourceText?: string | null;
   origin: TopicOrigin;
+  /** Coverage bucket and lesson frame (ideas coverage, 2026-11-03). */
+  bucket?: string | null;
+  lessonPayload?: string | null;
+  lessonAltitude?: LessonAltitude | null;
+  lessonMap?: string | null;
 };
 
 export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<TopicRow[]> {
@@ -108,8 +117,9 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
       const title = topic.title.trim();
       if (!title) throw new Error('topic title is empty');
       const { rows } = await tx.query<Record<string, unknown>>(
-        `INSERT INTO explainers.topics (title, scope, term, source_url, source_text, origin)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO explainers.topics
+           (title, scope, term, source_url, source_text, origin, bucket, lesson_payload, lesson_altitude, lesson_map, syllabus_rank)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           title,
@@ -118,12 +128,25 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
           topic.sourceUrl?.trim() || null,
           topic.sourceText?.trim() || null,
           topic.origin,
+          topic.bucket?.trim() || null,
+          topic.lessonPayload?.trim() || null,
+          topic.lessonAltitude ?? null,
+          topic.lessonMap?.trim() || null,
+          syllabusRank(topic.term),
         ],
       );
       added.push(toTopic(rows[0]));
     }
     return added;
   });
+}
+
+/** Every topic's term and status, for the curriculum's "taken" check (nextSyllabusTopics). */
+export async function listTopicTerms(db: Queryable): Promise<{ term: string; status: string; duplicateOf: string | null; syllabusRank: number | null }[]> {
+  const { rows } = await db.query<{ term: string; status: string; duplicate_of: string | null; syllabus_rank: number | null }>(
+    `SELECT term, status, duplicate_of::text AS duplicate_of, syllabus_rank FROM explainers.topics WHERE term IS NOT NULL`,
+  );
+  return rows.map((r) => ({ term: r.term, status: r.status, duplicateOf: r.duplicate_of, syllabusRank: r.syllabus_rank }));
 }
 
 export async function getTopic(db: Queryable, id: string): Promise<TopicRow | null> {
@@ -163,12 +186,34 @@ export async function listRecentlyRendered(
 ): Promise<TopicRow[]> {
   const { rows } = await db.query<Record<string, unknown>>(
     `SELECT * FROM explainers.topics
-      WHERE rendered_at IS NOT NULL
+      WHERE rendered_at IS NOT NULL AND status <> 'retired'
         AND rendered_at >= $1::timestamptz - make_interval(days => $2::int)
       ORDER BY rendered_at DESC`,
     [now.toISOString(), lookbackDays],
   );
   return rows.map(toTopic);
+}
+
+/** Every rendered topic, newest first: the coverage map's input (ideas coverage, 2026-11-03). */
+export async function listRendered(db: Queryable): Promise<TopicRow[]> {
+  const { rows } = await db.query<Record<string, unknown>>(
+    `SELECT * FROM explainers.topics WHERE rendered_at IS NOT NULL AND status <> 'retired' ORDER BY rendered_at DESC`,
+  );
+  return rows.map(toTopic);
+}
+
+/** Writes a topic's bucket and lesson frame (generator, seeds, the payload rewrite and the one-time backfill). */
+export async function saveLessonFrame(
+  db: Queryable,
+  topicId: string,
+  frame: { bucket?: string | null; payload: string; altitude: LessonAltitude; map: string },
+): Promise<void> {
+  await db.query(
+    `UPDATE explainers.topics
+        SET bucket = COALESCE($2, bucket), lesson_payload = $3, lesson_altitude = $4, lesson_map = $5, updated_at = now()
+      WHERE id = $1`,
+    [topicId, frame.bucket ?? null, frame.payload, frame.altitude, frame.map],
+  );
 }
 
 /** Lucas's Reject on a topic that has not been rendered or queued. */
@@ -221,13 +266,106 @@ export async function recordCost(db: Queryable, event: CostEventInput): Promise<
   );
 }
 
-/** Production spend on one Eastern-time day: renders plus the idea pipeline (A-4). */
-export async function productionSpendForDay(db: Queryable, day: string): Promise<number> {
+export type CostBreakdownRow = {
+  jobId: string;
+  component: string;
+  model?: string | null;
+  turns?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  usd: number;
+  wallMs?: number;
+  detail?: Record<string, unknown>;
+};
+
+/**
+ * Session B telemetry rows (explainers.cost_breakdown): an attribution of spend that cost_events
+ * already holds, so this never touches cost_events or jobs.spend_usd (no double counting).
+ */
+export async function recordCostBreakdown(db: Queryable, rows: readonly CostBreakdownRow[]): Promise<void> {
+  for (const r of rows) {
+    await db.query(
+      `INSERT INTO explainers.cost_breakdown
+         (job_id, component, model, turns, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, usd, wall_ms, detail)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [r.jobId, r.component, r.model ?? null, r.turns ?? 0, r.inputTokens ?? 0, r.outputTokens ?? 0, r.cacheReadTokens ?? 0, r.cacheWriteTokens ?? 0, Number.isFinite(r.usd) ? r.usd : 0, Math.round(r.wallMs ?? 0), JSON.stringify(r.detail ?? {})],
+    );
+  }
+}
+
+/** A render's first-try log rows (explainers.first_try_log), as the injection ledger reads them. */
+export type FirstTryContext = {
+  label: string;
+  role: string;
+  look: string;
+  frame: string | null;
+  injected: string[];
+  scores: Record<string, number>;
+  misses: string[];
+  firstTry: string[] | null;
+  lessons?: string[];
+};
+
+/** Save one render's first-try log, replacing any rows the job already has (the repair pass). */
+export async function saveFirstTryLog(db: ExplainersDb, render: { jobId: string; at: string; contexts: readonly FirstTryContext[] }): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query(`DELETE FROM explainers.first_try_log WHERE job_id = $1`, [render.jobId]);
+    for (const c of render.contexts) {
+      await tx.query(
+        `INSERT INTO explainers.first_try_log (job_id, render_at, label, role, look, frame, injected, scores, misses, lessons, first_try)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [render.jobId, render.at, c.label, c.role, c.look, c.frame, c.injected, JSON.stringify(c.scores ?? {}), c.misses, c.lessons ?? [], c.firstTry === null ? null : JSON.stringify(c.firstTry)],
+      );
+    }
+  });
+}
+
+/** The last `limit` renders' first-try logs, oldest first (the ledger's history). */
+export async function loadFirstTryLog(db: Queryable, limit = 20): Promise<{ jobId: string; at: string; contexts: FirstTryContext[] }[]> {
+  const { rows } = await db.query<{ job_id: string; render_at: Date | string; label: string; role: string; look: string; frame: string | null; injected: string[]; scores: Record<string, number>; misses: string[]; lessons: string[]; first_try: string[] | null }>(
+    `SELECT job_id, render_at, label, role, look, frame, injected, scores, misses, lessons, first_try
+       FROM explainers.first_try_log
+      WHERE job_id IN (SELECT job_id FROM explainers.first_try_log GROUP BY job_id ORDER BY max(render_at) DESC LIMIT $1)
+      ORDER BY render_at, created_at`,
+    [limit],
+  );
+  const renders = new Map<string, { jobId: string; at: string; contexts: FirstTryContext[] }>();
+  for (const r of rows) {
+    const at = r.render_at instanceof Date ? r.render_at.toISOString() : String(r.render_at);
+    if (!renders.has(r.job_id)) renders.set(r.job_id, { jobId: r.job_id, at, contexts: [] });
+    renders.get(r.job_id)!.contexts.push({ label: r.label, role: r.role, look: r.look, frame: r.frame, injected: r.injected ?? [], scores: r.scores ?? {}, misses: r.misses ?? [], lessons: r.lessons ?? [], firstTry: r.first_try });
+  }
+  return [...renders.values()].sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/**
+ * Replace one job's session B breakdown rows (component `session_b:%`) in one transaction: delete,
+ * then insert. Used when the summary is rewritten after the repair pass, so nothing double counts.
+ * Like recordCostBreakdown, it never touches cost_events or jobs.spend_usd.
+ */
+export async function replaceCostBreakdown(db: ExplainersDb, jobId: string, rows: readonly CostBreakdownRow[]): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query(`DELETE FROM explainers.cost_breakdown WHERE job_id = $1 AND component LIKE 'session\\_b:%'`, [jobId]);
+    await recordCostBreakdown(tx, rows.filter((r) => r.jobId === jobId));
+  });
+}
+
+/**
+ * Spend counted against one Eastern-time day, in every mode: renders plus the idea pipeline (A-4). The daily spend cap
+ * applies in every mode (it once applied in production only; with Mode a developer label, an uncapped day was possible). Lead time (Bald-Eagle
+ * D4, D8): a cost counts against the date its render was made FOR (`target_date`), or its idea cycle's date (the date
+ * that cycle filled), else the day it was spent. So the night's spend for a date two days ahead is that date's, and the
+ * cutover night may spend up to one cap per date it fills.
+ */
+export async function spendForDay(db: Queryable, day: string): Promise<number> {
   const { rows } = await db.query<{ usd: unknown }>(
-    `SELECT COALESCE(SUM(usd), 0) AS usd
-       FROM explainers.cost_events
-      WHERE mode = 'production'
-        AND (created_at AT TIME ZONE '${NY_TZ}')::date = $1::date`,
+    `SELECT COALESCE(SUM(e.usd), 0) AS usd
+       FROM explainers.cost_events e
+       LEFT JOIN explainers.jobs j ON j.id = e.job_id
+       LEFT JOIN explainers.idea_cycles c ON c.id = e.idea_cycle_id
+      WHERE COALESCE(${jobTargetSql('j')}, c.ny_date, (e.created_at AT TIME ZONE '${NY_TZ}')::date) = $1::date`,
     [day],
   );
   return num(rows[0].usd);
@@ -251,12 +389,13 @@ async function topicPublished(db: Queryable, topicId: string): Promise<boolean> 
   return rows.length > 0;
 }
 
+/** Production renders counted against a day: made for it (the night's target date), or requested on it (a click). */
 async function productionRendersForDay(db: Queryable, day: string): Promise<number> {
   const { rows } = await db.query<{ n: unknown }>(
     `SELECT count(*) AS n
-       FROM explainers.jobs
-      WHERE mode = 'production'
-        AND (requested_at AT TIME ZONE '${NY_TZ}')::date = $1::date`,
+       FROM explainers.jobs j
+      WHERE j.mode = 'production'
+        AND ${jobDaySql('j')} = $1::date`,
     [day],
   );
   return num(rows[0].n);
@@ -302,7 +441,15 @@ export async function typicalRenderCostUsd(db: Queryable, settings: Pick<Explain
  */
 export async function requestRender(
   db: ExplainersDb,
-  input: { topicId: string; trigger: JobTrigger; settings: ExplainersSettings; now?: Date; overrideCaps?: boolean },
+  input: {
+    topicId: string;
+    trigger: JobTrigger;
+    settings: ExplainersSettings;
+    now?: Date;
+    overrideCaps?: boolean;
+    /** The night's render: the date it is made FOR (Bald-Eagle D4), stamped on the job; the caps are that date's. Absent: today. */
+    targetDate?: string | null;
+  },
 ): Promise<RenderRequest> {
   const { topicId, trigger, settings } = input;
   return db.transaction(async (tx) => {
@@ -319,12 +466,13 @@ export async function requestRender(
 
     // A person's confirmed click may go over the day's caps (it is one render, and the spend is recorded as any render's);
     // the night never does.
-    if (settings.mode === 'production' && !(trigger === 'click' && input.overrideCaps)) {
-      const day = nyDate(input.now);
-      if ((await productionRendersForDay(tx, day)) >= settings.daily_render_cap) {
+    if (!(trigger === 'click' && input.overrideCaps)) {
+      const day = input.targetDate ?? nyDate(input.now);
+      if (settings.mode === 'production' && (await productionRendersForDay(tx, day)) >= settings.daily_render_cap) {
         return { ok: false, reason: 'daily_render_cap' } as const;
       }
-      if ((await productionSpendForDay(tx, day)) >= settings.daily_spend_cap_usd) {
+      // The daily spend cap applies in every mode.
+      if ((await spendForDay(tx, day)) >= settings.daily_spend_cap_usd) {
         return { ok: false, reason: 'daily_spend_cap' } as const;
       }
     }
@@ -345,6 +493,10 @@ export async function requestRender(
       ],
     );
     if (!rows[0]) return { ok: false, reason: 'already_in_flight' } as const;
+    // The target date, where the column exists (db/bald_eagle_2026_11_12_leadtime.sql); without it the render counts as today's.
+    if (input.targetDate && (await jobsHaveTargetDate(tx))) {
+      await tx.query(`UPDATE explainers.jobs SET target_date = $2::date WHERE id = $1`, [rows[0].id, input.targetDate]);
+    }
 
     await tx.query(
       `UPDATE explainers.topics SET status = 'queued', updated_at = now() WHERE id = $1`,
@@ -354,8 +506,11 @@ export async function requestRender(
   });
 }
 
-/** Oldest requested job, if nothing is running (one render at a time, E-02). */
-export async function claimNextJob(db: Queryable): Promise<JobRow | null> {
+/**
+ * Oldest requested job, if nothing is running (one render at a time, E-02). `parallel` (local runs started from
+ * Claude Code, Lucas 2026-11-03: "set the norm to having local renders … run in parallel") claims it regardless.
+ */
+export async function claimNextJob(db: Queryable, opts: { parallel?: boolean } = {}): Promise<JobRow | null> {
   const { rows } = await db.query<Record<string, unknown>>(
     `UPDATE explainers.jobs
         SET status = 'running', started_at = now(), stage = 'claimed'
@@ -366,8 +521,9 @@ export async function claimNextJob(db: Queryable): Promise<JobRow | null> {
                LIMIT 1
                FOR UPDATE SKIP LOCKED
             )
-        AND NOT EXISTS (SELECT 1 FROM explainers.jobs WHERE status = 'running')
+        AND ($1::boolean OR NOT EXISTS (SELECT 1 FROM explainers.jobs WHERE status = 'running'))
       RETURNING *`,
+    [opts.parallel === true],
   );
   return rows[0] ? toJob(rows[0]) : null;
 }
@@ -401,6 +557,23 @@ export async function recentOpeners(db: Queryable, exceptJobId: string, limit: n
     [exceptJobId, limit],
   );
   return rows.map((r) => r.opener);
+}
+
+/** The hand-offs of the latest reels before job `exceptJobId`, newest first (Explainers 4.3). */
+export async function recentHandoffs(db: Queryable, exceptJobId: string, limit: number): Promise<string[]> {
+  const { rows } = await db.query<{ handoff: string }>(
+    `SELECT handoff FROM explainers.jobs
+      WHERE handoff IS NOT NULL AND id <> $1 AND status <> 'failed'
+      ORDER BY seq DESC
+      LIMIT $2`,
+    [exceptJobId, limit],
+  );
+  return rows.map((r) => r.handoff);
+}
+
+/** Record the hand-off template job `id` drew (Explainers 4.3). */
+export async function setJobHandoff(db: Queryable, id: string, handoff: string): Promise<void> {
+  await db.query('UPDATE explainers.jobs SET handoff = $2 WHERE id = $1', [id, handoff]);
 }
 
 /** Record the opener job `id` drew. */
@@ -625,6 +798,10 @@ export async function getFeedback(db: Queryable, jobId: string): Promise<Feedbac
  * now. A topic that already rendered goes back to `promoted` so
  * `requestRender` accepts it; the daily caps still apply. The new render
  * becomes the current version when it finishes; earlier ones stay as history.
+ *
+ * A regenerate is a whole new reel, analogy included (Lucas, 2026-11-08): the topic's analogy pick
+ * moves to `jev_notes.analogies_retired`, so the render's first stage picks a fresh one (EX3-31) and
+ * the picker refuses a retired name. A refused regenerate puts the pick back.
  */
 export async function requestRerender(
   db: ExplainersDb,
@@ -634,10 +811,37 @@ export async function requestRerender(
     `UPDATE explainers.topics SET status = 'promoted', updated_at = now() WHERE id = $1 AND status = 'rendered' RETURNING id`,
     [input.topicId],
   );
+  const { rows: before } = await db.query<{ analogy: unknown }>(
+    `SELECT jev_notes -> 'analogy' AS analogy FROM explainers.topics WHERE id = $1`,
+    [input.topicId],
+  );
+  const pick = before[0]?.analogy ?? null;
+  if (pick) {
+    await db.query(
+      `UPDATE explainers.topics
+          SET jev_notes = (jev_notes - 'analogy')
+                || jsonb_build_object('analogies_retired', COALESCE(jev_notes -> 'analogies_retired', '[]'::jsonb) || jsonb_build_array(jev_notes -> 'analogy')),
+              updated_at = now()
+        WHERE id = $1`,
+      [input.topicId],
+    );
+  }
   const result = await requestRender(db, { topicId: input.topicId, trigger: 'click', settings: input.settings, now: input.now });
-  // A cap refused it: the topic goes back to how it was.
-  if (!result.ok && reopened.rows[0]) {
-    await db.query(`UPDATE explainers.topics SET status = 'rendered', updated_at = now() WHERE id = $1 AND status = 'promoted'`, [input.topicId]);
+  // A cap refused it: the topic goes back to how it was, its analogy pick included.
+  if (!result.ok) {
+    if (reopened.rows[0]) {
+      await db.query(`UPDATE explainers.topics SET status = 'rendered', updated_at = now() WHERE id = $1 AND status = 'promoted'`, [input.topicId]);
+    }
+    if (pick) {
+      await db.query(
+        `UPDATE explainers.topics
+            SET jev_notes = jev_notes || jsonb_build_object('analogy', $2::jsonb,
+                  'analogies_retired', (jev_notes -> 'analogies_retired') - (jsonb_array_length(jev_notes -> 'analogies_retired') - 1)),
+                updated_at = now()
+          WHERE id = $1`,
+        [input.topicId, JSON.stringify(pick)],
+      );
+    }
   }
   return result;
 }

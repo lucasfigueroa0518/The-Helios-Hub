@@ -1,0 +1,56 @@
+/* The Real or AI? swipe lab (planning/Real or AI/CONTRACT.md §4 B). Scoped under .rl, modelled on the meme lab. */
+.rl {
+  --rl-bg: #f6f6f4;
+  --rl-card: #ffffff;
+  --rl-ink: #161616;
+  --rl-ink-2: #5d5d5a;
+  --rl-line: #e2e2de;
+  --rl-accent: #ff5e1a;
+  --rl-ok: #2f9e44;
+  --rl-bad: #c92a2a;
+  min-height: 100vh;
+  background: var(--rl-bg);
+  color: var(--rl-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  padding: 24px clamp(16px, 4vw, 40px) 48px;
+  box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  .rl { --rl-bg: #121212; --rl-card: #1c1c1c; --rl-ink: #ececea; --rl-ink-2: #a3a3a0; --rl-line: #2e2e2c; }
+}
+.rl *, .rl *::before, .rl *::after { box-sizing: border-box; }
+.rl h1 { font-size: 26px; margin: 0 0 4px; }
+.rl-head { margin-bottom: 18px; max-width: 720px; }
+.rl-sub, .rl-note { color: var(--rl-ink-2); margin: 0; font-size: 14px; line-height: 1.5; }
+.rl-error { color: var(--rl-bad); font-size: 14px; margin: 8px 0; }
+.rl-card { background: var(--rl-card); border: 1px solid var(--rl-line); border-radius: 12px; padding: 16px; margin-bottom: 16px; max-width: 720px; }
+.rl-center { display: flex; justify-content: center; padding: 32px 16px; }
+.rl button { font: inherit; font-size: 15px; border: 1px solid var(--rl-line); background: transparent; color: var(--rl-ink); padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.rl button:disabled { opacity: 0.5; cursor: default; }
+.rl button:focus-visible { outline: 2px solid var(--rl-accent); outline-offset: 2px; }
+.rl .rl-primary { background: var(--rl-accent); border-color: var(--rl-accent); color: #fff; font-weight: 600; }
+
+/* The play area: a phone-shaped stage (9:16), the image for the look, then the question. */
+.rl-play { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.rl-progress { font-size: 13px; color: var(--rl-ink-2); font-variant-numeric: tabular-nums; }
+.rl-stage { position: relative; width: min(100%, 405px); aspect-ratio: 9 / 16; border-radius: 14px; overflow: hidden; background: #060608; display: flex; align-items: center; justify-content: center; }
+.rl-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.rl-img.on { opacity: 1; }
+.rl-stage .rl-note { color: #d4d4d0; padding: 24px; text-align: center; }
+.rl-ask { color: #fff; font-size: 30px; font-weight: 600; margin: 0; }
+.rl-actions { display: flex; gap: 12px; justify-content: center; margin-top: 4px; }
+.rl .rl-btn { min-width: 140px; padding: 14px 20px; font-size: 18px; font-weight: 600; }
+.rl .rl-real { background: #fff; color: #000; border-color: #c9c9c5; }
+.rl .rl-ai { background: var(--rl-accent); color: #fff; border-color: var(--rl-accent); }
+.rl kbd { font: inherit; font-size: 12px; opacity: 0.6; margin-left: 6px; }
+
+/* The end screen. */
+.rl-score { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+.rl-score-n { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rl-score-v { font-size: 20px; font-weight: 600; }
+.rl-score.ok .rl-score-v { color: var(--rl-ok); }
+.rl-score.bad .rl-score-v { color: var(--rl-bad); }
+.rl-results { margin: 14px 0 0; padding-left: 22px; font-size: 14px; line-height: 1.7; }
+.rl-results li.ok { color: var(--rl-ink-2); }
+.rl-results li.bad { color: var(--rl-ink); }
+.rl-results code { font-size: 12px; }

@@ -16,7 +16,7 @@ export { LFD_SYSTEM, LFD_TOOL };
 /** Prompt-cache tokens across the call's turns (spec §9 cost telemetry). */
 export type CacheTokens = { readTokens: number; creationTokens: number };
 
-export const LIMITS = { setup: 90, headline: 70, body: 190 } as const;
+export const LIMITS = { setup: 90, headline: 55, body: 190 } as const;
 export const MAX_SETUPS = 2;
 export const WRITER_MODEL: StageModelConfig = { model: 'claude-sonnet-5-5', effort: 'high' };
 const SOURCE_CHARS = 9000;

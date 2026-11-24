@@ -20,6 +20,7 @@ const PLACEHOLDER: Record<SeedVertical, string> = {
   last_few_days: 'In a sentence or two, what is the story? e.g. what happened and why it matters.',
   stories: 'In a sentence or two, describe the story, the number, or the tool.',
   explainers: 'A concept or a sentence on it, e.g. AI hallucinations.',
+  field_notes: 'The tool, skill or repo, and what someone gets from it.',
 };
 
 export function OneBoxSeedForm({ vertical, done }: SeedFormProps & { vertical: SeedVertical }) {

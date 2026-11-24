@@ -28,7 +28,7 @@ cd "$ROOT"
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
 ZONE="${GCP_ZONE:-us-west1-a}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
-UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher}"
+UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher helios-reel-ai-drama}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"
 IAP=""
 if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
@@ -52,6 +52,16 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
     if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('ai_events.runs') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
       AI_EVENTS_INFLIGHT="UNION ALL SELECT 'ai events run ' || id FROM ai_events.runs WHERE status = 'running'"
     fi
+    # The same for Field Notes: its line joins only once its schema is applied.
+    FIELD_NOTES_INFLIGHT=""
+    if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('field_notes.runs') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
+      FIELD_NOTES_INFLIGHT="UNION ALL SELECT 'field notes run ' || id FROM field_notes.runs WHERE status = 'running'"
+    fi
+    # AI Drama Reels (reel_ai_drama): a running job or a running Develop / Calibrate click, once its schema is applied.
+    DRAMA_INFLIGHT=""
+    if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('reel_ai_drama.requests') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
+      DRAMA_INFLIGHT="UNION ALL SELECT 'ai drama job ' || id FROM reel_ai_drama.jobs WHERE status = 'running' UNION ALL SELECT 'ai drama request ' || id FROM reel_ai_drama.requests WHERE status = 'running'"
+    fi
     INFLIGHT="$(psql "${DB_URL}" -Atc "
       SELECT 'carousel run ' || id FROM social.runs WHERE status = 'running'
       UNION ALL SELECT 'reels run ' || id FROM reels.runs WHERE status = 'running'
@@ -62,6 +72,8 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
       UNION ALL SELECT 'story set ' || id FROM stories.sets WHERE status = 'building'
       UNION ALL SELECT 'last few days run ' || id FROM lfd.runs WHERE status = 'running'
       ${AI_EVENTS_INFLIGHT}
+      ${FIELD_NOTES_INFLIGHT}
+      ${DRAMA_INFLIGHT}
       UNION ALL SELECT 'publish ' || id FROM social_hub.publish_attempts WHERE status IN ('creating', 'processing', 'publishing')" 2>/dev/null || echo 'CHECK_FAILED')"
     if [[ "${INFLIGHT}" == "CHECK_FAILED" ]]; then
       echo "Could not check for in-flight work; deploying anyway (FORCE_DEPLOY=1 silences this)." >&2
@@ -86,7 +98,14 @@ REMOTE_ARCHIVE="/tmp/helios-social-app-${STAMP}.tgz"
 REMOTE_ENV="/tmp/social-worker-${STAMP}.env"
 UNIT_STAGE="$(mktemp -d -t helios-social-units-XXXXXX)"
 trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}"' EXIT
-tar -czf "${ARCHIVE}" \
+# macOS tar adds a "._name" AppleDouble file for every file with an extended attribute (all of them:
+# com.apple.provenance). They start with NUL bytes; an explainer render that copied the kit read one and
+# failed (invalid byte sequence 0x00). COPYFILE_DISABLE stops them; the ._* exclude is for other tars.
+# The local worktrees are whole repo copies the workers never use.
+COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
+  --exclude='._*' \
+  --exclude='./.worktrees' \
+  --exclude='./.claude/worktrees' \
   --exclude='./.git' \
   --exclude='./node_modules' \
   --exclude='./.next' \
@@ -98,7 +117,22 @@ tar -czf "${ARCHIVE}" \
   --exclude='./Claude outputs' \
   --exclude='./.explainers-local' \
   --exclude='./explainers/smoke/.out' \
+  --exclude='./explainers/design/sfx/dropins' \
   .
+
+# Sound drop-ins (explainers/design/sfx/dropins, a link to a local folder of packs; catalog-inbox.json
+# names their files): they live on the VM in /opt/helios-social/sfx-dropins, outside the app folder
+# every deploy replaces, and the app links them in below. SYNC_SFX_DROPINS=1 uploads the local packs
+# (about 165 MB, once and whenever packs are added); without it the VM keeps the packs it has.
+DROPINS_ARCHIVE=""
+REMOTE_DROPINS="/tmp/helios-sfx-dropins-${STAMP}.tgz"
+if [[ "${SYNC_SFX_DROPINS:-}" == "1" ]]; then
+  [[ -d explainers/design/sfx/dropins/ ]] || { echo "SYNC_SFX_DROPINS=1 but explainers/design/sfx/dropins is missing" >&2; exit 1; }
+  DROPINS_ARCHIVE="$(mktemp -t helios-sfx-dropins-XXXXXX).tgz"
+  trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}" "${DROPINS_ARCHIVE}"' EXIT
+  COPYFILE_DISABLE=1 tar -czf "${DROPINS_ARCHIVE}" --exclude='._*' -C explainers/design/sfx/dropins/ .
+  gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" "${DROPINS_ARCHIVE}" "${INSTANCE}:${REMOTE_DROPINS}"
+fi
 
 gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
   "${ARCHIVE}" "${INSTANCE}:${REMOTE_ARCHIVE}"
@@ -125,6 +159,21 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
     echo 'Missing /opt/helios-social/worker.env on the VM. Pass SOCIAL_WORKER_ENV_FILE=… once.' >&2
     exit 1
   fi
+  # Fail fast on a dead Anthropic key (the deploy-worker-code.sh probe, for this VM). A bad key in
+  # worker.env made every IG Stories build 401 overnight. Only 401/403 block; a network blip or
+  # rate limit does not. One 1-token ping, key never printed.
+  KEY=\$(sudo grep -E '^ANTHROPIC_API_KEY=' /opt/helios-social/worker.env | head -1 | cut -d= -f2- | tr -d '\"\\r')
+  if [[ -z \"\${KEY}\" ]]; then
+    echo 'ERROR: ANTHROPIC_API_KEY missing in /opt/helios-social/worker.env. Pass SOCIAL_WORKER_ENV_FILE=… with a working key.' >&2
+    exit 1
+  fi
+  KEY_STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://api.anthropic.com/v1/messages \
+    -H \"x-api-key: \${KEY}\" -H 'anthropic-version: 2023-06-01' -H 'content-type: application/json' \
+    -d '{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' || true)
+  if [[ \"\${KEY_STATUS}\" == '401' || \"\${KEY_STATUS}\" == '403' ]]; then
+    echo \"ERROR: ANTHROPIC_API_KEY in worker.env was rejected (HTTP \${KEY_STATUS}). Nothing was stopped or replaced. Sync a working key from .env.local and redeploy with SOCIAL_WORKER_ENV_FILE=….\" >&2
+    exit 1
+  fi
   # Every social unit runs as helios (not root): Claude Code refuses
   # --dangerously-skip-permissions as root, and the Explainers render agent needs it.
   # System packages stay root; node_modules, browsers and the venv belong to helios.
@@ -138,6 +187,17 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   sudo rm -rf /opt/helios-social/app
   sudo mkdir -p /opt/helios-social/app /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage \${H} \${PW}
   sudo tar -xzf ${REMOTE_ARCHIVE} -C /opt/helios-social/app --no-same-owner
+  # the sound drop-ins: replaced when this deploy uploaded them, then linked into the app's library
+  if [[ -f ${REMOTE_DROPINS} ]]; then
+    sudo rm -rf /opt/helios-social/sfx-dropins.new && sudo mkdir -p /opt/helios-social/sfx-dropins.new
+    sudo tar -xzf ${REMOTE_DROPINS} -C /opt/helios-social/sfx-dropins.new --no-same-owner
+    sudo rm -rf /opt/helios-social/sfx-dropins && sudo mv /opt/helios-social/sfx-dropins.new /opt/helios-social/sfx-dropins
+    rm -f ${REMOTE_DROPINS}
+  fi
+  if [[ -d /opt/helios-social/sfx-dropins ]]; then
+    sudo chown -R helios:helios /opt/helios-social/sfx-dropins
+    sudo ln -sfn /opt/helios-social/sfx-dropins /opt/helios-social/app/explainers/design/sfx/dropins
+  fi
   sudo chown -R helios:helios /opt/helios-social/app /opt/helios-social/explainers \${H} \${PW}
   sudo chmod -R go-w /opt/helios-social/app && sudo chmod 755 /opt/helios-social/app
   AS_HELIOS=\"sudo -u helios env HOME=\${H} PLAYWRIGHT_BROWSERS_PATH=\${PW} HYPERFRAMES_NO_TELEMETRY=1\"

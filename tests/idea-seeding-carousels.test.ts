@@ -51,7 +51,8 @@ test('a pasted link is read, scored once, stored, and listed as the person’s o
   assert.equal(out.title, 'OpenAI ships a new model');
   assert.deepEqual(calls, { fetch: 1, jev: 1 }, 'one page read, one scoring call, no model');
   assert.equal((await readOpenSeeds(query, NOW)).length, 1);
-  const { rows } = await query(CAROUSEL_IDEAS_SQL);
+  // The SQL reads expiry against now(): pin it to the test's clock, or the seed reads as expired a week after NOW.
+  const { rows } = await query(CAROUSEL_IDEAS_SQL.replace('now()', `'${NOW.toISOString()}'::timestamptz`));
   const ideas = carouselIdeas(rows as CarouselIdeaRow[]);
   assert.equal(ideas.length, 1);
   assert.deepEqual([ideas[0]!.id, ideas[0]!.yours, ideas[0]!.title, ideas[0]!.state], [`carousels:story:${link(1)}`, true, 'OpenAI ships a new model', 'idea_only']);

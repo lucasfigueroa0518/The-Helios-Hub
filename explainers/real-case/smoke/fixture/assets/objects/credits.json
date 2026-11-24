@@ -1,0 +1,4 @@
+[
+ {"what": "smartphone", "kind": "cutout", "file": "assets/objects/cutout/smartphone.png", "credit": "Made for Helios", "license": "generated", "source": "gpt-image-2"},
+ {"what": "smartphone", "kind": "drawing", "file": "assets/objects/drawing/smartphone.png", "credit": "Drawn for Helios", "license": "generated", "source": "gpt-image-2"}
+]

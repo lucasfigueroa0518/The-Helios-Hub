@@ -1,0 +1,32 @@
+{
+  "slides": [
+    {
+      "tipId": "t1",
+      "headline": "Catch small slips before you rely on results",
+      "body": "A built-in setting called the review option gives each run a second pass before it finishes, so mistakes are easier to spot.",
+      "name": "Review option",
+      "tryIt": "Switch on the review option in settings; each run gets a second pass."
+    },
+    {
+      "tipId": "t2",
+      "headline": "Keep long chats quick by clearing old messages",
+      "body": "A built-in command called trim shortens a long conversation to its latest messages, so replies stop slowing down.",
+      "name": "/trim",
+      "tryIt": "Type `/trim 20` and press Enter to keep the last 20 messages."
+    },
+    {
+      "tipId": "t3",
+      "headline": "Pick up a crashed run where it stopped",
+      "body": "A built-in option called snapshot saves the state of a run while it works, so a crash loses nothing.",
+      "name": "--snapshot",
+      "tryIt": "Pass `--snapshot` when you start a run, then `--resume` to continue."
+    }
+  ],
+  "skipped": [
+    {
+      "tipId": "t4",
+      "missing": "the source does not say what the helper is or what it does for the reader"
+    }
+  ],
+  "caption": "Three small settings that make long runs easier. Save this post for later."
+}

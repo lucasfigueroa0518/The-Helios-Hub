@@ -1,0 +1,3118 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track.mp3",
+    "volume": 0.31,
+    "query": "tense documentary underscore, low pulsing bass, suspense, investigative, 80-100 BPM, instrumental",
+    "mode": "retrieve",
+    "duration_s": 80.945
+  },
+  "bgm_pending": false,
+  "voices": [
+    {
+      "frame": 1,
+      "path": "assets/voice/01.wav",
+      "duration_s": 7.757,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Microsoft",
+          "start": 0,
+          "end": 0.493
+        },
+        {
+          "id": "w1",
+          "text": "was",
+          "start": 0.525,
+          "end": 0.704
+        },
+        {
+          "id": "w2",
+          "text": "publicly",
+          "start": 0.81,
+          "end": 1.168
+        },
+        {
+          "id": "w3",
+          "text": "condemning",
+          "start": 1.24,
+          "end": 1.668
+        },
+        {
+          "id": "w4",
+          "text": "the",
+          "start": 1.704,
+          "end": 1.74
+        },
+        {
+          "id": "w5",
+          "text": "separation",
+          "start": 1.811,
+          "end": 2.311
+        },
+        {
+          "id": "w6",
+          "text": "of",
+          "start": 2.347,
+          "end": 2.383
+        },
+        {
+          "id": "w7",
+          "text": "migrant",
+          "start": 2.454,
+          "end": 2.74
+        },
+        {
+          "id": "w8",
+          "text": "children",
+          "start": 2.811,
+          "end": 3.097
+        },
+        {
+          "id": "w9",
+          "text": "from",
+          "start": 3.168,
+          "end": 3.24
+        },
+        {
+          "id": "w10",
+          "text": "their",
+          "start": 3.311,
+          "end": 3.383
+        },
+        {
+          "id": "w11",
+          "text": "parents,",
+          "start": 3.516,
+          "end": 3.883
+        },
+        {
+          "id": "w12",
+          "text": "while",
+          "start": 4.132,
+          "end": 4.175
+        },
+        {
+          "id": "w13",
+          "text": "its",
+          "start": 4.282,
+          "end": 4.389
+        },
+        {
+          "id": "w14",
+          "text": "own",
+          "start": 4.475,
+          "end": 4.604
+        },
+        {
+          "id": "w15",
+          "text": "blog",
+          "start": 4.675,
+          "end": 4.961
+        },
+        {
+          "id": "w16",
+          "text": "said",
+          "start": 5.032,
+          "end": 5.104
+        },
+        {
+          "id": "w17",
+          "text": "its",
+          "start": 5.175,
+          "end": 5.318
+        },
+        {
+          "id": "w18",
+          "text": "cloud",
+          "start": 5.461,
+          "end": 5.604
+        },
+        {
+          "id": "w19",
+          "text": "could",
+          "start": 5.675,
+          "end": 5.747
+        },
+        {
+          "id": "w20",
+          "text": "help",
+          "start": 5.818,
+          "end": 5.961
+        },
+        {
+          "id": "w21",
+          "text": "ICE",
+          "start": 6.129,
+          "end": 6.318
+        },
+        {
+          "id": "w22",
+          "text": "speed",
+          "start": 6.425,
+          "end": 6.532
+        },
+        {
+          "id": "w23",
+          "text": "up",
+          "start": 6.604,
+          "end": 6.747
+        },
+        {
+          "id": "w24",
+          "text": "facial",
+          "start": 6.818,
+          "end": 7.104
+        },
+        {
+          "id": "w25",
+          "text": "recognition.",
+          "start": 7.175,
+          "end": 7.675
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "Microsoft",
+          "start": 0,
+          "end": 0.539
+        },
+        {
+          "id": "w1",
+          "text": "was",
+          "start": 0.571,
+          "end": 0.75
+        },
+        {
+          "id": "w2",
+          "text": "publicly",
+          "start": 0.786,
+          "end": 1.214
+        },
+        {
+          "id": "w3",
+          "text": "condemning",
+          "start": 1.286,
+          "end": 1.714
+        },
+        {
+          "id": "w4",
+          "text": "the",
+          "start": 1.75,
+          "end": 1.786
+        },
+        {
+          "id": "w5",
+          "text": "separation",
+          "start": 1.857,
+          "end": 2.357
+        },
+        {
+          "id": "w6",
+          "text": "of",
+          "start": 2.393,
+          "end": 2.429
+        },
+        {
+          "id": "w7",
+          "text": "migrant",
+          "start": 2.5,
+          "end": 2.786
+        },
+        {
+          "id": "w8",
+          "text": "children",
+          "start": 2.857,
+          "end": 3.143
+        },
+        {
+          "id": "w9",
+          "text": "from",
+          "start": 3.214,
+          "end": 3.286
+        },
+        {
+          "id": "w10",
+          "text": "their",
+          "start": 3.357,
+          "end": 3.429
+        },
+        {
+          "id": "w11",
+          "text": "parents,",
+          "start": 3.5,
+          "end": 3.929
+        },
+        {
+          "id": "w12",
+          "text": "while",
+          "start": 4.286,
+          "end": 4.357
+        },
+        {
+          "id": "w13",
+          "text": "its",
+          "start": 4.464,
+          "end": 4.571
+        },
+        {
+          "id": "w14",
+          "text": "own",
+          "start": 4.643,
+          "end": 4.786
+        },
+        {
+          "id": "w15",
+          "text": "blog",
+          "start": 4.857,
+          "end": 5.143
+        },
+        {
+          "id": "w16",
+          "text": "said",
+          "start": 5.214,
+          "end": 5.286
+        },
+        {
+          "id": "w17",
+          "text": "its",
+          "start": 5.357,
+          "end": 5.5
+        },
+        {
+          "id": "w18",
+          "text": "cloud",
+          "start": 5.643,
+          "end": 5.786
+        },
+        {
+          "id": "w19",
+          "text": "could",
+          "start": 5.857,
+          "end": 5.929
+        },
+        {
+          "id": "w20",
+          "text": "help",
+          "start": 6,
+          "end": 6.143
+        },
+        {
+          "id": "w21",
+          "text": "ICE",
+          "start": 6.286,
+          "end": 6.5
+        },
+        {
+          "id": "w22",
+          "text": "speed",
+          "start": 6.607,
+          "end": 6.714
+        },
+        {
+          "id": "w23",
+          "text": "up",
+          "start": 6.786,
+          "end": 6.929
+        },
+        {
+          "id": "w24",
+          "text": "facial",
+          "start": 7,
+          "end": 7.286
+        },
+        {
+          "id": "w25",
+          "text": "recognition.",
+          "start": 7.357,
+          "end": 7.857
+        }
+      ],
+      "duration_orig": 8.183,
+      "lead_s": 0
+    },
+    {
+      "frame": 2,
+      "path": "assets/voice/02.wav",
+      "duration_s": 7.232,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Microsoft",
+          "start": 0.02,
+          "end": 0.401
+        },
+        {
+          "id": "w1",
+          "text": "wrote",
+          "start": 0.437,
+          "end": 0.615
+        },
+        {
+          "id": "w2",
+          "text": "that",
+          "start": 0.687,
+          "end": 0.758
+        },
+        {
+          "id": "w3",
+          "text": "in",
+          "start": 0.83,
+          "end": 0.901
+        },
+        {
+          "id": "w4",
+          "text": "January,",
+          "start": 1.044,
+          "end": 1.544
+        },
+        {
+          "id": "w5",
+          "text": "in",
+          "start": 1.736,
+          "end": 1.739
+        },
+        {
+          "id": "w6",
+          "text": "a",
+          "start": 1.775,
+          "end": 1.811
+        },
+        {
+          "id": "w7",
+          "text": "post",
+          "start": 1.882,
+          "end": 2.096
+        },
+        {
+          "id": "w8",
+          "text": "announcing",
+          "start": 2.168,
+          "end": 2.525
+        },
+        {
+          "id": "w9",
+          "text": "ICE's",
+          "start": 2.596,
+          "end": 3.096
+        },
+        {
+          "id": "w10",
+          "text": "move",
+          "start": 3.168,
+          "end": 3.382
+        },
+        {
+          "id": "w11",
+          "text": "onto",
+          "start": 3.489,
+          "end": 3.596
+        },
+        {
+          "id": "w12",
+          "text": "its",
+          "start": 3.668,
+          "end": 3.739
+        },
+        {
+          "id": "w13",
+          "text": "government",
+          "start": 3.811,
+          "end": 4.096
+        },
+        {
+          "id": "w14",
+          "text": "cloud,",
+          "start": 4.168,
+          "end": 4.382
+        },
+        {
+          "id": "w15",
+          "text": "and",
+          "start": 4.731,
+          "end": 4.739
+        },
+        {
+          "id": "w16",
+          "text": "called",
+          "start": 4.811,
+          "end": 4.954
+        },
+        {
+          "id": "w17",
+          "text": "itself",
+          "start": 5.025,
+          "end": 5.311
+        },
+        {
+          "id": "w18",
+          "text": "proud",
+          "start": 5.48,
+          "end": 5.811
+        },
+        {
+          "id": "w19",
+          "text": "to",
+          "start": 5.882,
+          "end": 5.954
+        },
+        {
+          "id": "w20",
+          "text": "support",
+          "start": 6.025,
+          "end": 6.311
+        },
+        {
+          "id": "w21",
+          "text": "ICE's",
+          "start": 6.382,
+          "end": 6.811
+        },
+        {
+          "id": "w22",
+          "text": "work.",
+          "start": 6.882,
+          "end": 7.084
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "Microsoft",
+          "start": 0.246,
+          "end": 0.674
+        },
+        {
+          "id": "w1",
+          "text": "wrote",
+          "start": 0.71,
+          "end": 0.888
+        },
+        {
+          "id": "w2",
+          "text": "that",
+          "start": 0.96,
+          "end": 1.031
+        },
+        {
+          "id": "w3",
+          "text": "in",
+          "start": 1.103,
+          "end": 1.174
+        },
+        {
+          "id": "w4",
+          "text": "January,",
+          "start": 1.317,
+          "end": 1.817
+        },
+        {
+          "id": "w5",
+          "text": "in",
+          "start": 1.996,
+          "end": 2.031
+        },
+        {
+          "id": "w6",
+          "text": "a",
+          "start": 2.067,
+          "end": 2.103
+        },
+        {
+          "id": "w7",
+          "text": "post",
+          "start": 2.174,
+          "end": 2.388
+        },
+        {
+          "id": "w8",
+          "text": "announcing",
+          "start": 2.46,
+          "end": 2.817
+        },
+        {
+          "id": "w9",
+          "text": "ICE's",
+          "start": 2.888,
+          "end": 3.388
+        },
+        {
+          "id": "w10",
+          "text": "move",
+          "start": 3.46,
+          "end": 3.674
+        },
+        {
+          "id": "w11",
+          "text": "onto",
+          "start": 3.781,
+          "end": 3.888
+        },
+        {
+          "id": "w12",
+          "text": "its",
+          "start": 3.96,
+          "end": 4.031
+        },
+        {
+          "id": "w13",
+          "text": "government",
+          "start": 4.103,
+          "end": 4.388
+        },
+        {
+          "id": "w14",
+          "text": "cloud,",
+          "start": 4.46,
+          "end": 4.674
+        },
+        {
+          "id": "w15",
+          "text": "and",
+          "start": 4.996,
+          "end": 5.031
+        },
+        {
+          "id": "w16",
+          "text": "called",
+          "start": 5.103,
+          "end": 5.246
+        },
+        {
+          "id": "w17",
+          "text": "itself",
+          "start": 5.317,
+          "end": 5.603
+        },
+        {
+          "id": "w18",
+          "text": "proud",
+          "start": 5.746,
+          "end": 6.103
+        },
+        {
+          "id": "w19",
+          "text": "to",
+          "start": 6.174,
+          "end": 6.246
+        },
+        {
+          "id": "w20",
+          "text": "support",
+          "start": 6.317,
+          "end": 6.603
+        },
+        {
+          "id": "w21",
+          "text": "ICE's",
+          "start": 6.674,
+          "end": 7.103
+        },
+        {
+          "id": "w22",
+          "text": "work.",
+          "start": 7.174,
+          "end": 7.388
+        }
+      ],
+      "duration_orig": 7.773,
+      "lead_s": 0
+    },
+    {
+      "frame": 3,
+      "path": "assets/voice/03.wav",
+      "duration_s": 7.073,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Five",
+          "start": 0.02,
+          "end": 0.123
+        },
+        {
+          "id": "w1",
+          "text": "months",
+          "start": 0.195,
+          "end": 0.409
+        },
+        {
+          "id": "w2",
+          "text": "later,",
+          "start": 0.48,
+          "end": 0.695
+        },
+        {
+          "id": "w3",
+          "text": "over",
+          "start": 0.98,
+          "end": 1.052
+        },
+        {
+          "id": "w4",
+          "text": "Father's",
+          "start": 1.123,
+          "end": 1.409
+        },
+        {
+          "id": "w5",
+          "text": "Day",
+          "start": 1.48,
+          "end": 1.552
+        },
+        {
+          "id": "w6",
+          "text": "weekend,",
+          "start": 1.623,
+          "end": 1.909
+        },
+        {
+          "id": "w7",
+          "text": "Microsoft",
+          "start": 2.17,
+          "end": 2.503
+        },
+        {
+          "id": "w8",
+          "text": "president",
+          "start": 2.679,
+          "end": 2.931
+        },
+        {
+          "id": "w9",
+          "text": "Brad",
+          "start": 3.003,
+          "end": 3.217
+        },
+        {
+          "id": "w10",
+          "text": "Smith",
+          "start": 3.36,
+          "end": 3.645
+        },
+        {
+          "id": "w11",
+          "text": "wrote",
+          "start": 3.717,
+          "end": 3.86
+        },
+        {
+          "id": "w12",
+          "text": "that",
+          "start": 3.931,
+          "end": 4.003
+        },
+        {
+          "id": "w13",
+          "text": "keeping",
+          "start": 4.121,
+          "end": 4.36
+        },
+        {
+          "id": "w14",
+          "text": "children",
+          "start": 4.431,
+          "end": 4.717
+        },
+        {
+          "id": "w15",
+          "text": "with",
+          "start": 4.788,
+          "end": 4.86
+        },
+        {
+          "id": "w16",
+          "text": "their",
+          "start": 4.895,
+          "end": 4.931
+        },
+        {
+          "id": "w17",
+          "text": "parents",
+          "start": 5.074,
+          "end": 5.431
+        },
+        {
+          "id": "w18",
+          "text": "helps",
+          "start": 5.503,
+          "end": 5.717
+        },
+        {
+          "id": "w19",
+          "text": "build",
+          "start": 5.849,
+          "end": 5.931
+        },
+        {
+          "id": "w20",
+          "text": "a",
+          "start": 6.003,
+          "end": 6.074
+        },
+        {
+          "id": "w21",
+          "text": "stronger",
+          "start": 6.145,
+          "end": 6.503
+        },
+        {
+          "id": "w22",
+          "text": "country.",
+          "start": 6.65,
+          "end": 7.003
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "Five",
+          "start": 0.258,
+          "end": 0.401
+        },
+        {
+          "id": "w1",
+          "text": "months",
+          "start": 0.473,
+          "end": 0.687
+        },
+        {
+          "id": "w2",
+          "text": "later,",
+          "start": 0.758,
+          "end": 0.973
+        },
+        {
+          "id": "w3",
+          "text": "over",
+          "start": 1.258,
+          "end": 1.33
+        },
+        {
+          "id": "w4",
+          "text": "Father's",
+          "start": 1.401,
+          "end": 1.687
+        },
+        {
+          "id": "w5",
+          "text": "Day",
+          "start": 1.758,
+          "end": 1.83
+        },
+        {
+          "id": "w6",
+          "text": "weekend,",
+          "start": 1.901,
+          "end": 2.187
+        },
+        {
+          "id": "w7",
+          "text": "Microsoft",
+          "start": 2.615,
+          "end": 2.973
+        },
+        {
+          "id": "w8",
+          "text": "president",
+          "start": 3.115,
+          "end": 3.401
+        },
+        {
+          "id": "w9",
+          "text": "Brad",
+          "start": 3.473,
+          "end": 3.687
+        },
+        {
+          "id": "w10",
+          "text": "Smith",
+          "start": 3.83,
+          "end": 4.115
+        },
+        {
+          "id": "w11",
+          "text": "wrote",
+          "start": 4.187,
+          "end": 4.33
+        },
+        {
+          "id": "w12",
+          "text": "that",
+          "start": 4.401,
+          "end": 4.473
+        },
+        {
+          "id": "w13",
+          "text": "keeping",
+          "start": 4.544,
+          "end": 4.83
+        },
+        {
+          "id": "w14",
+          "text": "children",
+          "start": 4.901,
+          "end": 5.187
+        },
+        {
+          "id": "w15",
+          "text": "with",
+          "start": 5.258,
+          "end": 5.33
+        },
+        {
+          "id": "w16",
+          "text": "their",
+          "start": 5.365,
+          "end": 5.401
+        },
+        {
+          "id": "w17",
+          "text": "parents",
+          "start": 5.544,
+          "end": 5.901
+        },
+        {
+          "id": "w18",
+          "text": "helps",
+          "start": 5.973,
+          "end": 6.187
+        },
+        {
+          "id": "w19",
+          "text": "build",
+          "start": 6.258,
+          "end": 6.401
+        },
+        {
+          "id": "w20",
+          "text": "a",
+          "start": 6.473,
+          "end": 6.544
+        },
+        {
+          "id": "w21",
+          "text": "stronger",
+          "start": 6.615,
+          "end": 6.973
+        },
+        {
+          "id": "w22",
+          "text": "country.",
+          "start": 7.115,
+          "end": 7.473
+        }
+      ],
+      "duration_orig": 7.792,
+      "lead_s": 0
+    },
+    {
+      "frame": 4,
+      "path": "assets/voice/04.wav",
+      "duration_s": 4.166,
+      "words": [
+        {
+          "id": "w0",
+          "text": "The",
+          "start": 0.02,
+          "end": 0.02
+        },
+        {
+          "id": "w1",
+          "text": "next",
+          "start": 0.044,
+          "end": 0.259
+        },
+        {
+          "id": "w2",
+          "text": "day,",
+          "start": 0.33,
+          "end": 0.544
+        },
+        {
+          "id": "w3",
+          "text": "the",
+          "start": 0.799,
+          "end": 0.84
+        },
+        {
+          "id": "w4",
+          "text": "January",
+          "start": 0.911,
+          "end": 1.268
+        },
+        {
+          "id": "w5",
+          "text": "post",
+          "start": 1.34,
+          "end": 1.625
+        },
+        {
+          "id": "w6",
+          "text": "went",
+          "start": 1.732,
+          "end": 1.84
+        },
+        {
+          "id": "w7",
+          "text": "viral,",
+          "start": 1.982,
+          "end": 2.34
+        },
+        {
+          "id": "w8",
+          "text": "with",
+          "start": 2.511,
+          "end": 2.553
+        },
+        {
+          "id": "w9",
+          "text": "calls",
+          "start": 2.625,
+          "end": 2.839
+        },
+        {
+          "id": "w10",
+          "text": "to",
+          "start": 2.91,
+          "end": 2.982
+        },
+        {
+          "id": "w11",
+          "text": "boycott",
+          "start": 3.143,
+          "end": 3.482
+        },
+        {
+          "id": "w12",
+          "text": "Microsoft.",
+          "start": 3.553,
+          "end": 4.053
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "The",
+          "start": 0.252,
+          "end": 0.288
+        },
+        {
+          "id": "w1",
+          "text": "next",
+          "start": 0.323,
+          "end": 0.538
+        },
+        {
+          "id": "w2",
+          "text": "day,",
+          "start": 0.609,
+          "end": 0.823
+        },
+        {
+          "id": "w3",
+          "text": "the",
+          "start": 1.109,
+          "end": 1.181
+        },
+        {
+          "id": "w4",
+          "text": "January",
+          "start": 1.252,
+          "end": 1.609
+        },
+        {
+          "id": "w5",
+          "text": "post",
+          "start": 1.681,
+          "end": 1.966
+        },
+        {
+          "id": "w6",
+          "text": "went",
+          "start": 2.073,
+          "end": 2.181
+        },
+        {
+          "id": "w7",
+          "text": "viral,",
+          "start": 2.323,
+          "end": 2.681
+        },
+        {
+          "id": "w8",
+          "text": "with",
+          "start": 2.895,
+          "end": 2.966
+        },
+        {
+          "id": "w9",
+          "text": "calls",
+          "start": 3.038,
+          "end": 3.252
+        },
+        {
+          "id": "w10",
+          "text": "to",
+          "start": 3.323,
+          "end": 3.395
+        },
+        {
+          "id": "w11",
+          "text": "boycott",
+          "start": 3.538,
+          "end": 3.895
+        },
+        {
+          "id": "w12",
+          "text": "Microsoft.",
+          "start": 3.966,
+          "end": 4.466
+        }
+      ],
+      "duration_orig": 4.832,
+      "lead_s": 0
+    },
+    {
+      "frame": 5,
+      "path": "assets/voice/05.wav",
+      "duration_s": 6.004,
+      "words": [
+        {
+          "id": "w0",
+          "text": "On",
+          "start": 0.02,
+          "end": 0.066
+        },
+        {
+          "id": "w1",
+          "text": "Tuesday,",
+          "start": 0.137,
+          "end": 0.566
+        },
+        {
+          "id": "w2",
+          "text": "an",
+          "start": 0.78,
+          "end": 0.851
+        },
+        {
+          "id": "w3",
+          "text": "open",
+          "start": 0.923,
+          "end": 1.066
+        },
+        {
+          "id": "w4",
+          "text": "letter",
+          "start": 1.137,
+          "end": 1.28
+        },
+        {
+          "id": "w5",
+          "text": "to",
+          "start": 1.351,
+          "end": 1.494
+        },
+        {
+          "id": "w6",
+          "text": "CEO",
+          "start": 1.566,
+          "end": 1.923
+        },
+        {
+          "id": "w7",
+          "text": "Satya",
+          "start": 2.066,
+          "end": 2.316
+        },
+        {
+          "id": "w8",
+          "text": "Nadella",
+          "start": 2.351,
+          "end": 2.78
+        },
+        {
+          "id": "w9",
+          "text": "drew",
+          "start": 2.963,
+          "end": 3.045
+        },
+        {
+          "id": "w10",
+          "text": "more",
+          "start": 3.116,
+          "end": 3.259
+        },
+        {
+          "id": "w11",
+          "text": "than",
+          "start": 3.366,
+          "end": 3.474
+        },
+        {
+          "id": "w12",
+          "text": "100",
+          "start": 3.545,
+          "end": 3.688
+        },
+        {
+          "id": "w13",
+          "text": "employee",
+          "start": 3.831,
+          "end": 4.545
+        },
+        {
+          "id": "w14",
+          "text": "signatures",
+          "start": 4.616,
+          "end": 5.045
+        },
+        {
+          "id": "w15",
+          "text": "within",
+          "start": 5.116,
+          "end": 5.377
+        },
+        {
+          "id": "w16",
+          "text": "hours.",
+          "start": 5.49,
+          "end": 5.902
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "On",
+          "start": 0.277,
+          "end": 0.349
+        },
+        {
+          "id": "w1",
+          "text": "Tuesday,",
+          "start": 0.42,
+          "end": 0.849
+        },
+        {
+          "id": "w2",
+          "text": "an",
+          "start": 1.063,
+          "end": 1.134
+        },
+        {
+          "id": "w3",
+          "text": "open",
+          "start": 1.206,
+          "end": 1.349
+        },
+        {
+          "id": "w4",
+          "text": "letter",
+          "start": 1.42,
+          "end": 1.563
+        },
+        {
+          "id": "w5",
+          "text": "to",
+          "start": 1.634,
+          "end": 1.777
+        },
+        {
+          "id": "w6",
+          "text": "CEO",
+          "start": 1.849,
+          "end": 2.206
+        },
+        {
+          "id": "w7",
+          "text": "Satya",
+          "start": 2.349,
+          "end": 2.599
+        },
+        {
+          "id": "w8",
+          "text": "Nadella",
+          "start": 2.634,
+          "end": 3.063
+        },
+        {
+          "id": "w9",
+          "text": "drew",
+          "start": 3.277,
+          "end": 3.42
+        },
+        {
+          "id": "w10",
+          "text": "more",
+          "start": 3.491,
+          "end": 3.634
+        },
+        {
+          "id": "w11",
+          "text": "than",
+          "start": 3.741,
+          "end": 3.849
+        },
+        {
+          "id": "w12",
+          "text": "100",
+          "start": 3.92,
+          "end": 4.063
+        },
+        {
+          "id": "w13",
+          "text": "employee",
+          "start": 4.206,
+          "end": 4.92
+        },
+        {
+          "id": "w14",
+          "text": "signatures",
+          "start": 4.991,
+          "end": 5.42
+        },
+        {
+          "id": "w15",
+          "text": "within",
+          "start": 5.491,
+          "end": 5.777
+        },
+        {
+          "id": "w16",
+          "text": "hours.",
+          "start": 5.849,
+          "end": 6.277
+        }
+      ],
+      "duration_orig": 6.586,
+      "lead_s": 0
+    },
+    {
+      "frame": 6,
+      "path": "assets/voice/06.wav",
+      "duration_s": 7.125,
+      "words": [
+        {
+          "id": "w0",
+          "text": "It",
+          "start": 0.02,
+          "end": 0.026
+        },
+        {
+          "id": "w1",
+          "text": "said",
+          "start": 0.097,
+          "end": 0.24
+        },
+        {
+          "id": "w2",
+          "text": "Microsoft",
+          "start": 0.49,
+          "end": 0.74
+        },
+        {
+          "id": "w3",
+          "text": "must",
+          "start": 0.811,
+          "end": 1.026
+        },
+        {
+          "id": "w4",
+          "text": "\"put",
+          "start": 1.026,
+          "end": 1.409
+        },
+        {
+          "id": "w5",
+          "text": "children",
+          "start": 1.481,
+          "end": 1.838
+        },
+        {
+          "id": "w6",
+          "text": "and",
+          "start": 1.873,
+          "end": 1.909
+        },
+        {
+          "id": "w7",
+          "text": "families",
+          "start": 2.1,
+          "end": 2.409
+        },
+        {
+          "id": "w8",
+          "text": "above",
+          "start": 2.481,
+          "end": 2.766
+        },
+        {
+          "id": "w9",
+          "text": "profits\"",
+          "start": 2.94,
+          "end": 3.338
+        },
+        {
+          "id": "w10",
+          "text": "and",
+          "start": 3.581,
+          "end": 3.625
+        },
+        {
+          "id": "w11",
+          "text": "cancel",
+          "start": 3.696,
+          "end": 4.053
+        },
+        {
+          "id": "w12",
+          "text": "its",
+          "start": 4.125,
+          "end": 4.196
+        },
+        {
+          "id": "w13",
+          "text": "ICE",
+          "start": 4.268,
+          "end": 4.411
+        },
+        {
+          "id": "w14",
+          "text": "contract,",
+          "start": 4.482,
+          "end": 4.857
+        },
+        {
+          "id": "w15",
+          "text": "worth",
+          "start": 5.127,
+          "end": 5.234
+        },
+        {
+          "id": "w16",
+          "text": "more",
+          "start": 5.306,
+          "end": 5.377
+        },
+        {
+          "id": "w17",
+          "text": "than",
+          "start": 5.484,
+          "end": 5.591
+        },
+        {
+          "id": "w18",
+          "text": "19",
+          "start": 5.663,
+          "end": 6.02
+        },
+        {
+          "id": "w19",
+          "text": "million",
+          "start": 6.234,
+          "end": 6.52
+        },
+        {
+          "id": "w20",
+          "text": "dollars.",
+          "start": 6.591,
+          "end": 7.02
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "It",
+          "start": 0.191,
+          "end": 0.263
+        },
+        {
+          "id": "w1",
+          "text": "said",
+          "start": 0.334,
+          "end": 0.477
+        },
+        {
+          "id": "w2",
+          "text": "Microsoft",
+          "start": 0.727,
+          "end": 0.977
+        },
+        {
+          "id": "w3",
+          "text": "must",
+          "start": 1.048,
+          "end": 1.263
+        },
+        {
+          "id": "w4",
+          "text": "\"put",
+          "start": 1.263,
+          "end": 1.691
+        },
+        {
+          "id": "w5",
+          "text": "children",
+          "start": 1.763,
+          "end": 2.12
+        },
+        {
+          "id": "w6",
+          "text": "and",
+          "start": 2.155,
+          "end": 2.191
+        },
+        {
+          "id": "w7",
+          "text": "families",
+          "start": 2.334,
+          "end": 2.691
+        },
+        {
+          "id": "w8",
+          "text": "above",
+          "start": 2.763,
+          "end": 3.048
+        },
+        {
+          "id": "w9",
+          "text": "profits\"",
+          "start": 3.191,
+          "end": 3.62
+        },
+        {
+          "id": "w10",
+          "text": "and",
+          "start": 3.905,
+          "end": 3.977
+        },
+        {
+          "id": "w11",
+          "text": "cancel",
+          "start": 4.048,
+          "end": 4.405
+        },
+        {
+          "id": "w12",
+          "text": "its",
+          "start": 4.477,
+          "end": 4.548
+        },
+        {
+          "id": "w13",
+          "text": "ICE",
+          "start": 4.62,
+          "end": 4.763
+        },
+        {
+          "id": "w14",
+          "text": "contract,",
+          "start": 4.834,
+          "end": 5.263
+        },
+        {
+          "id": "w15",
+          "text": "worth",
+          "start": 5.584,
+          "end": 5.691
+        },
+        {
+          "id": "w16",
+          "text": "more",
+          "start": 5.763,
+          "end": 5.834
+        },
+        {
+          "id": "w17",
+          "text": "than",
+          "start": 5.941,
+          "end": 6.048
+        },
+        {
+          "id": "w18",
+          "text": "19",
+          "start": 6.12,
+          "end": 6.477
+        },
+        {
+          "id": "w19",
+          "text": "million",
+          "start": 6.691,
+          "end": 6.977
+        },
+        {
+          "id": "w20",
+          "text": "dollars.",
+          "start": 7.048,
+          "end": 7.477
+        }
+      ],
+      "duration_orig": 7.836,
+      "lead_s": 0
+    },
+    {
+      "frame": 7,
+      "path": "assets/voice/07.wav",
+      "duration_s": 5.099,
+      "words": [
+        {
+          "id": "w0",
+          "text": "That",
+          "start": 0.02,
+          "end": 0.144
+        },
+        {
+          "id": "w1",
+          "text": "evening,",
+          "start": 0.251,
+          "end": 0.429
+        },
+        {
+          "id": "w2",
+          "text": "Nadella",
+          "start": 0.692,
+          "end": 1.072
+        },
+        {
+          "id": "w3",
+          "text": "emailed",
+          "start": 1.144,
+          "end": 1.358
+        },
+        {
+          "id": "w4",
+          "text": "the",
+          "start": 1.429,
+          "end": 1.572
+        },
+        {
+          "id": "w5",
+          "text": "whole",
+          "start": 1.644,
+          "end": 1.715
+        },
+        {
+          "id": "w6",
+          "text": "company,",
+          "start": 1.858,
+          "end": 2.144
+        },
+        {
+          "id": "w7",
+          "text": "calling",
+          "start": 2.384,
+          "end": 2.492
+        },
+        {
+          "id": "w8",
+          "text": "the",
+          "start": 2.563,
+          "end": 2.599
+        },
+        {
+          "id": "w9",
+          "text": "border",
+          "start": 2.634,
+          "end": 2.849
+        },
+        {
+          "id": "w10",
+          "text": "policy",
+          "start": 2.92,
+          "end": 3.349
+        },
+        {
+          "id": "w11",
+          "text": "\"simply",
+          "start": 3.349,
+          "end": 3.849
+        },
+        {
+          "id": "w12",
+          "text": "cruel",
+          "start": 3.92,
+          "end": 4.349
+        },
+        {
+          "id": "w13",
+          "text": "and",
+          "start": 4.42,
+          "end": 4.492
+        },
+        {
+          "id": "w14",
+          "text": "abusive.\"",
+          "start": 4.599,
+          "end": 5.049
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "That",
+          "start": 0.284,
+          "end": 0.427
+        },
+        {
+          "id": "w1",
+          "text": "evening,",
+          "start": 0.534,
+          "end": 0.712
+        },
+        {
+          "id": "w2",
+          "text": "Nadella",
+          "start": 0.962,
+          "end": 1.355
+        },
+        {
+          "id": "w3",
+          "text": "emailed",
+          "start": 1.427,
+          "end": 1.641
+        },
+        {
+          "id": "w4",
+          "text": "the",
+          "start": 1.712,
+          "end": 1.855
+        },
+        {
+          "id": "w5",
+          "text": "whole",
+          "start": 1.927,
+          "end": 1.998
+        },
+        {
+          "id": "w6",
+          "text": "company,",
+          "start": 2.141,
+          "end": 2.427
+        },
+        {
+          "id": "w7",
+          "text": "calling",
+          "start": 2.819,
+          "end": 2.927
+        },
+        {
+          "id": "w8",
+          "text": "the",
+          "start": 2.998,
+          "end": 3.034
+        },
+        {
+          "id": "w9",
+          "text": "border",
+          "start": 3.069,
+          "end": 3.284
+        },
+        {
+          "id": "w10",
+          "text": "policy",
+          "start": 3.355,
+          "end": 3.784
+        },
+        {
+          "id": "w11",
+          "text": "\"simply",
+          "start": 3.784,
+          "end": 4.284
+        },
+        {
+          "id": "w12",
+          "text": "cruel",
+          "start": 4.355,
+          "end": 4.784
+        },
+        {
+          "id": "w13",
+          "text": "and",
+          "start": 4.855,
+          "end": 4.927
+        },
+        {
+          "id": "w14",
+          "text": "abusive.\"",
+          "start": 5.034,
+          "end": 5.498
+        }
+      ],
+      "duration_orig": 5.815,
+      "lead_s": 0
+    },
+    {
+      "frame": 8,
+      "path": "assets/voice/08.wav",
+      "duration_s": 7.173,
+      "words": [
+        {
+          "id": "w0",
+          "text": "But",
+          "start": 0.02,
+          "end": 0.02
+        },
+        {
+          "id": "w1",
+          "text": "he",
+          "start": 0.086,
+          "end": 0.158
+        },
+        {
+          "id": "w2",
+          "text": "said",
+          "start": 0.229,
+          "end": 0.301
+        },
+        {
+          "id": "w3",
+          "text": "the",
+          "start": 0.336,
+          "end": 0.372
+        },
+        {
+          "id": "w4",
+          "text": "ICE",
+          "start": 0.443,
+          "end": 0.801
+        },
+        {
+          "id": "w5",
+          "text": "contract",
+          "start": 0.872,
+          "end": 1.301
+        },
+        {
+          "id": "w6",
+          "text": "covered",
+          "start": 1.372,
+          "end": 1.658
+        },
+        {
+          "id": "w7",
+          "text": "old",
+          "start": 1.729,
+          "end": 1.872
+        },
+        {
+          "id": "w8",
+          "text": "email,",
+          "start": 1.943,
+          "end": 2.301
+        },
+        {
+          "id": "w9",
+          "text": "calendar",
+          "start": 2.658,
+          "end": 2.872
+        },
+        {
+          "id": "w10",
+          "text": "and",
+          "start": 2.943,
+          "end": 3.015
+        },
+        {
+          "id": "w11",
+          "text": "documents,",
+          "start": 3.086,
+          "end": 3.586
+        },
+        {
+          "id": "w12",
+          "text": "never",
+          "start": 3.812,
+          "end": 4.026
+        },
+        {
+          "id": "w13",
+          "text": "explained",
+          "start": 4.098,
+          "end": 4.455
+        },
+        {
+          "id": "w14",
+          "text": "the",
+          "start": 4.49,
+          "end": 4.526
+        },
+        {
+          "id": "w15",
+          "text": "blog's",
+          "start": 4.633,
+          "end": 4.812
+        },
+        {
+          "id": "w16",
+          "text": "facial",
+          "start": 4.883,
+          "end": 5.098
+        },
+        {
+          "id": "w17",
+          "text": "recognition",
+          "start": 5.169,
+          "end": 5.598
+        },
+        {
+          "id": "w18",
+          "text": "line,",
+          "start": 5.669,
+          "end": 5.883
+        },
+        {
+          "id": "w19",
+          "text": "and",
+          "start": 6.101,
+          "end": 6.141
+        },
+        {
+          "id": "w20",
+          "text": "kept",
+          "start": 6.247,
+          "end": 6.427
+        },
+        {
+          "id": "w21",
+          "text": "the",
+          "start": 6.462,
+          "end": 6.498
+        },
+        {
+          "id": "w22",
+          "text": "contract.",
+          "start": 6.569,
+          "end": 6.983
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "But",
+          "start": 0.29,
+          "end": 0.326
+        },
+        {
+          "id": "w1",
+          "text": "he",
+          "start": 0.397,
+          "end": 0.469
+        },
+        {
+          "id": "w2",
+          "text": "said",
+          "start": 0.54,
+          "end": 0.612
+        },
+        {
+          "id": "w3",
+          "text": "the",
+          "start": 0.647,
+          "end": 0.683
+        },
+        {
+          "id": "w4",
+          "text": "ICE",
+          "start": 0.754,
+          "end": 1.112
+        },
+        {
+          "id": "w5",
+          "text": "contract",
+          "start": 1.183,
+          "end": 1.612
+        },
+        {
+          "id": "w6",
+          "text": "covered",
+          "start": 1.683,
+          "end": 1.969
+        },
+        {
+          "id": "w7",
+          "text": "old",
+          "start": 2.04,
+          "end": 2.183
+        },
+        {
+          "id": "w8",
+          "text": "email,",
+          "start": 2.254,
+          "end": 2.612
+        },
+        {
+          "id": "w9",
+          "text": "calendar",
+          "start": 2.969,
+          "end": 3.183
+        },
+        {
+          "id": "w10",
+          "text": "and",
+          "start": 3.254,
+          "end": 3.326
+        },
+        {
+          "id": "w11",
+          "text": "documents,",
+          "start": 3.397,
+          "end": 3.897
+        },
+        {
+          "id": "w12",
+          "text": "never",
+          "start": 4.326,
+          "end": 4.54
+        },
+        {
+          "id": "w13",
+          "text": "explained",
+          "start": 4.612,
+          "end": 4.969
+        },
+        {
+          "id": "w14",
+          "text": "the",
+          "start": 5.004,
+          "end": 5.04
+        },
+        {
+          "id": "w15",
+          "text": "blog's",
+          "start": 5.147,
+          "end": 5.326
+        },
+        {
+          "id": "w16",
+          "text": "facial",
+          "start": 5.397,
+          "end": 5.612
+        },
+        {
+          "id": "w17",
+          "text": "recognition",
+          "start": 5.683,
+          "end": 6.112
+        },
+        {
+          "id": "w18",
+          "text": "line,",
+          "start": 6.183,
+          "end": 6.397
+        },
+        {
+          "id": "w19",
+          "text": "and",
+          "start": 6.754,
+          "end": 6.826
+        },
+        {
+          "id": "w20",
+          "text": "kept",
+          "start": 6.897,
+          "end": 7.112
+        },
+        {
+          "id": "w21",
+          "text": "the",
+          "start": 7.147,
+          "end": 7.183
+        },
+        {
+          "id": "w22",
+          "text": "contract.",
+          "start": 7.254,
+          "end": 7.754
+        }
+      ],
+      "duration_orig": 8.189,
+      "lead_s": 0
+    },
+    {
+      "frame": 9,
+      "path": "assets/voice/09.wav",
+      "duration_s": 7.558,
+      "words": [
+        {
+          "id": "w0",
+          "text": "By",
+          "start": 0.02,
+          "end": 0.063
+        },
+        {
+          "id": "w1",
+          "text": "late",
+          "start": 0.134,
+          "end": 0.205
+        },
+        {
+          "id": "w2",
+          "text": "July,",
+          "start": 0.277,
+          "end": 0.634
+        },
+        {
+          "id": "w3",
+          "text": "a",
+          "start": 0.863,
+          "end": 0.92
+        },
+        {
+          "id": "w4",
+          "text": "nonprofit",
+          "start": 1.027,
+          "end": 1.42
+        },
+        {
+          "id": "w5",
+          "text": "petition",
+          "start": 1.634,
+          "end": 1.848
+        },
+        {
+          "id": "w6",
+          "text": "demanding",
+          "start": 2.063,
+          "end": 2.348
+        },
+        {
+          "id": "w7",
+          "text": "Microsoft",
+          "start": 2.42,
+          "end": 2.848
+        },
+        {
+          "id": "w8",
+          "text": "cancel",
+          "start": 2.92,
+          "end": 3.277
+        },
+        {
+          "id": "w9",
+          "text": "had",
+          "start": 3.495,
+          "end": 3.589
+        },
+        {
+          "id": "w10",
+          "text": "more",
+          "start": 3.66,
+          "end": 3.732
+        },
+        {
+          "id": "w11",
+          "text": "than",
+          "start": 3.839,
+          "end": 3.933
+        },
+        {
+          "id": "w12",
+          "text": "300,000",
+          "start": 4.044,
+          "end": 4.589
+        },
+        {
+          "id": "w13",
+          "text": "signatures,",
+          "start": 4.803,
+          "end": 5.66
+        },
+        {
+          "id": "w14",
+          "text": "500",
+          "start": 6.003,
+          "end": 6.11
+        },
+        {
+          "id": "w15",
+          "text": "from",
+          "start": 6.182,
+          "end": 6.464
+        },
+        {
+          "id": "w16",
+          "text": "Microsoft",
+          "start": 6.61,
+          "end": 6.967
+        },
+        {
+          "id": "w17",
+          "text": "staff.",
+          "start": 7.11,
+          "end": 7.467
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "By",
+          "start": 0.351,
+          "end": 0.423
+        },
+        {
+          "id": "w1",
+          "text": "late",
+          "start": 0.494,
+          "end": 0.565
+        },
+        {
+          "id": "w2",
+          "text": "July,",
+          "start": 0.637,
+          "end": 0.994
+        },
+        {
+          "id": "w3",
+          "text": "a",
+          "start": 1.208,
+          "end": 1.28
+        },
+        {
+          "id": "w4",
+          "text": "nonprofit",
+          "start": 1.387,
+          "end": 1.78
+        },
+        {
+          "id": "w5",
+          "text": "petition",
+          "start": 1.994,
+          "end": 2.208
+        },
+        {
+          "id": "w6",
+          "text": "demanding",
+          "start": 2.423,
+          "end": 2.708
+        },
+        {
+          "id": "w7",
+          "text": "Microsoft",
+          "start": 2.78,
+          "end": 3.208
+        },
+        {
+          "id": "w8",
+          "text": "cancel",
+          "start": 3.28,
+          "end": 3.637
+        },
+        {
+          "id": "w9",
+          "text": "had",
+          "start": 3.851,
+          "end": 3.994
+        },
+        {
+          "id": "w10",
+          "text": "more",
+          "start": 4.065,
+          "end": 4.137
+        },
+        {
+          "id": "w11",
+          "text": "than",
+          "start": 4.244,
+          "end": 4.351
+        },
+        {
+          "id": "w12",
+          "text": "300,000",
+          "start": 4.423,
+          "end": 4.994
+        },
+        {
+          "id": "w13",
+          "text": "signatures,",
+          "start": 5.208,
+          "end": 6.065
+        },
+        {
+          "id": "w14",
+          "text": "500",
+          "start": 6.601,
+          "end": 6.708
+        },
+        {
+          "id": "w15",
+          "text": "from",
+          "start": 6.78,
+          "end": 7.137
+        },
+        {
+          "id": "w16",
+          "text": "Microsoft",
+          "start": 7.208,
+          "end": 7.565
+        },
+        {
+          "id": "w17",
+          "text": "staff.",
+          "start": 7.708,
+          "end": 8.065
+        }
+      ],
+      "duration_orig": 8.438,
+      "lead_s": 0
+    },
+    {
+      "frame": 10,
+      "path": "assets/voice/10.wav",
+      "duration_s": 7.238,
+      "words": [
+        {
+          "id": "w0",
+          "text": "A",
+          "start": 0.02,
+          "end": 0.03
+        },
+        {
+          "id": "w1",
+          "text": "judge's",
+          "start": 0.101,
+          "end": 0.387
+        },
+        {
+          "id": "w2",
+          "text": "deadline",
+          "start": 0.565,
+          "end": 0.744
+        },
+        {
+          "id": "w3",
+          "text": "to",
+          "start": 0.78,
+          "end": 0.815
+        },
+        {
+          "id": "w4",
+          "text": "reunite",
+          "start": 0.887,
+          "end": 1.244
+        },
+        {
+          "id": "w5",
+          "text": "separated",
+          "start": 1.315,
+          "end": 1.673
+        },
+        {
+          "id": "w6",
+          "text": "children",
+          "start": 1.744,
+          "end": 2.101
+        },
+        {
+          "id": "w7",
+          "text": "five",
+          "start": 2.173,
+          "end": 2.387
+        },
+        {
+          "id": "w8",
+          "text": "and",
+          "start": 2.423,
+          "end": 2.458
+        },
+        {
+          "id": "w9",
+          "text": "older",
+          "start": 2.53,
+          "end": 2.815
+        },
+        {
+          "id": "w10",
+          "text": "was",
+          "start": 2.887,
+          "end": 2.958
+        },
+        {
+          "id": "w11",
+          "text": "July",
+          "start": 3.03,
+          "end": 3.315
+        },
+        {
+          "id": "w12",
+          "text": "26,",
+          "start": 3.458,
+          "end": 4.03
+        },
+        {
+          "id": "w13",
+          "text": "and",
+          "start": 4.181,
+          "end": 4.181
+        },
+        {
+          "id": "w14",
+          "text": "employees",
+          "start": 4.414,
+          "end": 4.664
+        },
+        {
+          "id": "w15",
+          "text": "chose",
+          "start": 4.735,
+          "end": 5.02
+        },
+        {
+          "id": "w16",
+          "text": "that",
+          "start": 5.128,
+          "end": 5.235
+        },
+        {
+          "id": "w17",
+          "text": "day",
+          "start": 5.307,
+          "end": 5.45
+        },
+        {
+          "id": "w18",
+          "text": "to",
+          "start": 5.521,
+          "end": 5.664
+        },
+        {
+          "id": "w19",
+          "text": "act,",
+          "start": 5.807,
+          "end": 5.876
+        },
+        {
+          "id": "w20",
+          "text": "The",
+          "start": 6.186,
+          "end": 6.186
+        },
+        {
+          "id": "w21",
+          "text": "Seattle",
+          "start": 6.238,
+          "end": 6.452
+        },
+        {
+          "id": "w22",
+          "text": "Times",
+          "start": 6.523,
+          "end": 6.738
+        },
+        {
+          "id": "w23",
+          "text": "reported.",
+          "start": 6.809,
+          "end": 7.166
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "A",
+          "start": 0.27,
+          "end": 0.342
+        },
+        {
+          "id": "w1",
+          "text": "judge's",
+          "start": 0.413,
+          "end": 0.699
+        },
+        {
+          "id": "w2",
+          "text": "deadline",
+          "start": 0.877,
+          "end": 1.056
+        },
+        {
+          "id": "w3",
+          "text": "to",
+          "start": 1.092,
+          "end": 1.127
+        },
+        {
+          "id": "w4",
+          "text": "reunite",
+          "start": 1.199,
+          "end": 1.556
+        },
+        {
+          "id": "w5",
+          "text": "separated",
+          "start": 1.627,
+          "end": 1.985
+        },
+        {
+          "id": "w6",
+          "text": "children",
+          "start": 2.056,
+          "end": 2.413
+        },
+        {
+          "id": "w7",
+          "text": "five",
+          "start": 2.485,
+          "end": 2.699
+        },
+        {
+          "id": "w8",
+          "text": "and",
+          "start": 2.735,
+          "end": 2.77
+        },
+        {
+          "id": "w9",
+          "text": "older",
+          "start": 2.842,
+          "end": 3.127
+        },
+        {
+          "id": "w10",
+          "text": "was",
+          "start": 3.199,
+          "end": 3.27
+        },
+        {
+          "id": "w11",
+          "text": "July",
+          "start": 3.342,
+          "end": 3.627
+        },
+        {
+          "id": "w12",
+          "text": "26,",
+          "start": 3.77,
+          "end": 4.342
+        },
+        {
+          "id": "w13",
+          "text": "and",
+          "start": 4.663,
+          "end": 4.699
+        },
+        {
+          "id": "w14",
+          "text": "employees",
+          "start": 4.949,
+          "end": 5.199
+        },
+        {
+          "id": "w15",
+          "text": "chose",
+          "start": 5.27,
+          "end": 5.556
+        },
+        {
+          "id": "w16",
+          "text": "that",
+          "start": 5.663,
+          "end": 5.77
+        },
+        {
+          "id": "w17",
+          "text": "day",
+          "start": 5.842,
+          "end": 5.985
+        },
+        {
+          "id": "w18",
+          "text": "to",
+          "start": 6.056,
+          "end": 6.199
+        },
+        {
+          "id": "w19",
+          "text": "act,",
+          "start": 6.342,
+          "end": 6.485
+        },
+        {
+          "id": "w20",
+          "text": "The",
+          "start": 6.735,
+          "end": 6.77
+        },
+        {
+          "id": "w21",
+          "text": "Seattle",
+          "start": 6.842,
+          "end": 7.056
+        },
+        {
+          "id": "w22",
+          "text": "Times",
+          "start": 7.127,
+          "end": 7.342
+        },
+        {
+          "id": "w23",
+          "text": "reported.",
+          "start": 7.413,
+          "end": 7.77
+        }
+      ],
+      "duration_orig": 8.118,
+      "lead_s": 0
+    },
+    {
+      "frame": 11,
+      "path": "assets/voice/11.wav",
+      "duration_s": 5.085,
+      "words": [
+        {
+          "id": "w0",
+          "text": "That",
+          "start": 0.02,
+          "end": 0.133
+        },
+        {
+          "id": "w1",
+          "text": "Thursday,",
+          "start": 0.204,
+          "end": 0.633
+        },
+        {
+          "id": "w2",
+          "text": "at",
+          "start": 0.812,
+          "end": 0.847
+        },
+        {
+          "id": "w3",
+          "text": "an",
+          "start": 0.919,
+          "end": 0.99
+        },
+        {
+          "id": "w4",
+          "text": "intern",
+          "start": 1.169,
+          "end": 1.347
+        },
+        {
+          "id": "w5",
+          "text": "Q&A",
+          "start": 1.419,
+          "end": 1.74
+        },
+        {
+          "id": "w6",
+          "text": "in",
+          "start": 1.776,
+          "end": 1.847
+        },
+        {
+          "id": "w7",
+          "text": "Redmond,",
+          "start": 1.919,
+          "end": 2.276
+        },
+        {
+          "id": "w8",
+          "text": "an",
+          "start": 2.466,
+          "end": 2.466
+        },
+        {
+          "id": "w9",
+          "text": "employee",
+          "start": 2.67,
+          "end": 2.884
+        },
+        {
+          "id": "w10",
+          "text": "handed",
+          "start": 2.956,
+          "end": 3.17
+        },
+        {
+          "id": "w11",
+          "text": "Nadella",
+          "start": 3.206,
+          "end": 3.563
+        },
+        {
+          "id": "w12",
+          "text": "the",
+          "start": 3.598,
+          "end": 3.634
+        },
+        {
+          "id": "w13",
+          "text": "petition",
+          "start": 3.67,
+          "end": 4.098
+        },
+        {
+          "id": "w14",
+          "text": "on",
+          "start": 4.17,
+          "end": 4.241
+        },
+        {
+          "id": "w15",
+          "text": "a",
+          "start": 4.277,
+          "end": 4.313
+        },
+        {
+          "id": "w16",
+          "text": "USB",
+          "start": 4.384,
+          "end": 4.741
+        },
+        {
+          "id": "w17",
+          "text": "stick.",
+          "start": 4.813,
+          "end": 5.035
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "That",
+          "start": 0.295,
+          "end": 0.438
+        },
+        {
+          "id": "w1",
+          "text": "Thursday,",
+          "start": 0.509,
+          "end": 0.938
+        },
+        {
+          "id": "w2",
+          "text": "at",
+          "start": 1.117,
+          "end": 1.152
+        },
+        {
+          "id": "w3",
+          "text": "an",
+          "start": 1.224,
+          "end": 1.295
+        },
+        {
+          "id": "w4",
+          "text": "intern",
+          "start": 1.474,
+          "end": 1.652
+        },
+        {
+          "id": "w5",
+          "text": "Q&A",
+          "start": 1.724,
+          "end": 2.045
+        },
+        {
+          "id": "w6",
+          "text": "in",
+          "start": 2.081,
+          "end": 2.152
+        },
+        {
+          "id": "w7",
+          "text": "Redmond,",
+          "start": 2.224,
+          "end": 2.581
+        },
+        {
+          "id": "w8",
+          "text": "an",
+          "start": 2.831,
+          "end": 2.867
+        },
+        {
+          "id": "w9",
+          "text": "employee",
+          "start": 3.081,
+          "end": 3.295
+        },
+        {
+          "id": "w10",
+          "text": "handed",
+          "start": 3.367,
+          "end": 3.581
+        },
+        {
+          "id": "w11",
+          "text": "Nadella",
+          "start": 3.617,
+          "end": 3.974
+        },
+        {
+          "id": "w12",
+          "text": "the",
+          "start": 4.009,
+          "end": 4.045
+        },
+        {
+          "id": "w13",
+          "text": "petition",
+          "start": 4.081,
+          "end": 4.509
+        },
+        {
+          "id": "w14",
+          "text": "on",
+          "start": 4.581,
+          "end": 4.652
+        },
+        {
+          "id": "w15",
+          "text": "a",
+          "start": 4.688,
+          "end": 4.724
+        },
+        {
+          "id": "w16",
+          "text": "USB",
+          "start": 4.795,
+          "end": 5.152
+        },
+        {
+          "id": "w17",
+          "text": "stick.",
+          "start": 5.224,
+          "end": 5.509
+        }
+      ],
+      "duration_orig": 5.775,
+      "lead_s": 0
+    },
+    {
+      "frame": 12,
+      "path": "assets/voice/12.wav",
+      "duration_s": 5.225,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Microsoft",
+          "start": 0.02,
+          "end": 0.426
+        },
+        {
+          "id": "w1",
+          "text": "declined",
+          "start": 0.534,
+          "end": 0.784
+        },
+        {
+          "id": "w2",
+          "text": "to",
+          "start": 0.819,
+          "end": 0.855
+        },
+        {
+          "id": "w3",
+          "text": "comment,",
+          "start": 0.926,
+          "end": 1.212
+        },
+        {
+          "id": "w4",
+          "text": "confirming",
+          "start": 1.498,
+          "end": 1.784
+        },
+        {
+          "id": "w5",
+          "text": "only",
+          "start": 1.855,
+          "end": 2.07
+        },
+        {
+          "id": "w6",
+          "text": "that",
+          "start": 2.141,
+          "end": 2.213
+        },
+        {
+          "id": "w7",
+          "text": "Nadella",
+          "start": 2.284,
+          "end": 2.641
+        },
+        {
+          "id": "w8",
+          "text": "got",
+          "start": 2.713,
+          "end": 2.855
+        },
+        {
+          "id": "w9",
+          "text": "the",
+          "start": 2.891,
+          "end": 2.927
+        },
+        {
+          "id": "w10",
+          "text": "USB",
+          "start": 2.998,
+          "end": 3.355
+        },
+        {
+          "id": "w11",
+          "text": "stick,",
+          "start": 3.427,
+          "end": 3.641
+        },
+        {
+          "id": "w12",
+          "text": "and",
+          "start": 3.839,
+          "end": 3.839
+        },
+        {
+          "id": "w13",
+          "text": "its",
+          "start": 3.904,
+          "end": 3.976
+        },
+        {
+          "id": "w14",
+          "text": "ICE",
+          "start": 4.047,
+          "end": 4.476
+        },
+        {
+          "id": "w15",
+          "text": "work",
+          "start": 4.547,
+          "end": 4.74
+        },
+        {
+          "id": "w16",
+          "text": "went",
+          "start": 4.865,
+          "end": 4.976
+        },
+        {
+          "id": "w17",
+          "text": "on.",
+          "start": 5.083,
+          "end": 5.175
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "Microsoft",
+          "start": 0.306,
+          "end": 0.734
+        },
+        {
+          "id": "w1",
+          "text": "declined",
+          "start": 0.842,
+          "end": 1.092
+        },
+        {
+          "id": "w2",
+          "text": "to",
+          "start": 1.127,
+          "end": 1.163
+        },
+        {
+          "id": "w3",
+          "text": "comment,",
+          "start": 1.234,
+          "end": 1.52
+        },
+        {
+          "id": "w4",
+          "text": "confirming",
+          "start": 1.877,
+          "end": 2.163
+        },
+        {
+          "id": "w5",
+          "text": "only",
+          "start": 2.234,
+          "end": 2.449
+        },
+        {
+          "id": "w6",
+          "text": "that",
+          "start": 2.52,
+          "end": 2.592
+        },
+        {
+          "id": "w7",
+          "text": "Nadella",
+          "start": 2.663,
+          "end": 3.02
+        },
+        {
+          "id": "w8",
+          "text": "got",
+          "start": 3.092,
+          "end": 3.234
+        },
+        {
+          "id": "w9",
+          "text": "the",
+          "start": 3.27,
+          "end": 3.306
+        },
+        {
+          "id": "w10",
+          "text": "USB",
+          "start": 3.377,
+          "end": 3.734
+        },
+        {
+          "id": "w11",
+          "text": "stick,",
+          "start": 3.806,
+          "end": 4.02
+        },
+        {
+          "id": "w12",
+          "text": "and",
+          "start": 4.27,
+          "end": 4.306
+        },
+        {
+          "id": "w13",
+          "text": "its",
+          "start": 4.377,
+          "end": 4.449
+        },
+        {
+          "id": "w14",
+          "text": "ICE",
+          "start": 4.52,
+          "end": 4.949
+        },
+        {
+          "id": "w15",
+          "text": "work",
+          "start": 5.02,
+          "end": 5.234
+        },
+        {
+          "id": "w16",
+          "text": "went",
+          "start": 5.306,
+          "end": 5.449
+        },
+        {
+          "id": "w17",
+          "text": "on.",
+          "start": 5.556,
+          "end": 5.663
+        }
+      ],
+      "duration_orig": 6.077,
+      "lead_s": 0
+    },
+    {
+      "frame": 13,
+      "path": "assets/voice/13.wav",
+      "duration_s": 2.169,
+      "words": [
+        {
+          "id": "w0",
+          "text": "Should",
+          "start": 0.035,
+          "end": 0.178
+        },
+        {
+          "id": "w1",
+          "text": "Microsoft",
+          "start": 0.428,
+          "end": 0.678
+        },
+        {
+          "id": "w2",
+          "text": "have",
+          "start": 0.749,
+          "end": 0.821
+        },
+        {
+          "id": "w3",
+          "text": "walked",
+          "start": 0.892,
+          "end": 1.107
+        },
+        {
+          "id": "w4",
+          "text": "away",
+          "start": 1.249,
+          "end": 1.392
+        },
+        {
+          "id": "w5",
+          "text": "from",
+          "start": 1.464,
+          "end": 1.535
+        },
+        {
+          "id": "w6",
+          "text": "ICE?",
+          "start": 1.607,
+          "end": 2.035
+        }
+      ],
+      "words_orig": [
+        {
+          "id": "w0",
+          "text": "Should",
+          "start": 0.443,
+          "end": 0.586
+        },
+        {
+          "id": "w1",
+          "text": "Microsoft",
+          "start": 0.836,
+          "end": 1.086
+        },
+        {
+          "id": "w2",
+          "text": "have",
+          "start": 1.157,
+          "end": 1.229
+        },
+        {
+          "id": "w3",
+          "text": "walked",
+          "start": 1.3,
+          "end": 1.515
+        },
+        {
+          "id": "w4",
+          "text": "away",
+          "start": 1.657,
+          "end": 1.8
+        },
+        {
+          "id": "w5",
+          "text": "from",
+          "start": 1.872,
+          "end": 1.943
+        },
+        {
+          "id": "w6",
+          "text": "ICE?",
+          "start": 2.015,
+          "end": 2.443
+        }
+      ],
+      "duration_orig": 2.703,
+      "lead_s": 0
+    }
+  ],
+  "sfx": [
+    {
+      "frame": 1,
+      "file": "assets/sfx/events.wav",
+      "offset_s": 0,
+      "duration_s": 80.945,
+      "volume": 0.9,
+      "source": "host",
+      "role": "events"
+    }
+  ]
+}

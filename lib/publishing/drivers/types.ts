@@ -9,9 +9,9 @@ import type { SpineVertical } from '@/lib/social-hub/spine';
  */
 export interface PublishDriver {
   vertical: SpineVertical;
-  /** The type's own `publishing_live` switch. */
+  /** Whether the type is Live (D16): stateOf(its Generate key, publishing_live) is 'live'. Posts go out only then. */
   live(): Promise<boolean>;
-  /** The type's `require_approval` switch (on unless set to false). */
+  /** Always true: every post needs a person's approval (settings standard D16); require_approval is never read as false. */
   requireApproval(): Promise<boolean>;
   /** What happens to a due slot whose content may not post: Carousels cancel it, Explainers fail it at queueing. */
   refusesAtRelease: 'cancel' | 'fail';

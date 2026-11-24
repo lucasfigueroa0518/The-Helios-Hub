@@ -7,7 +7,7 @@ import { verticalInfo } from '@/lib/social-hub/verticals';
 
 const TIP_WIDTH = 260;
 
-/** Auto-publish readiness: one ring per type, with a hover card (also on keyboard focus) that explains the number. */
+/** Publish readiness: one ring per type, with a hover card (also on keyboard focus) that explains the number. */
 export function ReadinessRings({ readiness }: { readiness: Readiness[] }) {
   const tipId = useId();
   const tipRef = useRef<HTMLDivElement>(null);
@@ -42,7 +42,7 @@ export function ReadinessRings({ readiness }: { readiness: Readiness[] }) {
   const card = active?.card;
 
   return (
-    <section className="sh-ops-ready" aria-label="Auto-publish readiness">
+    <section className="sh-ops-ready" aria-label="Publish readiness">
       {rings.map((r) => {
         const c = readinessCard(r);
         const show = (e: { currentTarget: HTMLElement }) => setActive({ card: c, el: e.currentTarget, on: true });

@@ -3,7 +3,9 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
-import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { SERIES_LABEL } from '@/lib/content-type/story-series';
+import { isStoryVertical, STORY_VERTICALS, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
+import { readDramaMisses } from '@/lib/reel-ai-drama/hub-read';
 
 /**
  * "Run didn't finish" (Content page Phase B, B6): today's runs (New York
@@ -15,6 +17,8 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
  *   Reels       the idea's finish request failed today                   → that idea's card
  *   Carousels   today's latest daily run failed                          → every empty carousel card
  *   AI Events   today's latest build failed                              → its empty card
+ *   Field Notes today's latest build failed                              → its empty card
+ *   AI Drama    the pitch's latest job failed, requested today           → that idea's card
  *
  * A Stories set that failed after it had a minute failed while posting: it was
  * made, so it is not a run that didn't finish.
@@ -22,7 +26,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
 export type RunMiss = { key: string | null; title: string; detail: string | null };
 export type RunMisses = Record<Vertical, RunMiss[]>;
 
-export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [], ai_events: [] };
+export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], ai_trivia: [], real_or_ai: [], last_few_days: [], ai_events: [], field_notes: [], reel_ai_drama: [] };
 export const MISS_TITLE = 'Run didn’t finish';
 
 const DETAIL_MAX = 140;
@@ -31,13 +35,13 @@ const short = (text: string | null | undefined): string | null => {
   if (!t) return null;
   return t.length > DETAIL_MAX ? `${t.slice(0, DETAIL_MAX - 1)}…` : t;
 };
-const SERIES: Record<string, string> = SERIES_LABEL;
+const SERIES: Readonly<Record<string, string>> = SERIES_LABEL;
 
 export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunMisses> {
   const today = nyDateOf(now)!;
   // A type whose tables can't be read shows no line; the card keeps "Not made yet".
   const read = <T,>(p: Promise<{ rows: T[] }>): Promise<T[]> => p.then((r) => r.rows).catch(() => [] as T[]);
-  const [explainers, stories, reels, carousels, aiEvents] = await Promise.all([
+  const [explainers, stories, reels, carousels, aiEvents, fieldNotes, drama] = await Promise.all([
     read(q<{ key: string; reason: string | null }>(
       `SELECT j.topic_id::text AS key, j.error AS reason
          FROM explainers.jobs j
@@ -76,14 +80,26 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
         LIMIT 1`,
       [today],
     )),
+    read(q<{ status: string; trigger: string; reason: string | null }>(
+      `SELECT status, trigger, error AS reason
+         FROM field_notes.runs
+        WHERE kind = 'build' AND (requested_at AT TIME ZONE 'America/New_York')::date = $1::date
+        ORDER BY requested_at DESC
+        LIMIT 1`,
+      [today],
+    )),
+    // AI Drama Reels (lib/reel-ai-drama/hub.ts); an unapplied schema shows no line, like the rest.
+    readDramaMisses(q, today).catch(() => [] as Array<{ key: string; reason: string | null }>),
   ]);
   return {
+    reel_ai_drama: drama.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     explainers: explainers.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     reels: reels.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
-    stories: stories.map((r) => {
+    // Each Stories-format type gets its own series' misses (SS-1; a set's key is its series).
+    ...Object.fromEntries(STORY_VERTICALS.map((v) => [v, stories.filter((r) => verticalOfSeries(r.key) === v).map((r) => {
       const why = short(r.reason);
       return { key: r.key, title: MISS_TITLE, detail: `${SERIES[r.key] ?? r.key}: ${r.status}${why ? `, ${why}` : ''}` };
-    }),
+    })])) as Record<StoryVertical, RunMiss[]>,
     carousels: carousels
       .filter((r) => r.status === 'failed')
       .map((r) => ({
@@ -100,6 +116,13 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
         title: r.trigger === 'scheduled' ? 'The Sunday AI Events run didn’t finish' : 'The AI Events run didn’t finish',
         detail: short(r.reason),
       })),
+    field_notes: fieldNotes
+      .filter((r) => r.status === 'failed')
+      .map((r) => ({
+        key: null,
+        title: r.trigger === 'scheduled' ? 'The scheduled Field Notes run didn’t finish' : 'The Field Notes run didn’t finish',
+        detail: short(r.reason),
+      })),
   };
 }
 
@@ -107,8 +130,8 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
 export function missFor(c: QuotaCandidate, misses: RunMisses, run: ProgressItem | null): RunMiss | null {
   if (c.post || run) return null;
   const list = misses[c.vertical] ?? [];
-  if (c.vertical === 'carousels' || c.vertical === 'ai_events') return list[0] ?? null;
-  if (c.vertical === 'stories') return c.seriesId ? list.find((m) => m.key === c.seriesId) ?? null : null;
+  if (c.vertical === 'carousels' || c.vertical === 'ai_events' || c.vertical === 'field_notes') return list[0] ?? null;
+  if (isStoryVertical(c.vertical)) return c.seriesId ? list.find((m) => m.key === c.seriesId) ?? null : null;
   const ideaId = c.idea?.id;
   if (!ideaId) return null;
   return list.find((m) => m.key != null && (ideaId === m.key || ideaId.endsWith(`:${m.key}`))) ?? null;

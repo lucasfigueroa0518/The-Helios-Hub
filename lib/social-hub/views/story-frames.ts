@@ -1,6 +1,6 @@
 import { findPost, type HubDataset } from '@/lib/social-hub/dataset';
 import type { HubPost } from '@/lib/social-hub/types';
-import { createStoriesStorage } from '@/lib/stories/storage';
+import { createStoriesStorage, liveStorageConfig } from '@/lib/stories/storage';
 
 const FRAME_API = /^\/api\/stories\/frames\//;
 
@@ -16,8 +16,15 @@ export function storyFramePostIds(posts: readonly HubPost[]): Set<string> {
 
 type SignMany = (paths: string[]) => Promise<Array<string | null>>;
 
+/**
+ * Signing runs inside the page render, so it gets a short timeout: a slow Storage API
+ * must not hold the page (it used to wait up to the uploads' 60 s). On timeout the
+ * frames keep their route, exactly as on any other failed sign.
+ */
+export const RENDER_SIGN_TIMEOUT_MS = 1_500;
+
 async function liveSign(paths: string[]): Promise<Array<string | null>> {
-  return createStoriesStorage().signMany(paths, 3600);
+  return createStoriesStorage({ ...liveStorageConfig(), timeoutMs: RENDER_SIGN_TIMEOUT_MS }).signMany(paths, 3600);
 }
 
 /**

@@ -1,4 +1,5 @@
 // lib/social-hub/slots/rules.ts
+import { isStoryVertical, SERIES_OF_VERTICAL } from '@/lib/social-hub/story-types';
 import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -45,6 +46,7 @@ export const LFD_ONCE = 'Last Few Days runs once a day.';
 export const AI_EVENTS_ONCE = 'AI Events posts at most twice a day (Miami and Boston).';
 /** AE-29: one post per city, Miami and Boston. */
 export const AI_EVENTS_PER_DAY = 2;
+export const FIELD_NOTES_ONCE = 'Field Notes posts once a day.';
 export const NOT_ON_DAY = 'That slot isn’t on this day.';
 export const CAROUSEL_STARTED = 'A Carousel on that day has already started.';
 
@@ -70,8 +72,9 @@ export function canPlace(ctx: DayCtx, s: { vertical: Vertical; startMinute: numb
   if (isPastDay(ctx)) return refuse(PAST_DAY);
   if (!isSlotMinute(s.startMinute)) return refuse(OFF_GRID);
   if (s.startMinute < DAY_START || s.startMinute > LAST_START) return refuse(OUTSIDE_DAY);
-  if (s.vertical === 'stories' && !s.series) return refuse(NEEDS_SERIES);
-  if (s.vertical !== 'stories' && s.series) return refuse(NO_SERIES);
+  // A Stories-format type's slot names its one series (SS-1).
+  if (isStoryVertical(s.vertical) && s.series !== SERIES_OF_VERTICAL[s.vertical]) return refuse(NEEDS_SERIES);
+  if (!isStoryVertical(s.vertical) && s.series) return refuse(NO_SERIES);
 
   let minute = s.startMinute;
   if (ctx.nyDate !== null && ctx.nyDate === ctx.today && minute <= ctx.nowMinute) {
@@ -83,6 +86,7 @@ export function canPlace(ctx: DayCtx, s: { vertical: Vertical; startMinute: numb
   const has = (v: Vertical) => others.some((o) => o.vertical === v);
   if (s.vertical === 'carousels' && has('last_few_days')) return refuse(LFD_CAROUSEL_CONFLICT);
   if (s.vertical === 'last_few_days' && has('last_few_days')) return refuse(LFD_ONCE);
+  if (s.vertical === 'field_notes' && has('field_notes')) return refuse(FIELD_NOTES_ONCE);
   if (s.vertical === 'ai_events' && others.filter((o) => o.vertical === 'ai_events').length >= AI_EVENTS_PER_DAY) return refuse(AI_EVENTS_ONCE);
   if (s.vertical === 'last_few_days' && has('carousels')) return refuse(LFD_CAROUSEL_CONFLICT, 'remove-carousels');
   if (others.some((o) => sameSlotKey(o, { vertical: s.vertical, startMinute: minute, series: s.series }))) {
@@ -202,7 +206,8 @@ export function gapsFor(ctx: DayCtx, standard: readonly ResolvedSlot[], caps: Re
   if (!slots.some((s) => s.vertical === 'explainers')) {
     gaps.push({ kind: 'no-explainer', text: `${day} has no Explainer.`, fix: placeFix(ctx, 'explainers', DEFAULT_TIMES.explainers[0]!, null) });
   }
-  if (!slots.some((s) => s.vertical === 'stories')) {
+  // Any Stories-format type counts (SS-1); the fix places the daily Morning Download.
+  if (!slots.some((s) => isStoryVertical(s.vertical))) {
     gaps.push({ kind: 'no-stories', text: `${day} has no Stories.`, fix: placeFix(ctx, 'stories', DEFAULT_TIMES.stories[0]!, 'morning_download') });
   }
   if (slots.length < standard.length) {
@@ -211,7 +216,7 @@ export function gapsFor(ctx: DayCtx, standard: readonly ResolvedSlot[], caps: Re
 
   const counts = new Map<string, { name: { one: string; many: string }; n: number; cap: number }>();
   for (const s of slots) {
-    const k = s.vertical === 'stories' ? `stories|${s.series}` : s.vertical;
+    const k = s.vertical;
     const c = counts.get(k) ?? { name: nameOf(s), n: 0, cap: caps[s.vertical] };
     c.n += 1;
     counts.set(k, c);

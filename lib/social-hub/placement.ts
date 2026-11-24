@@ -54,6 +54,7 @@ import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { readLfdSettings } from '@/lib/lfd/settings';
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW, DEFAULT_AI_EVENTS_DAYS } from '@/lib/ai-events/config';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
+import { FIELD_NOTES_AUTO_DAYS, FIELD_NOTES_WINDOW } from '@/lib/field-notes/config';
 import { bookSlotStatement, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
 import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { driftMinute } from '@/lib/social-hub/slots/book';
@@ -65,8 +66,9 @@ import { canPlace, isLocked, type DayCtx } from '@/lib/social-hub/slots/rules';
 import { clockLabel, DEFAULT_FEED_MODE, DRIFT, isFeedSlot, nyMinuteOf, SERIES_NAME } from '@/lib/social-hub/slots/times';
 import { asSlotId } from '@/lib/social-hub/slots/legacy';
 import { isReelType, isStorySeries, parseSlotId, slotId, type FeedMode, type ResolvedSlot, type SetBy, type SlotQuery, type StorySeries } from '@/lib/social-hub/slots/types';
+import { isStoryVertical, SERIES_OF_VERTICAL, type StoryVertical } from '@/lib/social-hub/story-types';
 import { isDayKey } from '@/lib/social-hub/time';
-import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { SERIES_LABEL } from '@/lib/content-type/story-series';
 
 /** A posting window as the picker shows it; `days` (0 = Sunday) when it doesn't run every day. */
 export type SlotWindow = PostingWindow & { name: string; days?: readonly number[] };
@@ -89,10 +91,17 @@ const TYPE_NAME: Record<SpineVertical, string> = {
   carousels: 'Carousels',
   explainers: 'Explainers',
   reels: 'Text on Screen',
-  stories: 'Stories',
+  stories: 'Morning Downloads',
+  ai_trivia: 'Are you smarter than AI? sets',
+  real_or_ai: 'Real or AI? sets',
   last_few_days: 'Last Few Days posts',
   ai_events: 'AI Events posts',
+  field_notes: 'Field Notes posts',
+  reel_ai_drama: 'AI Drama reels',
 };
+
+/** lib/reel-ai-drama/hub.ts DRAMA_WINDOWS, copied so placement never imports the drama backend (a test pins it). */
+const DRAMA_PLACEMENT_WINDOWS = [{ id: 'evening', label: '8:00–8:45 PM', startMinute: 1200, endMinute: 1245 }] as const;
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
@@ -116,10 +125,10 @@ const named = (windows: ReadonlyArray<PostingWindow>, names: Record<string, stri
  * reach). tests/social-hub-placement.test.ts pins the copy to the original;
  * a stories.settings `series` row overrides it, as in loadSettings.
  */
-export const STORY_WINDOW_DEFAULTS: Record<keyof typeof SERIES_LABEL, { start: string; end: string; days: number[] }> = {
+export const STORY_WINDOW_DEFAULTS: Record<StorySeries, { start: string; end: string; days: number[] }> = {
   morning_download: { start: '08:30', end: '10:00', days: [0, 1, 2, 3, 4, 5, 6] },
-  guess_the_number: { start: '08:30', end: '10:00', days: [1, 4] },
-  free_vs_paid: { start: '08:30', end: '10:00', days: [2, 6] },
+  ai_trivia: { start: '08:30', end: '10:00', days: [0, 1, 4] },
+  real_or_ai: { start: '08:30', end: '10:00', days: [2, 6] },
 };
 
 const minuteOf = (hhmm: string) => {
@@ -127,7 +136,8 @@ const minuteOf = (hhmm: string) => {
   return h! * 60 + m!;
 };
 
-async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
+/** A Stories-format type's window: its one series' (SS-1). */
+async function storyWindows(query: SpineQuery, vertical: StoryVertical): Promise<SlotWindow[]> {
   let override: Record<string, { window?: Partial<{ start: string; end: string; days: number[] }> }> = {};
   try {
     const { rows } = await query(`SELECT value FROM stories.settings WHERE key = 'series'`);
@@ -135,7 +145,7 @@ async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
   } catch {
     // No stories schema on this handle: the defaults stand.
   }
-  return (Object.keys(STORY_WINDOW_DEFAULTS) as Array<keyof typeof STORY_WINDOW_DEFAULTS>).map((series) => {
+  return [SERIES_OF_VERTICAL[vertical]].map((series) => {
     const w = { ...STORY_WINDOW_DEFAULTS[series], ...(override[series]?.window ?? {}) };
     const startMinute = minuteOf(w.start);
     const endMinute = minuteOf(w.end);
@@ -171,12 +181,21 @@ export async function placementRules(query: SpineQuery, vertical: SpineVertical)
         ],
       };
     }
+    case 'field_notes': {
+      // One afternoon window on its days (1-2 a week); a feed post, so spaced. Its days come from the calendar.
+      return { vertical, spaced: true, windows: [{ ...FIELD_NOTES_WINDOW, name: 'Afternoon', days: [...FIELD_NOTES_AUTO_DAYS] }] };
+    }
     case 'explainers':
       return { vertical, spaced: true, windows: named(EXPLAINER_WINDOWS, { afternoon: 'Afternoon', late: 'Late afternoon' }) };
+    case 'reel_ai_drama':
+      // A Main-feed reel, like Explainers: spaced from the other feed posts.
+      return { vertical, spaced: true, windows: named(DRAMA_PLACEMENT_WINDOWS, { evening: 'Evening' }) };
     case 'reels':
       return { vertical, spaced: false, windows: named(POSTING_SLOTS, { morning: 'Morning', midday: 'Midday', evening: 'Evening' }) };
     case 'stories':
-      return { vertical, spaced: false, windows: await storyWindows(query) };
+    case 'ai_trivia':
+    case 'real_or_ai':
+      return { vertical, spaced: false, windows: await storyWindows(query, vertical) };
   }
 }
 
@@ -319,15 +338,15 @@ async function heldSlots(query: SpineQuery, rules: PlacementRules, nyDate: strin
 /** What `slot` asks for: a start minute (and Stories' series). A bare series takes its first free slot that day. */
 function askedKey(rules: PlacementRules, slot: string, mine: readonly ResolvedSlot[], free: (s: ResolvedSlot) => boolean): { startMinute: number; series: StorySeries | null } | null {
   const parsed = parseSlotId(slot);
-  if (parsed) return (parsed.series !== null) === (rules.vertical === 'stories') ? parsed : null;
-  if (rules.vertical === 'stories') {
+  if (parsed) return (parsed.series !== null) === isStoryVertical(rules.vertical) ? parsed : null;
+  if (isStoryVertical(rules.vertical)) {
     if (!isStorySeries(slot)) return null;
     const of = mine.filter((s) => s.series === slot);
     const pick = of.find(free) ?? of[0];
     if (pick) return { startMinute: pick.startMinute, series: slot };
   }
   const w = rules.windows.find((x) => x.id === slot);
-  return w ? { startMinute: w.startMinute, series: rules.vertical === 'stories' && isStorySeries(slot) ? slot : null } : null;
+  return w ? { startMinute: w.startMinute, series: isStoryVertical(rules.vertical) && isStorySeries(slot) ? slot : null } : null;
 }
 
 async function planOnCalendar(
@@ -353,7 +372,7 @@ async function planOnCalendar(
   const slotOps: OverrideOp[] = [];
   if (existing && free(existing)) {
     slot = existing;
-  } else if (vertical === 'stories') {
+  } else if (isStoryVertical(vertical)) {
     // A Story set's time lives in stories.sets: it takes one of the day's Stories slots, never a new one.
     if (existing) return { ok: false, note: held.has(slotId(existing.startMinute, existing.series)) ? 'That slot is taken.' : `Today’s ${clockLabel(existing.startMinute)} slot is over.` };
     return { ok: false, note: `${clockLabel(key.startMinute)} isn’t a ${key.series ? SERIES_NAME[key.series].one : 'Stories'} slot on ${WEEKDAY[weekdayOf(input.nyDate)]}, ${input.nyDate}. Add it on the calendar first.` };

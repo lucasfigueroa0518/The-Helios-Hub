@@ -9,7 +9,7 @@ import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
 import { emptyReport, funnelFrom, publishingFor, quotaFor, withPublishing } from '@/lib/social-hub/health/reporters/shared';
 import { typeVerdict } from '@/lib/social-hub/health/verdict';
 import { reportReels } from '@/lib/social-hub/health/reporters/reels';
-import { reportStories } from '@/lib/social-hub/health/reporters/stories';
+import { makeStoriesReporter, reportStories } from '@/lib/social-hub/health/reporters/stories';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -18,36 +18,31 @@ const NOW = new Date('2026-10-13T11:31:00Z');
 const posting = (over: Partial<PostingState> = {}): PostingState =>
   ({ type: 'carousels', live: true, generate: true, autoPublish: false, perDay: 1, maxPerDay: 2, series: null, ...over }) as PostingState;
 
-test('quota: perDay for most types; enabled series that run that weekday for Stories', () => {
+test('quota: perDay for most types; each Stories-format type on its own days, two days ahead for Trivia (SS-1)', () => {
   assert.equal(quotaFor(posting({ perDay: 2 }), NIGHT), 2);
-  const series = [
-    { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [1, 4] },
-    { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [2] },
-  ];
-  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series } as never), NIGHT), 1); // Tue: MD only (FP disabled)
+  // Tue night: Morning Download for Tue (every day); Trivia is made 2 days ahead (Bald-Eagle D4), and Thursday is a Trivia day.
+  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, days: [0, 1, 2, 3, 4, 5, 6] } as never), NIGHT), 1);
+  assert.equal(quotaFor(posting({ type: 'ai_trivia', perDay: null, days: [0, 1, 4] } as never), NIGHT), 1);
+  assert.equal(quotaFor(posting({ type: 'real_or_ai', perDay: null, days: [2, 6] } as never), NIGHT), 0, 'Thursday is not a Real or AI? day');
 });
 
 test('quota in template mode: the night\'s own slots from the week schedule, else the derived fields', () => {
   const day = (nyDate: string, count: number, series: string[] = []) => ({ nyDate, count, trial: 0, main: 0, series, override: false });
-  const schedule = [day('2026-10-12', 2), day(NIGHT, 1, ['guess_the_number', 'free_vs_paid'])];
+  // Trivia and Real or AI? are made 2 days ahead (Bald-Eagle D4): Tuesday's night fills their Thursday (Oct 15) slots.
+  const schedule = [day('2026-10-12', 2), day(NIGHT, 1), day('2026-10-15', 1, ['ai_trivia'])];
   // perDay is today's count (say 2); the night reads its own day.
   assert.equal(quotaFor(posting({ perDay: 2, schedule }), NIGHT), 1);
   assert.equal(quotaFor(posting({ perDay: 2, schedule }), '2026-10-20'), 2, 'outside the week: perDay');
   assert.equal(quotaFor(posting({ type: 'last_few_days', perDay: null, days: [], schedule } as never), NIGHT), 1);
   assert.equal(quotaFor(posting({ type: 'last_few_days', perDay: null, days: [2], schedule: [day(NIGHT, 0)] } as never), NIGHT), 0, 'no LFD slot that night');
-  const series = [
-    { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [2] },
-    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [] },
-    { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [] },
-  ];
-  // Tuesday's slots are GN and FP: GN counts, FP is disabled, MD has no slot that night.
-  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule } as never), NIGHT), 1);
-  // The daily limit: the night makes no more than it, whatever the slots (Stories: per series).
+  // Thursday's slot is Trivia's: Trivia counts it; Morning Download reads Tuesday's own slots.
+  assert.equal(quotaFor(posting({ type: 'ai_trivia', perDay: null, days: [], schedule, cap: 1 } as never), NIGHT), 1);
+  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, days: [], schedule: [day(NIGHT, 0)], cap: 1 } as never), NIGHT), 0);
+  // The daily limit: the night makes no more than it, whatever the slots.
   assert.equal(quotaFor(posting({ perDay: 1, cap: 1, schedule: [day(NIGHT, 3)] }), NIGHT), 1);
   assert.equal(quotaFor(posting({ perDay: 1, cap: 0, schedule: [day(NIGHT, 3)] }), NIGHT), 0);
-  const twice = [day(NIGHT, 3, ['guess_the_number', 'guess_the_number', 'guess_the_number'])];
-  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule: twice, cap: 2 } as never), NIGHT), 2);
+  const twice = [day(NIGHT, 0), day('2026-10-15', 3, ['ai_trivia', 'ai_trivia', 'ai_trivia'])];
+  assert.equal(quotaFor(posting({ type: 'ai_trivia', perDay: null, days: [], schedule: twice, cap: 1 } as never), NIGHT), 1, 'once a day (SS-24)');
 });
 
 test('due follows generate, not the publishing switch; a run is always due', () => {
@@ -61,9 +56,8 @@ test('due follows generate, not the publishing switch; a run is always due', () 
   assert.equal(off.due, false);
   // Generation off but a run happened anyway: still judged.
   assert.equal(withPublishing({ ...emptyReport('carousels', NIGHT), ran: true }, posting({ generate: false }), pub).due, true);
-  // Stories (generate null) follow each series' own switch through the quota.
-  const series = [{ id: 'morning_download', label: 'MD', enabled: true, generate: false, days: [0, 1, 2, 3, 4, 5, 6] }];
-  assert.equal(withPublishing(emptyReport('stories', NIGHT), posting({ type: 'stories', generate: null, perDay: null, series } as never), pub).due, false);
+  // A Stories-format type has its own Generate switch (SS-24), like the others.
+  assert.equal(withPublishing(emptyReport('stories', NIGHT), posting({ type: 'stories', generate: false, perDay: null, days: [0, 1, 2, 3, 4, 5, 6] } as never), pub).due, false);
 });
 
 test('funnel subtracts drops stage by stage', () => {
@@ -122,22 +116,47 @@ test('carousels: made from run posts, pipeline-fault set-asides are failures, sh
   assert.equal(r.spendUsd, 1.2);
 });
 
-test('stories: failed set is a failure, watch-reached skip is a cap warning', async () => {
+test('stories: failed set is a failure, watch-reached skip is a cap warning; each Stories-format type reports its own sets (SS-1)', async () => {
   const { pg, query } = await openHubTestDb();
   await pg.exec(`
     INSERT INTO stories.sets (series, ny_date, trigger, style, status, error, spend_usd) VALUES
       ('morning_download', '2026-10-13', 'auto', 'polished', 'failed', 'Request timed out', 0.4),
-      ('guess_the_number', '2026-10-13', 'auto', 'polished', 'skipped', 'monthly watch reached (25)', 0);
+      ('ai_trivia', '2026-10-15', 'auto', 'polished', 'skipped', 'monthly watch reached (25)', 0),
+      ('ai_trivia', '2026-10-13', 'auto', 'polished', 'failed', 'made by an earlier night', 0);
   `);
-  const series = [
-    { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [2] },
-  ];
-  const r = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, series } as never), now: NOW });
-  assert.equal(r.made, 0);
-  assert.equal(r.target, 2);
-  assert.deepEqual(r.failures.map((f) => [f.reason, f.severity]).sort(), [['cap_hit', 'warning'], ['timeout', 'failed']]);
-  assert.equal(r.spendUsd, 0.4);
+  const md = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, days: [0, 1, 2, 3, 4, 5, 6] } as never), now: NOW });
+  assert.equal(md.made, 0);
+  assert.equal(md.target, 1);
+  assert.deepEqual(md.failures.map((f) => [f.reason, f.severity]), [['timeout', 'failed']]);
+  assert.equal(md.spendUsd, 0.4);
+  // Trivia is made 2 days ahead (Bald-Eagle D4): Tuesday's night made Thursday's set; Tuesday's own set was an earlier night's.
+  const trivia = await makeStoriesReporter('ai_trivia')(query, { night: NIGHT, posting: posting({ type: 'ai_trivia', perDay: null, days: [0, 1, 4] } as never), now: NOW });
+  assert.equal(trivia.target, 1);
+  assert.deepEqual(trivia.failures.map((f) => [f.reason, f.severity]), [['cap_hit', 'warning']]);
+});
+
+test('stories: a 402 out-of-credits failure has its own cause, not "unrecognized error"', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO stories.sets (series, ny_date, trigger, style, status, error, spend_usd) VALUES
+      ('morning_download', '2026-10-13', 'auto', 'polished', 'failed', '402 Your organization has no available TypeSafe API credits. Please add more credits and/or set up auto-reload at https://console.typesafe.ai/settings/billing', 0);
+  `);
+  const r = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, days: [0, 1, 2, 3, 4, 5, 6] } as never), now: NOW });
+  assert.equal(r.failures[0]?.reason, 'out_of_credits');
+});
+
+test('stories: a built set still waiting on a person is built, with a visible heads-up that it cannot post yet', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO stories.sets (series, ny_date, trigger, style, status, flagged, spend_usd) VALUES
+      ('morning_download', '2026-10-13', 'auto', 'polished', 'ready', true, 0.1);
+  `);
+  const r = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, days: [0, 1, 2, 3, 4, 5, 6] } as never), now: NOW });
+  assert.equal(r.made, 1, 'it was built');
+  const waiting = r.failures.find((f) => f.reason === 'awaiting_approval');
+  assert.ok(waiting, 'the heads-up is there');
+  assert.equal(waiting!.severity, 'warning');
+  assert.match(waiting!.rawError ?? '', /flagged/);
 });
 
 test('feed staleness counts distinct days, not rows', async () => {
@@ -190,7 +209,7 @@ test('explainers: capped job is cap_hit; unknown-cost HeyGen rows are counted, n
   await pg.exec(`
     INSERT INTO explainers.topics (id, title, scope, source_url, origin, status, audience_fit, teachability_45s, analogy_potential, visual_potential, accuracy_under_simplification, hook_strength, weighted_score)
       VALUES ('00000000-0000-0000-0000-0000000000e1', 'Webhooks', NULL, NULL, 'generated', 'queued', 3, 3, 3, 3, 3, 3, 70);
-    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool) VALUES ('ok', 'production', '2026-10-13', 12, 6);
+    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool, started_at) VALUES ('ok', 'production', '2026-10-13', 12, 6, '2026-10-13T06:00:00Z');
     INSERT INTO explainers.jobs (id, topic_id, status, stage, trigger, mode, spend_usd, spend_cap_usd, capped, error, orchestrator_model, frame_worker_model, requested_at, finished_at) VALUES
       ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000e1', 'failed', 'render', 'auto', 'production', 5, 5, true, 'spend cap reached', 'claude-opus-5-5', 'claude-sonnet-5-5', '2026-10-13T06:00:00Z', '2026-10-13T06:40:00Z');
     INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd, usd_known, created_at) VALUES
@@ -203,6 +222,23 @@ test('explainers: capped job is cap_hit; unknown-cost HeyGen rows are counted, n
   assert.equal(r.unknownCostCalls, 1);
   assert.equal(r.spendUsd, 4.5);
   assert.equal(r.funnel[0]!.in, 12);
+});
+
+test('explainers: development-mode cycles, jobs and costs are the real pipeline and count (the setting ships as development)', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO explainers.topics (id, title, scope, source_url, origin, status, audience_fit, teachability_45s, analogy_potential, visual_potential, accuracy_under_simplification, hook_strength, weighted_score)
+      VALUES ('00000000-0000-0000-0000-0000000000e2', 'Caching', NULL, NULL, 'generated', 'queued', 3, 3, 3, 3, 3, 3, 70);
+    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool, started_at) VALUES ('ok', 'development', '2026-10-13', 3, 3, '2026-10-13T06:00:00Z');
+    INSERT INTO explainers.jobs (id, topic_id, status, stage, trigger, mode, spend_usd, spend_cap_usd, capped, error, orchestrator_model, frame_worker_model, requested_at, finished_at) VALUES
+      ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000e2', 'failed', 'session_b_done', 'auto', 'development', 5.57, 5, true, 'Spend cap $5.00 reached in session B.', 'claude-opus-5-5', 'claude-opus-5-5', '2026-10-13T06:01:00Z', '2026-10-13T06:19:00Z');
+    INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd, usd_known, created_at) VALUES
+      ('00000000-0000-0000-0000-0000000000f2', 'development', 'anthropic', 'session_b:claude-opus-5-5', 5.57, true, '2026-10-13T06:10:00Z');
+  `);
+  const r = await reportExplainers(query, { night: NIGHT, posting: posting({ type: 'explainers', perDay: 1 }), now: NOW });
+  assert.equal(r.ran, true, 'the cycle ran: not "did not run"');
+  assert.equal(r.failures[0]?.reason, 'cap_hit', 'the cause shows');
+  assert.equal(r.spendUsd, 5.57);
 });
 
 test('carousels: no quota on a Last Few Days night while Last Few Days auto_run is on', async () => {
@@ -246,8 +282,9 @@ test('template mode: a Sunday night reported on Monday uses Sunday\'s slots, not
     const MON_EARLY = new Date('2026-10-19T10:00:00Z'); // Mon Oct 19, 6:00 AM New York: before the 7:30 report, so Sunday's night
     const p = await readPosting('reels', MON_EARLY);
     assert.equal(p.perDay, 3, 'Monday has 3');
-    assert.equal(quotaFor(p, '2026-10-18'), 1);
-    assert.equal(quotaFor(p, '2026-10-19'), 3);
+    // Text on Screen is made 2 days ahead (Bald-Eagle D4): Friday's night fills Sunday, Saturday's fills Monday.
+    assert.equal(quotaFor(p, '2026-10-16'), 1);
+    assert.equal(quotaFor(p, '2026-10-17'), 3);
     assert.equal(p.schedule!.length, 7, 'the type page still gets this Monday–Sunday week');
     assert.equal(p.schedule![0]!.nyDate, '2026-10-19');
   });
@@ -258,8 +295,9 @@ test('template mode: a backfilled night 20 days back uses its own slots', async 
     await setSlotSource(query as never, 'template', 't');
     await pg.exec(removeReels('2026-09-29', ['evening'])); // Tue Sep 29: 2 reels slots
     const p = await readPosting('reels', new Date('2026-10-19T14:00:00Z'));
-    assert.equal(quotaFor(p, '2026-09-29'), 2);
-    assert.equal(quotaFor(p, '2026-09-30'), 3);
+    // Made 2 days ahead (Bald-Eagle D4): the night of Sep 27 fills Sep 29.
+    assert.equal(quotaFor(p, '2026-09-27'), 2);
+    assert.equal(quotaFor(p, '2026-09-28'), 3);
   });
 });
 

@@ -1,0 +1,44 @@
+[
+ {
+  "out": "/private/tmp/claude-501/-Users-lucasfigueroa--claude-spares-spare-IbG1Hb/20ca182e-e5c1-46bd-982f-0ddc91797092/scratchpad/aud2/context-window-1.mp4",
+  "opener": "big-bang",
+  "palette": {
+   "seed": "context-window-1",
+   "break": "dropins/deep-impacts-sound-fx/tick-impact.mp3",
+   "swish": "dropins/ultimate-whooshes-sound-fx/cyber-whoosh.mp3",
+   "cut": "dropins/risers-sound-fx/high-tone-sweep-riser.mp3"
+  },
+  "cutAt": 2.5,
+  "problems": [],
+  "ok": true,
+  "notes": []
+ },
+ {
+  "out": "/private/tmp/claude-501/-Users-lucasfigueroa--claude-spares-spare-IbG1Hb/20ca182e-e5c1-46bd-982f-0ddc91797092/scratchpad/aud2/context-window-2.mp4",
+  "opener": "big-bang",
+  "palette": {
+   "seed": "context-window-2",
+   "break": "dropins/deep-impacts-sound-fx/scary-hit.mp3",
+   "swish": "dropins/ultimate-whooshes-sound-fx/fast-wipe-whoosh.mp3",
+   "cut": "dropins/ultimate-whooshes-sound-fx/sacred-whoosh.mp3"
+  },
+  "cutAt": 2.5,
+  "problems": [],
+  "ok": true,
+  "notes": []
+ },
+ {
+  "out": "/private/tmp/claude-501/-Users-lucasfigueroa--claude-spares-spare-IbG1Hb/20ca182e-e5c1-46bd-982f-0ddc91797092/scratchpad/aud2/context-window-3.mp4",
+  "opener": "big-bang",
+  "palette": {
+   "seed": "context-window-3",
+   "break": "dropins/deep-impacts-sound-fx/ominous-impact.mp3",
+   "swish": "dropins/ultimate-whooshes-sound-fx/deep-bulb-whoosh.mp3",
+   "cut": "dropins/ultimate-whooshes-sound-fx/fast-wipe-whoosh.mp3"
+  },
+  "cutAt": 2.544,
+  "problems": [],
+  "ok": true,
+  "notes": []
+ }
+]

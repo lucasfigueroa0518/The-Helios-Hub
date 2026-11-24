@@ -1,4 +1,5 @@
 import { CostChart } from '@/components/social-hub/cost/CostChart';
+import { RefillTotal } from '@/components/social-hub/cost/RefillTotal';
 import { CountUp } from '@/components/social-hub/cost/CountUp';
 import { dollars, money, perUnit, shortDay } from '@/components/social-hub/cost/format';
 import { InfoPop } from '@/components/social-hub/cost/InfoPop';
@@ -113,9 +114,10 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
       <section aria-labelledby="h-budget">
         <div className="sh-ops-sechead is-start">
           <h2 id="h-budget">Budget</h2>
-          <InfoPop title="Budget">Each type&apos;s spend this month against its monthly watch. Types with only a daily cap use the cap × days in the month.</InfoPop>
+          <InfoPop title="Budget">Each type&apos;s spend this month against its monthly watch. Types with only a daily cap use the cap × days in the month; Morning Download, Are you smarter than AI? and Real or AI? each use their own daily cap × the days they post.</InfoPop>
         </div>
         <p className="sh-ops-sub">Each type against its monthly watch. Click a card to filter the page to that type.</p>
+        <RefillTotal />
         <div className="sh-cost-budget">
           {model.budget.map((b, i) => {
             const v = verticalInfo(b.vertical);
@@ -221,7 +223,7 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
                 <span className="sh-ops-num">{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</span>
               </div>
             ))}
-            <p className="sh-ops-meta sh-cost-rej__note">Lower is closer to auto-publish. The same number feeds the readiness ring on Health.</p>
+            <p className="sh-ops-meta sh-cost-rej__note">Lower is closer to publish-ready. The same number feeds the readiness ring on Health.</p>
           </div>
         </div>
       </section>

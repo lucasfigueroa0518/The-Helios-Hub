@@ -8,8 +8,9 @@
 import { metaOf, type MetaSighting, type MetaSource } from './policy';
 import type { BankRows, Query, SightingRow, SourceRow } from './types';
 
-/** open > government > company > unknown, as SQL (a re-offer only ever widens a source's licence). */
-const rank = (col: string) => `(CASE ${col} WHEN 'open' THEN 3 WHEN 'government' THEN 2 WHEN 'company' THEN 1 ELSE 0 END)`;
+/** open > government > company > unknown (and generated), as SQL (a re-offer only ever widens a source's licence). */
+export const licenceRankSql = (col: string) => `(CASE ${col} WHEN 'open' THEN 3 WHEN 'government' THEN 2 WHEN 'company' THEN 1 ELSE 0 END)`;
+const rank = licenceRankSql;
 const RETRY_ON_SIGHT = `s.status IN ('failed', 'gone', 'skipped')`;
 
 const OUTCOME_RANK: Record<string, number> = { used: 5, picked: 4, passed: 3, verified: 2, rejected: 1 };
@@ -108,7 +109,7 @@ export async function refreshPhotoMeta(query: Query, photoId: string): Promise<v
   );
   if (!sources.length) return;
   const { rows: sightings } = await query(
-    `SELECT url, outcome, tile_tags, request_query, request_kind, qid, subject, verified, vision FROM media_library.sightings WHERE url = ANY($1::text[]) ORDER BY at, id`,
+    `SELECT url, run_kind, outcome, tile_tags, request_query, request_kind, qid, subject, verified, vision FROM media_library.sightings WHERE url = ANY($1::text[]) ORDER BY at, id`,
     [sources.map((s) => s.url)],
   );
   const m = metaOf(sources as MetaSource[], sightings as MetaSighting[]);

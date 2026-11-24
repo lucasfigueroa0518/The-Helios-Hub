@@ -20,7 +20,7 @@
  *   wording  the writer's limits and normalize() → Jev grounding over the whole slide; a miss gets ONE
  *            Sonnet rewrite (REWRITE_NOTE, as the run does) whose targeted field must pass again
  *   photo    the Stories finder (findPhotos) for that story, never a photo already in the post, in
- *            the 7-day used_photos set or in the last two posts → render → the Haiku vision check
+ *            the used-photo ledger (CI-32: published in the last 20 days) or in the last two posts → render → the Haiku vision check
  *
  * Parts: `{ kind: 'story', key: '<1-based story number>' }` (story n is slide n + 1) and the cover
  * `{ kind: 'story', key: 'cover' }`. The cover refuses every fix: its words are the fixed hook, its
@@ -30,6 +30,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Pick as LfdPick, StoryCopy, StoryPhotoRequest } from '@/lib/lfd/types';
+import { readUsedLedger } from '@/lib/photos/used';
 import type { SlideStory, SlideVerdict } from '@/lib/lfd/vision';
 import type { SavedStory } from '@/lib/memes/lfd-sim/post';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
@@ -418,9 +419,8 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
           for (const t of sl.lfdCover?.photos ?? []) exclude.add(t.url);
           if (sl.lfdCover?.meme?.url) exclude.add(sl.lfdCover.meme.url);
         }
-        // The shared 7-day rule (store.ts recentPhotoUrls) and the repeat check's last two posts.
-        const recent = await q(`SELECT DISTINCT url FROM social.used_photos WHERE used_at > now() - make_interval(days => 7)`);
-        for (const r of recent.rows) exclude.add(r.url as string);
+        // The used-photo ledger (CI-32: published in the last 20 days) and the repeat check's last two posts.
+        for (const url of (await readUsedLedger(q, new Date())).urls) exclude.add(url);
         const prev = await q(
           `SELECT p.stories FROM lfd.posts p WHERE p.status <> 'rejected' AND p.id <> $1::uuid ORDER BY p.ny_date DESC, p.created_at DESC LIMIT 2`,
           [post.id],
@@ -435,7 +435,7 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
         m.check();
         const photo = found.photo;
         if (!photo || !photo.src || exclude.has(photo.src) || !photo.credit?.trim()) {
-          return failed(`I searched for another photo for story ${no} and couldn't find a different usable one (not already in this post, the last two posts, or used in the last 7 days), so the original was kept.`);
+          return failed(`I searched for another photo for story ${no} and couldn't find a different usable one (not already in this post, the last two posts, or published in the last 20 days), so the original was kept.`);
         }
         next.photo = photo;
         next.photoSource = 'finder';

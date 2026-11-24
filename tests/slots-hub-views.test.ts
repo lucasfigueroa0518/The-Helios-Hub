@@ -11,11 +11,12 @@ import { openSlots, placeItem, planPlacement, rescheduleItem } from '@/lib/socia
 import { readDayQuotas } from '@/lib/social-hub/queries/day';
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadSlots, readCaps } from '@/lib/social-hub/slots/load';
+import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
 import { seedWithCarousels } from './helpers/seed-with-carousels';
 import type { OverrideRow, SlotsByDate } from '@/lib/social-hub/slots/types';
-import { applySlotChanges, setSlotSource, writeCaps } from '@/lib/social-hub/slots/write';
+import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
 import { capacityWindows, dayPlan, windowsOn } from '@/lib/social-hub/views/plan';
 import { storyActions } from '@/lib/publishing/actions/stories';
@@ -71,7 +72,9 @@ test('windowsOn follows the day\'s slot times when given, and the old windows wh
   const lfdWed = slotsFor(['2026-10-21'], [add('2026-10-21', 'last_few_days', 540)]);
   assert.deepEqual(windowsOn('last_few_days', '2026-10-21', [], lfdWed).map((w) => w.id), ['t0540']);
   const stories = windowsOn('stories', '2026-10-22', [], slotsFor(['2026-10-22'], [add('2026-10-22', 'stories', 900, null, 'morning_download')]));
-  assert.deepEqual(stories.map((w) => [w.id, w.label]), [['t0510:guess_the_number', 'Guess the Number'], ['t0510:morning_download', 'Morning Download'], ['t0900:morning_download', 'Morning Download']]);
+  // SS-1: Thursday's Trivia slot is its own type's, not Morning Download's.
+  assert.deepEqual(stories.map((w) => [w.id, w.label]), [['t0510:morning_download', 'Morning Download'], ['t0900:morning_download', 'Morning Download']]);
+  assert.deepEqual(windowsOn('ai_trivia', '2026-10-22', [], slotsFor(['2026-10-22'], [])).map((w) => w.id), ['t0510:ai_trivia']);
   assert.deepEqual(capacityWindows('carousels', '2026-10-21', [3], 1, '2026-10-20', slots).map((w) => w.id), ['t0870']);
 });
 
@@ -128,9 +131,9 @@ test('readDayQuotas: today\'s slot counts under the daily limit and the slot map
   assert.deepEqual([q.reels, q.carousels, q.explainers, q.last_few_days, q.lfdDays], [2, 0, 2, 1, []]);
   assert.equal(Object.keys(q.slots!).length, 29);
   assert.ok(q.slots!['2026-10-13'] && q.slots!['2026-11-10'], 'today − 7 … today + 21');
-  // Over the daily limit: only the limit counts.
-  await writeCaps(query as never, { explainers: 1 });
-  assert.equal((await readDayQuotas(query, Promise.resolve(query), now)).explainers, 1);
+  // D20: a stale daily limit trims nothing; the slots are the count.
+  await query(`INSERT INTO social_hub.settings (key, value, updated_at) VALUES ('daily_caps', '{"explainers":1}'::jsonb, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.equal((await readDayQuotas(query, Promise.resolve(query), now)).explainers, 2);
 });
 
 // ── Placement on free times ──
@@ -310,7 +313,8 @@ test('template: openSlots lists the day\'s slot times, free or taken', async () 
   const md = await planPlacement(q, { vertical: 'stories', nyDate: WED, slot: 'morning_download', now: NOW });
   assert.ok(md.ok);
   assert.equal(md.slot, 't0510:morning_download');
-  const gtn = await planPlacement(q, { vertical: 'stories', nyDate: WED, slot: 'guess_the_number', now: NOW });
+  // SS-1: Trivia is its own type; Wednesday has no Trivia slot (Sun/Mon/Thu).
+  const gtn = await planPlacement(q, { vertical: 'ai_trivia', nyDate: WED, slot: 'ai_trivia', now: NOW });
   assert.equal(gtn.ok, false);
   assert.match((gtn as { note: string }).note, /Add it on the calendar first/);
 });
@@ -375,31 +379,23 @@ test('posting settings: cadence is refused in template mode and still works in l
   assert.equal(legacy.schedule, null);
   await setSlotSource(query as never, 'template', 't');
   await assert.rejects(() => writePosting('carousels', { perDay: 2 }, 't'), /^Error: Cadence moved to the calendar\.$/);
-  await assert.rejects(() => writePosting('stories', { series: { id: 'free_vs_paid', days: [1] } }, 't'), /Cadence moved to the calendar\./);
+  await assert.rejects(() => writePosting('stories', { perDay: 1 }, 't'), /no daily quota/);
   assert.equal((await pg.query<{ value: unknown }>(`SELECT value FROM social.settings WHERE key = 'posts_per_day'`)).rows[0]!.value, 1, 'nothing written');
-  // The switches still save.
-  assert.equal((await writePosting('carousels', { autoPublish: true }, 't')).autoPublish, true);
+  // The state still saves (D16).
+  assert.equal((await writePosting('carousels', { state: 'approval' }, 't')).state, 'approval');
 });
 
-test('the daily limit: read in template mode (null while legacy), written 0–10 through writeCaps', async () => {
+test('no daily limit to set (D20): cap reads the fixed maximum, a write is refused, perDay is today\'s slots', async () => {
   const { query } = await appDb();
   const q = query as never;
   assert.equal((await readPosting('explainers')).cap, null);
-  await assert.rejects(() => writePosting('explainers', { cap: 4 }, 't'), /calendar/);
   await setSlotSource(q, 'template', 't');
-  assert.equal((await readPosting('explainers')).cap, 3);
-  assert.equal((await readPosting('stories')).cap, 2, 'Stories: per series');
-  const saved = await writePosting('explainers', { cap: 4 }, 't');
-  assert.equal(saved.cap, 4);
-  assert.equal((await readCaps(q)).explainers, 4);
-  assert.equal((await readCaps(q)).reels, 5, 'the other types keep theirs');
-  await assert.rejects(() => writePosting('explainers', { cap: 11 }, 't'), /from 0 to 10/);
-  await assert.rejects(() => writePosting('explainers', { cap: 1.5 }, 't'), /from 0 to 10/);
-  await assert.rejects(() => writePosting('last_few_days', { cap: 2 }, 't'), /once a day/);
-  assert.equal((await readCaps(q)).explainers, 4, 'a refused change writes nothing');
-  // Today's perDay is the slots under the limit.
-  await writePosting('reels', { cap: 2 }, 't');
-  assert.equal((await readPosting('reels', new Date('2026-10-20T14:00:00Z'))).perDay, 2);
+  assert.equal((await readPosting('explainers')).cap, 10);
+  assert.equal((await readPosting('ai_trivia')).cap, 1, 'AI Trivia posts at most once a day (SS-24)');
+  await assert.rejects(() => writePosting('explainers', { cap: 4 }, 't'), /Calendar sets how many a day/);
+  assert.deepEqual(await readCaps(q), DEFAULT_CAPS, 'a refused change writes nothing');
+  // Today's perDay is every slot the calendar has (Tuesday Oct 20 seeds three reels slots).
+  assert.equal((await readPosting('reels', new Date('2026-10-20T14:00:00Z'))).perDay, 3);
 });
 
 test('costPerPost: the average cost of a type\'s posts over the last 14 days, each item once; null with none', () => {
@@ -432,7 +428,8 @@ test('readPosting carries this week\'s schedule in template mode, and null in le
   assert.deepEqual([reels[0]!.count, reels[0]!.trial, reels[0]!.main], [3, 3, 0]);
   const stories = (await readPosting('stories')).schedule!;
   const monday = stories[0]!;
-  assert.deepEqual(monday.series, ['guess_the_number', 'morning_download'], 'in slot order');
+  assert.deepEqual(monday.series, ['morning_download'], 'Morning Download only (SS-1)');
+  assert.deepEqual((await readPosting('ai_trivia')).schedule![0]!.series, ['ai_trivia'], 'Trivia has its own Monday slot');
   assert.equal(stories.some((d) => d.override), false);
   // The cost line's input: the route works it out from the hub's posts (costPerPost); readPosting leaves it null.
   const explainer = { vertical: 'explainers', nyDate: null, generatedAt: new Date().toISOString(), costMicros: 300_000, costItemKey: 'x' } as HubPost;
@@ -455,11 +452,10 @@ test('readPosting in template mode works out perDay, LFD days and series days fr
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', startMinute: 1080, series: null, action: 'remove' }], { by: 't', now: TUE });
   assert.equal((await readPosting('reels', TUE)).perDay, 2, 'today\'s slots, not posts_per_day');
   assert.deepEqual((await readPosting('last_few_days', TUE)).days, [2, 5]);
-  // Seeded from the series' own days, so they match legacy; then a Thursday add shows up.
-  const daysOf = (state: Awaited<ReturnType<typeof readPosting>>) => Object.fromEntries((state.series ?? []).map((x) => [x.id, x.days]));
-  assert.deepEqual(daysOf(await readPosting('stories', TUE)), daysOf(legacyStories));
-  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-22', vertical: 'stories', startMinute: 510, series: 'free_vs_paid', action: 'add' }], { by: 't', now: TUE });
-  assert.ok(daysOf(await readPosting('stories', TUE)).free_vs_paid!.includes(4));
+  // Seeded from each type's own days, so they match legacy; then a Thursday add shows up (SS-24: days per type).
+  assert.deepEqual((await readPosting('stories', TUE)).days, legacyStories.days);
+  assert.equal((await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-22', vertical: 'real_or_ai', startMinute: 510, series: 'real_or_ai', action: 'add' }], { by: 't', now: TUE })).ok, true);
+  assert.ok((await readPosting('real_or_ai', TUE)).days!.includes(4));
 });
 
 // ── Run now's Stories ──
@@ -469,7 +465,7 @@ test('Run now\'s Stories due list follows the calendar\'s open Stories slots in 
   const q = query as never;
   const series = [
     { id: 'morning_download', label: 'MD', enabled: true, days: [4] },
-    { id: 'free_vs_paid', label: 'FP', enabled: true, days: [1] },
+    { id: 'real_or_ai', label: 'FP', enabled: true, days: [1] },
   ];
   const THU = '2026-10-22';
   const THU_7AM = new Date('2026-10-22T11:00:00Z');
@@ -478,14 +474,14 @@ test('Run now\'s Stories due list follows the calendar\'s open Stories slots in 
   await setSlotSource(q, 'template', 't');
   await applySlotChanges(q, [
     { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'morning_download', action: 'remove' },
-    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'free_vs_paid', action: 'add' },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'real_or_ai', startMinute: 510, series: 'real_or_ai', action: 'add' },
   ], { by: 't', now: new Date('2026-10-20T14:00:00Z') });
   const open = await openStorySlots(liveStoriesDb, (await storiesSlotsOn(q, THU))!, THU_7AM);
   const dueOn = (id: string) => ((open.get(id as never)?.open.length ?? 0) > 0);
-  assert.deepEqual(seriesDueToday(series, THU, new Set(), dueOn), [{ id: 'free_vs_paid', label: 'FP', held: false }]);
+  assert.deepEqual(seriesDueToday(series, THU, new Set(), dueOn), [{ id: 'real_or_ai', label: 'FP', held: false }]);
 });
 
-test('Run now\'s Stories Generate makes the set for the first open Stories slot in template mode, so a second slot is not "Already requested"', async () => {
+test('Run now\'s Stories Generate makes the set for the first open Stories slot in template mode, then the next', async () => {
   const { pg, query } = await appDb();
   const q = query as never;
   const TUE = '2026-10-20';
@@ -502,10 +498,10 @@ test('Run now\'s Stories Generate makes the set for the first open Stories slot 
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: TUE, vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add' }], { by: 't', now: TUE_7AM });
   assert.deepEqual(await requestStorySets(['morning_download'], 't', TUE_7AM), ['morning_download']);
   assert.deepEqual(await minutes(), [510]);
-  assert.deepEqual(await requestStorySets(['morning_download'], 't', TUE_7AM), ['morning_download'], 'the 3:00 PM slot is still open');
+  // Morning Download posts twice a day (R25): the second click books the added 3:00 PM slot, then nothing is open.
+  assert.deepEqual(await requestStorySets(['morning_download'], 't', TUE_7AM), ['morning_download']);
   assert.deepEqual(await minutes(), [510, 900]);
-  assert.deepEqual(await requestStorySets(['morning_download'], 't', TUE_7AM), [], 'every slot has its set');
-  assert.deepEqual(await minutes(), [510, 900]);
+  assert.deepEqual(await requestStorySets(['morning_download'], 't', TUE_7AM), [], 'both of the day’s sets are made');
 });
 
 // ── Fix round 1: a move takes its slot along, atomically (R15, R16) ──
@@ -586,7 +582,8 @@ test('R15: the type page\'s Stories Generate books into the first open Stories s
   await setSlotSource(q, 'template', 't');
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add' }], { by: 't', now: TUE_7AM });
   assert.equal((await generateNow(db, 'morning_download', 't', TUE_7AM)).created, true);
-  assert.equal((await generateNow(db, 'morning_download', 't', TUE_7AM)).created, true, 'the second slot is not "already requested"');
+  assert.deepEqual(await minutes(), [510]);
+  assert.equal((await generateNow(db, 'morning_download', 't', TUE_7AM)).created, true, 'Morning Download posts twice a day (R25): the added 3:00 PM slot is open');
   assert.deepEqual(await minutes(), [510, 900]);
   await assert.rejects(() => generateNow(db, 'morning_download', 't', TUE_7AM), (e: unknown) => e instanceof ApiError && e.status === 409 && e.message === NO_OPEN_SLOT);
 });
@@ -620,7 +617,7 @@ test('R15: moving a Story set on the calendar keeps its slot_minute with its tim
   const none = await act.reschedule!({ setId: SET }, 'tommy', { nyDate: WED, slot: 't1200:morning_download' });
   assert.equal(none.ok, false);
   assert.match(none.note, /Add it on the calendar first/);
-  const other = await act.reschedule!({ setId: SET }, 'tommy', { nyDate: WED, slot: 't0510:free_vs_paid' });
+  const other = await act.reschedule!({ setId: SET }, 'tommy', { nyDate: WED, slot: 't0510:real_or_ai' });
   assert.equal(other.ok, false, 'another series\' slot');
   assert.equal((await set()).slot_minute, 900);
 });

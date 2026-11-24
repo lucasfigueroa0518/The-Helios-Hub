@@ -4,13 +4,17 @@ import { reelIdeas, reelPosts } from '@/lib/social-hub/adapters/reels';
 import { storyIdeas, storyPosts } from '@/lib/social-hub/adapters/stories';
 import { lfdIdeas, lfdPosts } from '@/lib/social-hub/adapters/last-few-days';
 import { aiEventsIdeas, aiEventsPosts } from '@/lib/social-hub/adapters/ai-events';
+import { fieldNotesIdeas, fieldNotesPosts } from '@/lib/social-hub/adapters/field-notes';
+import { dramaIdeas, dramaPosts } from '@/lib/social-hub/adapters/reel-ai-drama';
+import type { ReelAiDramaRead } from '@/lib/social-hub/queries/reel-ai-drama';
 import type { LfdRead } from '@/lib/social-hub/queries/last-few-days';
 import type { AiEventsRead, AiEventsWeek } from '@/lib/social-hub/queries/ai-events';
+import type { FieldNotesRead } from '@/lib/social-hub/queries/field-notes';
 import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import type { CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
 import type { ReelsRead } from '@/lib/social-hub/queries/reels';
-import type { StoriesRead } from '@/lib/social-hub/queries/stories';
+import { storiesFor, type StoriesRead } from '@/lib/social-hub/queries/stories';
 import { allocate, itemCosts, withItemCosts, type CostLedger, type ItemCosts } from '@/lib/social-hub/cost';
 import { agreement, buildLedger, type CostReads } from '@/lib/social-hub/queries/costs';
 import { dedupeSources } from '@/lib/social-hub/sources';
@@ -21,11 +25,19 @@ export type VerticalReads = {
   reels: ReelsRead | Error;
   explainers: ExplainersRead | Error;
   carousels: CarouselsRead | Error;
+  /** Morning Download's part of the Stories engine read (SS-1: queries/stories.ts storiesFor). */
   stories: StoriesRead | Error;
+  /** Are you smarter than AI? and Real or AI?: their parts of the same read. Optional: a caller that leaves them out shows none. */
+  ai_trivia?: StoriesRead | Error;
+  real_or_ai?: StoriesRead | Error;
   /** Optional: a caller that reads only the first four types (older fixtures) shows no Last Few Days posts. */
   last_few_days?: LfdRead | Error;
   /** Optional the same way: a caller that leaves it out shows no AI Events posts or pool. */
   ai_events?: AiEventsRead | Error;
+  /** And Field Notes. */
+  field_notes?: FieldNotesRead | Error;
+  /** Optional the same way: a caller that leaves it out shows no AI Drama posts or pitches. */
+  reel_ai_drama?: ReelAiDramaRead | Error;
 };
 
 export type HubDataset = {
@@ -48,10 +60,12 @@ export type HubDataset = {
   adjustments?: IdeaAdjustment[];
   /** Each type's posts per day, for its quota candidates. */
   dayQuotas?: DayQuotas | null;
-  /** lfd.settings publishing_live (false when unreadable): Last Few Days offers Hard publish only while it is on. */
+  /** Whether Last Few Days is Live (D16: stateOf(auto_run, publishing_live); false when unreadable): Hard publish only then. */
   lfdPublishingLive?: boolean;
-  /** ai_events.settings publishing_live (false when unreadable): AI Events offers Hard publish only while it is on. */
+  /** Whether AI Events is Live (D16: stateOf(auto_run, publishing_live); false when unreadable): Hard publish only then. */
   aiEventsPublishingLive?: boolean;
+  /** Whether Field Notes is Live (D16: stateOf(auto_run, publishing_live); false when unreadable): Hard publish only then. */
+  fieldNotesPublishingLive?: boolean;
   /** The week the AI Events pool shows, and whether Pin / Exclude still change it; null when unread. */
   aiEventsWeek?: AiEventsWeek | null;
   loadedAt: string;
@@ -71,9 +85,15 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
       const r = reads.carousels;
       return r instanceof Error ? r : { posts: carouselPosts(r), ideas: carouselIdeas(r.ideas) };
     }
-    case 'stories': {
-      const r = reads.stories;
-      return r instanceof Error ? r : { posts: storyPosts(r), ideas: storyIdeas(r.pool) };
+    case 'stories':
+    case 'ai_trivia':
+    case 'real_or_ai': {
+      const r = reads[vertical];
+      if (!r) return { posts: [], ideas: [] };
+      if (r instanceof Error) return r;
+      // Each type keeps only its own series, whatever read it was handed (storiesFor is idempotent).
+      const own = storiesFor(r, vertical);
+      return { posts: storyPosts(own), ideas: storyIdeas(own.pool) };
     }
     case 'last_few_days': {
       const r = reads.last_few_days;
@@ -85,10 +105,20 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
       if (!r) return { posts: [], ideas: [] };
       return r instanceof Error ? r : { posts: aiEventsPosts(r), ideas: aiEventsIdeas(r) };
     }
+    case 'field_notes': {
+      const r = reads.field_notes;
+      if (!r) return { posts: [], ideas: [] };
+      return r instanceof Error ? r : { posts: fieldNotesPosts(r), ideas: fieldNotesIdeas(r) };
+    }
+    case 'reel_ai_drama': {
+      const r = reads.reel_ai_drama;
+      if (!r) return { posts: [], ideas: [] };
+      return r instanceof Error ? r : { posts: dramaPosts(r), ideas: dramaIdeas(r.pitches) };
+    }
   }
 }
 
-const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'];
+const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 
 /**
  * The cost half of the dataset, built on its own so it can be cached apart
@@ -145,9 +175,11 @@ export function buildDataset(
   const costed = part.items ? withItemCosts(posts, part.items) : posts;
   costed.sort((a, b) => (b.postedAt ?? b.publishAt ?? '').localeCompare(a.postedAt ?? a.publishAt ?? '') || a.id.localeCompare(b.id));
   const ai = reads.ai_events && !(reads.ai_events instanceof Error) ? reads.ai_events : null;
+  const fn = reads.field_notes && !(reads.field_notes instanceof Error) ? reads.field_notes : null;
   return {
     posts: costed, ideas, sources: dedupeSources(costed), errors, cost, costNotes, latestQuota, account,
     ...(ai ? { aiEventsWeek: ai.week, aiEventsPublishingLive: ai.publishingLive } : {}),
+    ...(fn ? { fieldNotesPublishingLive: fn.publishingLive } : {}),
     loadedAt: now.toISOString(),
   };
 }

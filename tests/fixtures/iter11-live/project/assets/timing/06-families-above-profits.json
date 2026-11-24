@@ -1,0 +1,123 @@
+{
+ "frame": 6,
+ "id": "06-families-above-profits",
+ "duration": 7.255,
+ "voice_end": 7.125,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "It",
+   "start": 0.02,
+   "end": 0.026
+  },
+  {
+   "text": "said",
+   "start": 0.097,
+   "end": 0.24
+  },
+  {
+   "text": "Microsoft",
+   "start": 0.49,
+   "end": 0.74
+  },
+  {
+   "text": "must",
+   "start": 0.811,
+   "end": 1.026
+  },
+  {
+   "text": "\"put",
+   "start": 1.026,
+   "end": 1.409
+  },
+  {
+   "text": "children",
+   "start": 1.481,
+   "end": 1.838
+  },
+  {
+   "text": "and",
+   "start": 1.873,
+   "end": 1.909
+  },
+  {
+   "text": "families",
+   "start": 2.1,
+   "end": 2.409
+  },
+  {
+   "text": "above",
+   "start": 2.481,
+   "end": 2.766
+  },
+  {
+   "text": "profits\"",
+   "start": 2.94,
+   "end": 3.338
+  },
+  {
+   "text": "and",
+   "start": 3.581,
+   "end": 3.625
+  },
+  {
+   "text": "cancel",
+   "start": 3.696,
+   "end": 4.053
+  },
+  {
+   "text": "its",
+   "start": 4.125,
+   "end": 4.196
+  },
+  {
+   "text": "ICE",
+   "start": 4.268,
+   "end": 4.411
+  },
+  {
+   "text": "contract,",
+   "start": 4.482,
+   "end": 4.857
+  },
+  {
+   "text": "worth",
+   "start": 5.127,
+   "end": 5.234
+  },
+  {
+   "text": "more",
+   "start": 5.306,
+   "end": 5.377
+  },
+  {
+   "text": "than",
+   "start": 5.484,
+   "end": 5.591
+  },
+  {
+   "text": "19",
+   "start": 5.663,
+   "end": 6.02
+  },
+  {
+   "text": "million",
+   "start": 6.234,
+   "end": 6.52
+  },
+  {
+   "text": "dollars.",
+   "start": 6.591,
+   "end": 7.02
+  }
+ ],
+ "lines": [
+  {
+   "id": "L6",
+   "start": 0.02,
+   "end": 7.02,
+   "label": null,
+   "label_kind": null
+  }
+ ]
+}

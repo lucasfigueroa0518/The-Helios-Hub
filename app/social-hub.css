@@ -13,6 +13,12 @@
   --sh-v-last_few_days: #e0529c;
   /* AI Events This Week: dark goldenrod, clear of Signal Orange and the other type hues. */
   --sh-v-ai_events: #b8860b;
+  /* Field Notes: olive, clear of the other type hues and of Signal Orange. */
+  --sh-v-field_notes: #6b7a3a;
+  --sh-v-reel_ai_drama: #d1495b;
+  /* Stories split (SS-1): AI Trivia violet and Real or AI? slate, clear of Morning Download's lilac and the reel cyans. */
+  --sh-v-ai_trivia: #7c5cd6;
+  --sh-v-real_or_ai: #5d6d8a;
 
   /* State: only Needs you and Failed carry color (The Quiet State Rule). */
   --sh-needs-ink: #b8410c;
@@ -378,6 +384,10 @@ p.sh-subtle { max-width: 75ch; }
   .sh-table--stack, .sh-table--stack tbody { display: block; width: 100%; }
   .sh-table--stack tbody tr { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 12px 16px; border-bottom: 1px solid var(--sh-hairline); }
   .sh-table--stack tbody tr:last-child { border-bottom: 0; }
+  /* Long stacked lists (the music pool is 800 rows, each with a native audio player):
+     rows off screen skip style, layout and paint until they scroll near. Same DOM and
+     look; `auto` remembers each row's real height once it has rendered. */
+  .sh-table--stack tbody tr { content-visibility: auto; contain-intrinsic-size: auto 88px; }
   .sh-table.sh-table--stack :is(td, td:first-child, td:last-child) { display: block; padding: 0; border: 0; text-align: left; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
   .sh-table.sh-table--stack td.sh-stack-lead { flex: 1 0 100%; color: var(--color-text); font-size: var(--sh-fs-body); }
   .sh-table--stack td[data-label]::after { content: ' ' attr(data-label); }

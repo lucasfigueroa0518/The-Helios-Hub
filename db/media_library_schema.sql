@@ -24,7 +24,9 @@ CREATE SCHEMA IF NOT EXISTS media_library;
 -- thumbs/<sha:2>/<sha>.jpg (480 px, q72). `mime` and `bytes` describe the
 -- original download; width/height are its true (EXIF-oriented) size.
 -- reuse_ok: open or government licence (the finder may offer it again);
--- company/official images are kept for the library only (reuse_ok false).
+-- company/official images, and credits the licence pass can't clear
+-- (licence 'unknown', 2026-11-03), are kept for the library and for Reel AI
+-- Drama's credited photos only (reuse_ok false; never offered to carousels).
 CREATE TABLE IF NOT EXISTS media_library.photos (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     sha256          text NOT NULL UNIQUE CHECK (sha256 ~ '^[0-9a-f]{64}$'),
@@ -36,7 +38,7 @@ CREATE TABLE IF NOT EXISTS media_library.photos (
     width           integer NOT NULL,
     height          integer NOT NULL,
     credit          text NOT NULL,
-    licence         text NOT NULL CHECK (licence IN ('open', 'government', 'company', 'unknown')),
+    licence         text NOT NULL CHECK (licence IN ('open', 'government', 'company', 'unknown', 'generated')),
     reuse_ok        boolean NOT NULL DEFAULT false,
     qids            text[] NOT NULL DEFAULT '{}',
     subjects        text[] NOT NULL DEFAULT '{}',
@@ -48,6 +50,12 @@ CREATE TABLE IF NOT EXISTS media_library.photos (
     first_seen_at   timestamptz NOT NULL DEFAULT now(),
     last_seen_at    timestamptz NOT NULL DEFAULT now()
 );
+
+-- Field Notes (planning/Field Notes/CONTRACT.md): photos Tommy and Lucas take themselves.
+-- 'own' is stored with reuse_ok false, so no other type's finder offers one.
+ALTER TABLE media_library.photos DROP CONSTRAINT IF EXISTS photos_licence_check;
+ALTER TABLE media_library.photos ADD CONSTRAINT photos_licence_check
+    CHECK (licence IN ('open', 'government', 'company', 'own', 'unknown', 'generated'));
 
 CREATE INDEX IF NOT EXISTS idx_media_library_photos_qids ON media_library.photos USING gin (qids);
 CREATE INDEX IF NOT EXISTS idx_media_library_photos_tags ON media_library.photos USING gin (tags);
@@ -68,7 +76,7 @@ CREATE TABLE IF NOT EXISTS media_library.photo_sources (
     title           text,
     date            text,
     credit          text,
-    licence         text CHECK (licence IN ('open', 'government', 'company', 'unknown')),
+    licence         text CHECK (licence IN ('open', 'government', 'company', 'unknown', 'generated')),
     reuse_ok        boolean NOT NULL DEFAULT false,
     status          text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'fetching', 'stored', 'failed', 'gone', 'skipped')),
     attempts        integer NOT NULL DEFAULT 0,
@@ -94,7 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_media_library_sources_outbox ON media_library.pho
 CREATE TABLE IF NOT EXISTS media_library.sightings (
     id              bigserial PRIMARY KEY,
     url             text NOT NULL,
-    run_kind        text NOT NULL CHECK (run_kind IN ('carousel', 'story', 'backfill')),
+    run_kind        text NOT NULL CHECK (run_kind IN ('carousel', 'story', 'backfill', 'reel_ai_drama', 'ai_trivia', 'real_or_ai')),
     run_ref         text NOT NULL,
     slide           integer NOT NULL,
     request_query   text NOT NULL,
@@ -112,6 +120,13 @@ CREATE TABLE IF NOT EXISTS media_library.sightings (
     at              timestamptz NOT NULL DEFAULT now(),
     UNIQUE (url, run_kind, run_ref, slide, request_query)
 );
+
+-- 2026-11-03: Reel AI Drama's harvest offers its kept photos (run_kind
+-- reel_ai_drama, lane reel-ai-drama; lib/media-library/drama.ts). Widen the
+-- run_kind check on a table created before that (idempotent).
+ALTER TABLE media_library.sightings DROP CONSTRAINT IF EXISTS sightings_run_kind_check;
+ALTER TABLE media_library.sightings ADD CONSTRAINT sightings_run_kind_check
+    CHECK (run_kind IN ('carousel', 'story', 'backfill', 'reel_ai_drama', 'ai_trivia', 'real_or_ai'));
 
 CREATE INDEX IF NOT EXISTS idx_media_library_sightings_url ON media_library.sightings (url, at DESC);
 CREATE INDEX IF NOT EXISTS idx_media_library_sightings_at ON media_library.sightings (at DESC);

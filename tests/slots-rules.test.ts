@@ -27,7 +27,9 @@ test('canPlace: one slot per (type, minute); one series twice at different times
   const stories = day([S('stories', 510, { series: 'morning_download' })]);
   assert.deepEqual(canPlace(stories, { vertical: 'stories', startMinute: 900, series: 'morning_download' }), { ok: true, minute: 900 });
   assert.equal(canPlace(stories, { vertical: 'stories', startMinute: 510, series: 'morning_download' }).ok, false);
-  assert.equal(canPlace(stories, { vertical: 'stories', startMinute: 510, series: 'guess_the_number' }).ok, true);
+  // SS-1: Trivia is its own type, so it shares Morning Download's minute; under 'stories' its series is refused.
+  assert.equal(canPlace(stories, { vertical: 'ai_trivia', startMinute: 510, series: 'ai_trivia' }).ok, true);
+  assert.equal(canPlace(stories, { vertical: 'stories', startMinute: 600, series: 'ai_trivia' }).ok, false);
 });
 
 test('canPlace: today, a passed time moves to the next 15-minute mark; no time left is refused', () => {
@@ -122,9 +124,10 @@ test('gapsFor: a dragged-in carousel has no usual window to be outside of', () =
   assert.ok(!kinds.includes('outside-usual'));
 });
 
-test('gapsFor: over the daily cap', () => {
+test('gapsFor: over the type\'s ceiling (none under the fixed maximum, D20)', () => {
   const slots = [S('explainers', 780), S('explainers', 810), S('explainers', 930), S('explainers', 960)];
-  const over = gapsFor(day(slots), slots, DEFAULT_CAPS).filter((g) => g.kind === 'over-cap');
+  assert.deepEqual(gapsFor(day(slots), slots, DEFAULT_CAPS).filter((g) => g.kind === 'over-cap'), []);
+  const over = gapsFor(day(slots), slots, { ...DEFAULT_CAPS, explainers: 3 }).filter((g) => g.kind === 'over-cap');
   assert.deepEqual(over.map((g) => g.text), ['Wed has 4 Explainers; only 3 will be made.']);
 });
 

@@ -12,28 +12,33 @@ import path from 'node:path';
 import { nyDateKey } from '@/lib/reels/scoring/decide';
 import { companyKey } from '@/lib/social/ingest/select/companies';
 import type { HubQuery } from '@/lib/social-hub/db';
+import { markPromoteUsed, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
+import { finishNightPlacements, readNightQueue } from '@/lib/social-hub/queue-store';
 import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { FetchedArticle } from '@/lib/social/ingest/fetch-feeds';
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import type { JevAsk } from '@/lib/social/jev/client';
-import { storeSlideJpegs } from '@/lib/social/overnight/slides';
+import { SlideImagesFailed, storeSlideJpegs } from '@/lib/social/overnight/slides';
 import type { FitCheck, FitResult } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
-import { MAJOR_NEWS_BAR } from '@/lib/stories/build/morning-download';
+import type { AddIntakeSeed, IntakeJev, IntakeQuery, ListStories } from '@/lib/intake/types';
+import { intakeLanes, type IntakeLaneDeps } from '@/lib/intake/pool-lfd';
 import type { PhotoFinder } from '@/lib/stories/photos';
+import type { FindOptions, FoundPhotos, PhotoBudget, PhotoDeps, PhotoNeed, PhotoProfile } from '@/lib/photos/types';
 
 import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
 import { MEME_POOL_SCAN } from './config';
 import { grounded, REWRITE_NOTE } from './ground';
 import { leadImage } from './lead-image';
 import { leadOrder } from './lead';
-import { findPhotos, REFUSED_ICON_SCENE } from './photos';
-import { judgedPool, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPANY, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
+import { BUILDER_HARVEST_CAP_USD, findPhotos, harvestBuilderPhoto, REFUSED_ICON_SCENE, type BuilderHarvest, type HarvestBudget } from './photos';
+import { type LfdQueue, judgedPool, leadFor, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPANY, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { arrangeMemes, buildPost, composeCaption, coverMemeOf } from './post';
-import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate } from './seeds';
+import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate, type LfdSeed } from './seeds';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
-import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
+import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoLedger, startRun, usedIdeaIds } from './store';
+import { usedReason, type GuardDeps } from '@/lib/photos/used-guard';
 import type { Drop, EngineMeme, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
 import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
 import { extendWindow, windowFor } from './window';
@@ -46,8 +51,18 @@ const PREVIOUS_POSTS = 2;
 /** Each lane queue's head kept in the run record (spec §8 Ideas view). */
 const QUEUE_TOP = 10;
 
+/** The hub's idea id for a Last Few Days story is `last_few_days:story:<key>` (lib/social-hub/adapters/last-few-days.ts). */
+export const LFD_STORY_IDEA = 'last_few_days:story:';
+/** Why a pinned story could not go on tonight's post (shown on the pin in the hub). */
+export const LFD_PIN_GONE = 'the story is not among this run’s candidates (outside the window, already posted, or merged into another)';
+
 export type LfdRunDeps = {
   query: HubQuery;
+  /**
+   * The hub's queue by story key (pins, drags, archives; Tommy, 2026-11-16: Last Few Days follows the queue). Absent:
+   * read from social_hub.idea_adjustments (never for a replay); an unreadable moves table is an empty queue.
+   */
+  queue?: LfdQueue & { readAt?: Date };
   jev: JevAsk;
   create: MessagesCreate;
   photos: PhotoFinder;
@@ -80,53 +95,191 @@ export type LfdRunDeps = {
     clears: (story: { key: string; headline: string; text: string }, opts?: { assumeShort?: boolean }) => Promise<boolean>;
     make: (story: { key: string; headline: string; url: string; body: string; outlet: string }) => Promise<{ png: Buffer; templateId: string; text: string[]; costUsd: number } | null>;
   };
+  /**
+   * The central intake (Phase 1). Absent (tests, the meme lab, replays): today's lanes. Present: the
+   * consumer switch decides ('intake' reads pre-scored intake stories; 'legacy' and 'stale-fallback' keep
+   * today's lanes); the run record says which (`record.intake`). Everything but `jev` defaults to the
+   * intake's own functions (A's readConsumerMode / ensureIntakeFresh / listStories, B's addIntakeSeed).
+   */
+  intake?: {
+    /** Intake Jev (its own cost bucket): the carousel lane's posted check and seed scoring. */
+    jev: IntakeJev;
+    mode?: (q: IntakeQuery, now: Date) => Promise<'intake' | 'legacy' | 'stale-fallback'>;
+    /** Before a manual run in intake mode: a top-up when the intake is stale. Never fails the run. */
+    ensureFresh?: (q: IntakeQuery) => Promise<unknown>;
+    lanes?: Partial<IntakeLaneDeps>;
+    addSeed?: AddIntakeSeed;
+    listStories?: ListStories;
+  };
+  /** Builder slides' photos: AI Drama's harvest after the article lead image, before the finder. Absent: the finder only. */
+  harvest?: BuilderHarvest;
+  /**
+   * The shared photo finder (central intake Phase 3), present only when the 'lfd' switch read 'shared' (once per
+   * run, live.ts). Every slide tries it first; an empty slide then takes today's chain (lead image, finder, meme,
+   * replace) without the builder harvest slice. Absent: today's chain, unchanged.
+   */
+  sharedPhotos?: LfdSharedPhotos;
+  /**
+   * How the used-photo guard (CI-32, lib/photos/used-guard.ts) downloads and hashes a lead image to check it against
+   * the ledger's published pictures. Absent (tests, replays): the lead image's URL is checked only.
+   */
+  usedPhotos?: GuardDeps;
 };
+
+/** The shared finder's wiring for one run. `find` / `need` default to lib/photos/find.ts and lib/photos/needs.ts (tests inject them). */
+export type LfdSharedPhotos = {
+  profile: PhotoProfile;
+  deps: PhotoDeps;
+  find?: (needs: PhotoNeed[], profile: PhotoProfile, deps: PhotoDeps, opts: FindOptions) => Promise<FoundPhotos>;
+  need?: (pick: Pick, copy: StoryCopy, id: string) => PhotoNeed;
+};
+
+/**
+ * The shared finder over a set of stories, one photo (or null) and one trace per story, same order, under the
+ * post's `budget`. Never throws: an error leaves every story to today's chain, with the reason in its trace.
+ */
+export async function findSharedLfdPhotos(
+  s: LfdSharedPhotos,
+  items: Array<{ pick: Pick; copy: StoryCopy }>,
+  exclude: ReadonlySet<string>,
+  budget: PhotoBudget,
+): Promise<{ photos: Array<Ready['photo'] | null>; traces: string[][] }> {
+  if (items.length === 0) return { photos: [], traces: [] };
+  try {
+    const find = s.find ?? (await import('@/lib/photos/find')).findPhotos;
+    const need = s.need ?? (await import('@/lib/photos/needs')).needForLfd;
+    const out = await find(items.map((it) => need(it.pick, it.copy, it.pick.key)), s.profile, s.deps, { exclude, budget });
+    return { photos: items.map((_, i) => out.photos[i] ?? null), traces: items.map((_, i) => out.traces[i] ?? []) };
+  } catch (err) {
+    return { photos: items.map(() => null), traces: items.map(() => [`shared: failed: ${err instanceof Error ? err.message : String(err)}`]) };
+  }
+}
+
+export type IntakeMode = 'intake' | 'legacy' | 'stale-fallback';
+
+/** The hub query as the intake's query object. */
+const asIntakeQuery = (q: HubQuery): IntakeQuery => ({ query: (text, params) => q(text, params) });
+
+/**
+ * Seeds in intake mode (B's addIntakeSeed): each joins or creates its intake story, scored on entry, so it
+ * carries stored major-news / story-builder scores and needs no Jev at pick time. A seed the intake cannot
+ * take keeps today's path (scored by the run's own major-news call). Never throws.
+ */
+async function intakeSeeds(d: LfdRunDeps, seeds: LfdSeed[], candidates: LfdCandidate[], record: Record<string, unknown>): Promise<LfdCandidate[]> {
+  if (!d.intake || seeds.length === 0) return candidates;
+  const iq = asIntakeQuery(d.query);
+  const addSeed = d.intake.addSeed ?? (await import('@/lib/intake/seed')).addIntakeSeed;
+  const list = d.intake.listStories ?? (await import('@/lib/intake/read')).listStories;
+  const ids = new Map<string, string>();
+  const errors: string[] = [];
+  for (const s of seeds) {
+    try {
+      const res = await addSeed(iq, d.intake.jev, { order: 'lfd', url: s.url, seededBy: 'lfd', headline: s.headline, body: s.body }, d.now);
+      ids.set(s.key, res.storyId);
+    } catch (err) {
+      errors.push(`${s.key}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (errors.length) record.intakeSeedErrors = errors;
+  if (ids.size === 0) return candidates;
+  const since = new Date(Math.min(...seeds.map((s) => Date.parse(s.addedAt)).filter(Number.isFinite), d.now.getTime() - 86_400_000));
+  const stories = await list(iq, { since }).catch((err: unknown) => {
+    errors.push(`read: ${err instanceof Error ? err.message : String(err)}`);
+    record.intakeSeedErrors = errors;
+    return [];
+  });
+  const byId = new Map(stories.map((s) => [s.id, s]));
+  return candidates.map((c) => {
+    const id = ids.get(c.key);
+    const story = id ? byId.get(id) : undefined;
+    if (!id) return c;
+    return {
+      ...c,
+      refs: [...new Set([...c.refs, id])],
+      ...(story
+        ? { major: story.scores['major-news'] ?? null, builder: story.scores['story-builder'] ?? null, eventDate: story.eventDate ? story.eventDate.toISOString() : null }
+        : {}),
+    };
+  });
+}
 
 /** Window start as an instant: midnight NY after `after` is close enough for "runs finished since". */
 function windowStartIso(w: LfdWindow): string {
   return `${w.after}T04:00:00Z`;
 }
 
-async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: ReadonlyMap<string, number> = new Map(), seeds: LfdCandidate[] = []) {
-  const reels = withoutUsed(await reelsLane(d.query, w), used);
-  const until = d.replay ? d.now.toISOString() : undefined;
-  const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w), until), used);
-  const last = await lastCarouselRunAt(d.query, until);
-  const since = new Date(last ?? windowStartIso(w));
+async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: ReadonlyMap<string, number> = new Map(), seeds: LfdCandidate[] = [], mode: IntakeMode = 'legacy') {
+  let reels: LfdCandidate[];
+  let carousel: LfdCandidate[];
+  let feed: LfdCandidate[];
   let feedError: string | undefined;
-  const fresh = await freshFeedLane(d.fetchFeeds, since, d.now).catch((err: unknown) => {
-    feedError = err instanceof Error ? err.message : String(err);
-    return [];
-  });
-  const feed = withoutUsed(fresh, used);
+  let intakeError: string | undefined;
+  let lanes: Awaited<ReturnType<typeof intakeLanes>> | null = null;
+  if (mode === 'intake' && d.intake) {
+    // The intake's pre-scored stories: same three lanes, same keys, no Reels or Carousels run needed. A read error
+    // falls back to today's lanes for this run (fix 2): the intake never takes a post down.
+    try {
+      lanes = await intakeLanes(asIntakeQuery(d.query), w, d.now, d.intake.jev, d.intake.lanes);
+    } catch (err) {
+      intakeError = err instanceof Error ? err.message : String(err);
+      mode = 'legacy';
+    }
+  }
+  if (lanes) {
+    reels = withoutUsed(lanes.reels, used);
+    carousel = withoutUsed(lanes.carousel, used);
+    feed = withoutUsed(lanes.feed, used);
+  } else {
+    reels = withoutUsed(await reelsLane(d.query, w), used);
+    const until = d.replay ? d.now.toISOString() : undefined;
+    carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w), until), used);
+    const last = await lastCarouselRunAt(d.query, until);
+    const since = new Date(last ?? windowStartIso(w));
+    const fresh = await freshFeedLane(d.fetchFeeds, since, d.now).catch((err: unknown) => {
+      feedError = err instanceof Error ? err.message : String(err);
+      return [];
+    });
+    feed = withoutUsed(fresh, used);
+  }
   // A person's seeds are scored by the same judge (one call each, inside the run cap) and go first in the merge so a seed
   // absorbs a same-event duplicate. A machine candidate with a seed's own key is the seed (its source ids are carried over).
+  // In intake mode a seed also carries its intake story id: the lane candidate for that story is the seed too.
   const seedKeys = new Set(seeds.map((s) => s.key));
-  const ownSeeds = seeds.map((s) => ({ ...s, refs: [...new Set([...s.refs, ...[...reels, ...carousel, ...feed].filter((c) => c.key === s.key).flatMap((c) => c.refs)])] }));
-  const scoredSeeds = await scoreMajor(ownSeeds, d.jev, known);
-  const notSeed = (list: LfdCandidate[]) => (seedKeys.size ? list.filter((c) => !seedKeys.has(c.key)) : list);
-  const judged = await scoreMajor(judgedPool(notSeed(carousel), notSeed(reels), notSeed(feed)), d.jev, known);
+  const seedRefs = new Set(seeds.flatMap((s) => s.refs.filter((r) => r !== s.key)));
+  const isSeedOf = (s: LfdCandidate, c: LfdCandidate) => c.key === s.key || c.refs.some((r) => r !== s.key && s.refs.includes(r));
+  const ownSeeds = seeds.map((s) => ({ ...s, refs: [...new Set([...s.refs, ...[...reels, ...carousel, ...feed].filter((c) => isSeedOf(s, c)).flatMap((c) => c.refs)])] }));
+  // Stored scores (intake seeds) are known: no Jev for them.
+  const seedKnown = new Map([...known, ...seeds.filter((s) => s.major !== null).map((s) => [s.key, s.major!] as const)]);
+  const scoredSeeds = await scoreMajor(ownSeeds, d.jev, seedKnown);
+  const notSeed = (list: LfdCandidate[]) => (seedKeys.size ? list.filter((c) => !seedKeys.has(c.key) && !c.refs.some((r) => seedRefs.has(r))) : list);
+  const pool = judgedPool(notSeed(carousel), notSeed(reels), notSeed(feed));
+  // Intake mode: major-news is stored on every story, so nothing is judged here (no Jev).
+  const judged = mode === 'intake' ? pool : await scoreMajor(pool, d.jev, known);
   const judgedKeys = new Set(judged.map((c) => c.key));
-  const rundownOnly = notSeed([...reels]).sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL);
+  // Major stays a judged-pool lane as today; builder scores ride on every candidate (round 1: judge deeper into the pool).
+  const rundownOnly = notSeed([...reels]).sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL).map((c) => (mode === 'intake' ? { ...c, major: null } : c));
   const merged = await mergeSameEvent([...scoredSeeds, ...judged.sort((a, b) => (b.major ?? 0) - (a.major ?? 0)), ...rundownOnly], d.jev);
   const machine = seedKeys.size ? merged.filter((c) => !c.yours) : merged;
   return {
-    majors: machine.filter((c) => c.major !== null),
+    /** Lead candidates: a major-news score (judged pool) or a story-builder score (intake). */
+    majors: machine.filter((c) => c.major !== null || c.builder !== null),
     rundown: machine.filter((c) => c.origin === 'reels' || c.refs.some((r) => reels.some((x) => x.refs.includes(r)))),
     /** The person's seeds, taken before the lanes. */
     forced: merged.filter((c) => c.yours),
     counts: { reels: reels.length, carousel: carousel.length, feed: feed.length, judged: judged.length },
     /** Every major-news score judged so far, by key: a re-gather reuses these instead of judging again. */
-    scores: new Map([...known, ...[...scoredSeeds, ...judged].map((c) => [c.key, c.major ?? 0] as const)]),
+    scores: new Map([...known, ...[...scoredSeeds, ...judged].filter((c) => mode !== 'intake' || c.major !== null).map((c) => [c.key, c.major ?? 0] as const)]),
     feedError,
+    /** Set when the intake read failed and this gather took today's lanes instead. */
+    intakeError,
   };
 }
 
-/** Distinct stories that could be picked: above-bar majors plus the rundown, deduped by key and shared refs. */
-function distinctEligible(pools: { majors: LfdCandidate[]; rundown: LfdCandidate[]; forced?: LfdCandidate[] }): number {
+/** Distinct stories that could be picked: leads (above-bar majors, in-window builders) plus the rundown, deduped by key and shared refs. */
+function distinctEligible(pools: { majors: LfdCandidate[]; rundown: LfdCandidate[]; forced?: LfdCandidate[] }, now: Date): number {
   const seen = new Set<string>();
   let n = 0;
-  for (const c of [...(pools.forced ?? []), ...pools.majors.filter((m) => (m.major ?? 0) >= MAJOR_NEWS_BAR), ...pools.rundown]) {
+  for (const c of [...(pools.forced ?? []), ...pools.majors.filter((m) => leadFor(m, now) !== null), ...pools.rundown]) {
     const ids = [c.key, ...c.refs];
     if (ids.some((id) => seen.has(id))) continue;
     ids.forEach((id) => seen.add(id));
@@ -236,6 +389,8 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   const nyDate = nyDateKey(d.now);
   const runId = d.runId ? await adoptRun(d.query, d.runId, d.capUsd, nyDate) : await startRun(d.query, d.trigger, d.capUsd, nyDate);
   const record: Record<string, unknown> = {};
+  // The shared finder's spend for this post (Serper + Haiku looks); stays 0 in legacy mode.
+  const sharedBudget: PhotoBudget = { usd: 0, capUsd: d.sharedPhotos?.profile.capUsd ?? 0 };
   let jevCalls = 0;
   const jev: JevAsk = (req, meta) => {
     jevCalls += 1;
@@ -265,23 +420,59 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     } catch (err) {
       record.seedError = err instanceof Error ? err.message : String(err);
     }
+    // The consumer switch (central intake): which lanes this run reads. Never fails the run: an error means today's lanes.
+    let mode: IntakeMode = 'legacy';
+    if (d.intake && !d.replay) {
+      const iq = asIntakeQuery(d.query);
+      try {
+        const readMode = d.intake.mode ?? (async (q: IntakeQuery, now: Date) => (await import('@/lib/intake/read')).readConsumerMode(q, 'lfd', now));
+        mode = await readMode(iq, d.now);
+      } catch (err) {
+        record.intakeError = err instanceof Error ? err.message : String(err);
+      }
+      if (mode === 'intake' && d.trigger === 'manual') {
+        const ensure = d.intake.ensureFresh ?? (async (q: IntakeQuery) => (await import('@/lib/intake/run')).ensureIntakeFresh(q));
+        record.intakeFresh = await ensure(iq).catch((err: unknown) => ({ ran: false, reason: err instanceof Error ? err.message : String(err) }));
+      }
+    }
+    record.intake = mode;
     // At most MAX_SEEDS to a post; the rest wait (and cost no Jev call).
     const taking = seedList.slice(0, MAX_SEEDS);
-    const seedCandidates = taking.map(seedCandidate);
+    const seedCandidates = mode === 'intake'
+      ? await intakeSeeds(d, taking, taking.map(seedCandidate), record).catch((err: unknown) => {
+        record.intakeSeedErrors = [err instanceof Error ? err.message : String(err)];
+        return taking.map(seedCandidate);
+      })
+      : taking.map(seedCandidate);
     let window = windowFor(nyDate, previous[0]?.nyDate ?? null);
-    let pools = await gather(run, window, used, new Map(), seedCandidates);
-    if (distinctEligible(pools) < MIN_STORIES) {
+    let pools = await gather(run, window, used, new Map(), seedCandidates, mode);
+    if (pools.intakeError) {
+      // The intake read failed: today's lanes for the rest of this run.
+      mode = 'legacy';
+      record.intake = 'error-fallback';
+      record.intakeError = pools.intakeError;
+    }
+    if (distinctEligible(pools, d.now) < MIN_STORIES) {
       window = extendWindow(window);
-      pools = await gather(run, window, used, pools.scores, seedCandidates);
+      pools = await gather(run, window, used, pools.scores, seedCandidates, mode);
       record.safetyNet = true;
     }
     record.window = window;
     record.pool = pools.counts;
     if (pools.feedError) record.feedError = pools.feedError;
 
-    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev, pools.forced);
-    const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, major: c.major, net: c.net });
-    record.queues = { major: selector.top('major', QUEUE_TOP).map(queueRow), rundown: selector.top('rundown', QUEUE_TOP).map(queueRow) };
+    const movesQ = d.query as unknown as MovesQuery;
+    const night = d.queue ?? (d.replay ? undefined : await readNightQueue(movesQ, 'last_few_days', LFD_STORY_IDEA));
+    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev, pools.forced, d.now, night);
+    if (night && (night.pins.length || night.placed.size || night.archived.size)) {
+      const found = new Set(selector.pinned.flatMap((c) => [c.key, ...c.refs]));
+      const gone = night.pins.filter((id) => !found.has(id));
+      record.queue = { pinned: selector.pinned.map((c) => c.key), pinsGone: gone, placed: night.placed.size, archived: night.archived.size };
+      for (const id of gone) await recordPromoteSkip(movesQ, 'last_few_days', `${LFD_STORY_IDEA}${id}`, LFD_PIN_GONE);
+    }
+    // `builder` only when scored (intake), so a legacy record keeps today's shape.
+    const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, major: c.major, net: c.net, ...(c.builder != null ? { builder: c.builder } : {}) });
+    record.queues = { major: selector.top('major', QUEUE_TOP).map(queueRow), builder: selector.top('builder', QUEUE_TOP).map(queueRow), rundown: selector.top('rundown', QUEUE_TOP).map(queueRow) };
     let pending: Pick[] = await selector.fill();
     const ready: Ready[] = [];
     const drops: Drop[] = [];
@@ -292,7 +483,19 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.vision = vision;
     /** Verdicts by story key + photo: a slide unchanged since the last render is not looked at again. */
     const verdicts = new Map<string, SlideVerdict>();
-    const exclude = await recentPhotoUrls(d.query, d.now);
+    // CI-32: photos published in the last 20 days, by URL (the exclude set) and by picture (the ledger's hashes).
+    // Bald-Eagle D3: the day's earlier post still waiting in review is what this run replaces; its photos don't count.
+    const { waitingItemsOn } = await import('@/lib/photos/pending');
+    const ledger = await recentPhotoLedger(d.query, d.now, undefined, { excludeItem: await waitingItemsOn((text, params) => d.query(text, params), 'lfd', nyDate) });
+    const exclude = new Set(ledger.urls);
+    // Builder-slide harvests share one budget per post (round 3: $0.15).
+    const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
+    const harvestRecord: { usd: number; slides: Array<{ key: string; found: boolean }> } = { usd: 0, slides: [] };
+    if (d.harvest && !d.sharedPhotos) record.photoHarvest = harvestRecord;
+    const sharedRecord: { usd: number; slides: Array<{ key: string; found: boolean }> } = { usd: 0, slides: [] };
+    if (d.sharedPhotos) record.photoShared = sharedRecord;
+    /** Stories whose photo came from the shared finder, by key → src (a vision reject sends them to today's finder). */
+    const sharedPicked = new Map<string, string>();
     const memesRecord: {
       rescued: Array<{ key: string; headline: string; templateId: string }>;
       scanned: Array<{ key: string; headline: string; pass: boolean }>;
@@ -373,23 +576,74 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
       // The article's own lead image first; only stories without one go to the finder. One set: no photo twice.
       const taken = new Set([...exclude, ...ready.map((r) => r.photo.src)]);
+      // Shared mode: every slide tries the shared finder first; the empty ones take today's chain below.
+      const sharedHits = new Map<number, { photo: Ready['photo']; trace: string[] }>();
+      const sharedTraces = new Map<number, string[]>();
+      if (d.sharedPhotos) {
+        const got = await findSharedLfdPhotos(d.sharedPhotos, checked, taken, sharedBudget);
+        sharedRecord.usd = sharedBudget.usd;
+        for (const [i, item] of checked.entries()) {
+          const photo = got.photos[i];
+          sharedRecord.slides.push({ key: item.pick.key, found: Boolean(photo) });
+          if (photo) {
+            taken.add(photo.src);
+            sharedHits.set(i, { photo, trace: got.traces[i] ?? [] });
+          } else sharedTraces.set(i, got.traces[i] ?? []);
+        }
+      }
       const leads: Array<Awaited<ReturnType<typeof leadImage>>> = [];
-      for (const item of checked) {
-        const lead = await leadImage(readPage, item.pick, taken);
+      const ledgerNotes = new Map<number, string[]>();
+      for (const [i, item] of checked.entries()) {
+        if (sharedHits.has(i)) {
+          leads.push(null);
+          continue;
+        }
+        let lead = await leadImage(readPage, item.pick, taken);
+        const used = lead ? await usedReason(ledger, { url: lead.photo.src, kind: lead.photo.kind }, d.usedPhotos ?? {}) : null;
+        if (lead && used) {
+          ledgerNotes.set(i, [`lead image refused by the used-photo ledger: ${used}: ${lead.photo.src}`]);
+          lead = null;
+        }
         if (lead) taken.add(lead.photo.src);
         leads.push(lead);
       }
-      const rest = checked.filter((_, i) => !leads[i]);
+      // Builder slides with no lead image: AI Drama's harvest next (capped per post); a miss goes to the finder.
+      const harvested = new Map<number, { photo: Ready['photo']; trace: string[] }>();
+      const harvestTraces = new Map<number, string[]>();
+      for (const [i, item] of checked.entries()) {
+        // Shared mode skips the builder-only harvest slice: the shared finder already covered every slide.
+        if (leads[i] || item.pick.lane !== 'builder' || !d.harvest || d.sharedPhotos) continue;
+        const got = await harvestBuilderPhoto(d.harvest, item.pick, item.copy, taken, harvestBudget, d.now, ledger);
+        harvestRecord.slides.push({ key: item.pick.key, found: got.photo !== null });
+        harvestRecord.usd = harvestBudget.usd;
+        if (got.photo) {
+          taken.add(got.photo.src);
+          harvested.set(i, { photo: got.photo, trace: got.trace });
+        } else harvestTraces.set(i, got.trace);
+      }
+      const rest = checked.filter((_, i) => !leads[i] && !harvested.has(i) && !sharedHits.has(i));
       const found = await findPhotos(d.photos, rest, taken);
       let k = 0;
       for (const [i, item] of checked.entries()) {
+        const shared = sharedHits.get(i);
+        if (shared) {
+          // The shared finder is AI Drama's harvest engine: recorded as 'harvest', its trace steps prefixed `shared:`.
+          ready.push({ ...item, photo: shared.photo, photoSource: 'harvest', photoTrace: shared.trace });
+          sharedPicked.set(item.pick.key, shared.photo.src);
+          continue;
+        }
         const lead = leads[i];
         if (lead) {
-          ready.push({ ...item, photo: lead.photo, photoSource: 'lead', photoTrace: [lead.note] });
+          ready.push({ ...item, photo: lead.photo, photoSource: 'lead', photoTrace: [...(sharedTraces.get(i) ?? []), lead.note] });
+          continue;
+        }
+        const harvest = harvested.get(i);
+        if (harvest) {
+          ready.push({ ...item, photo: harvest.photo, photoSource: 'harvest', photoTrace: harvest.trace });
           continue;
         }
         const photo = found.photos[k];
-        const photoTrace = found.traces[k] ?? [];
+        const photoTrace = [...(sharedTraces.get(i) ?? []), ...(ledgerNotes.get(i) ?? []), ...(harvestTraces.get(i) ?? []), ...(found.traces[k] ?? [])];
         k += 1;
         if (photo) ready.push({ ...item, photo, photoSource: 'finder', photoTrace });
         else {
@@ -428,7 +682,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         if (companyFullIn(ready, c.headline)) continue;
         const body = await fullText(d, c);
         if (!body) continue;
-        const lane = (c.major ?? 0) >= MAJOR_NEWS_BAR ? 'major' : 'rundown';
+        const lane = leadFor(c, d.now)?.lane ?? 'rundown';
         const pick: Pick = { ...c, lane };
         const batch = await write([{ pick, body }]);
         if (!batch.ok) continue;
@@ -454,7 +708,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     /** Lead scores by story key, judged once per story this run (spec §4.2). */
     const leadScores = new Map<string, number>();
     const finalOrder = async (): Promise<Ready[]> => {
-      const base = slideOrder(ready.map((r) => r.pick)).map((p) => ready.find((r) => r.pick.key === p.key)!);
+      const base = slideOrder(ready.map((r) => r.pick), d.now).map((p) => ready.find((r) => r.pick.key === p.key)!);
       const lead = await leadOrder(base, jev, leadScores);
       record.lead = lead.error ? { by: lead.by, error: lead.error } : { by: lead.by };
       const final = lead.order;
@@ -494,7 +748,8 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
     /**
      * Render and store the JPEGs. With `replaceBroken`, a story slide whose photo failed to load or that the
-     * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded.
+     * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded
+     * (a failed image always throws, from storeSlideJpegs; see renderClean).
      */
     const renderAndStore = async (final: Ready[], replaceBroken: boolean, coverMeme?: { url: string }) => {
       const render = buildPost(final, d.now, undefined, coverMeme ? { coverMeme } : undefined);
@@ -526,21 +781,49 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     let placed = place(await finalOrder());
     let final = placed.ready;
     if (final.length === 0) throw new Error('no stories survived');
+    // A post never ships a broken image: storeSlideJpegs refuses one before uploading. A story whose image still
+    // fails to load is dropped and the post re-rendered; an image no story owns fails the run.
+    const renderClean = async (replaceBroken: boolean) => {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await renderAndStore(final, replaceBroken, placed.coverMeme);
+        } catch (err) {
+          if (!(err instanceof SlideImagesFailed) || attempt >= 2) throw err;
+          const keys = brokenImageKeys(err.fit, final);
+          if (!keys.length) throw err;
+          for (const key of keys) {
+            const [gone] = ready.splice(ready.findIndex((r) => r.pick.key === key), 1);
+            if (gone) drops.push({ key, lane: gone.pick.lane, headline: gone.pick.headline, reason: 'image-failed', detail: 'the image still failed to load at the final render' });
+          }
+          placed = place(final.filter((r) => !keys.includes(r.pick.key)));
+          final = placed.ready;
+          if (final.length === 0) throw new Error('no stories survived');
+        }
+      }
+    };
     let rendered: Awaited<ReturnType<typeof renderAndStore>>;
     try {
-      rendered = await renderAndStore(final, true, placed.coverMeme);
+      rendered = await renderClean(true);
     } catch (err) {
       if (!(err instanceof BrokenImages)) throw err;
       // One extra round: drop each story whose photo failed to load or was rejected, replace it, re-render (whatever fails then is recorded).
       // A rejected article lead image first gets one finder search for the same story; only if that finds nothing is the story dropped.
+      // Shared mode: a rejected shared-finder photo is treated the same way (today's finder next).
       const next: Pick[] = [];
       const take = (key: string) => {
         const [gone] = ready.splice(ready.findIndex((r) => r.pick.key === key), 1);
         exclude.add(gone!.photo.src);
         return gone!;
       };
-      const isLead = (key: string) => ready.find((r) => r.pick.key === key)?.photoSource === 'lead';
-      const leadRejected = err.rejected.filter((x) => isLead(x.key)).map((x) => ({ gone: take(x.key), reason: x.reason }));
+      const fromShared = (key: string) => {
+        const r = ready.find((x) => x.pick.key === key);
+        return Boolean(r && sharedPicked.get(key) === r.photo.src);
+      };
+      const isLead = (key: string) => ready.find((r) => r.pick.key === key)?.photoSource === 'lead' || fromShared(key);
+      const leadRejected = err.rejected.filter((x) => isLead(x.key)).map((x) => {
+        const shared = fromShared(x.key);
+        return { gone: take(x.key), reason: x.reason, shared };
+      });
       const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.filter((x) => !leadRejected.some((l) => l.gone.pick.key === x.key)).map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
       for (const { key, reason, detail } of leave) {
         const gone = take(key);
@@ -551,9 +834,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       }
       if (leadRejected.length) {
         const again = await findPhotos(d.photos, leadRejected.map(({ gone }) => ({ pick: gone.pick, copy: gone.copy })), new Set([...exclude, ...ready.map((r) => r.photo.src)]));
-        for (const [j, { gone, reason }] of leadRejected.entries()) {
+        for (const [j, { gone, reason, shared }] of leadRejected.entries()) {
           const photo = again.photos[j];
-          const photoTrace = [`lead image rejected by vision: ${reason}: ${gone.photo.src}`, ...(again.traces[j] ?? [])];
+          const photoTrace = [`${shared ? 'shared photo' : 'lead image'} rejected by vision: ${reason}: ${gone.photo.src}`, ...(again.traces[j] ?? [])];
           if (photo) ready.push({ pick: gone.pick, copy: gone.copy, photo, photoSource: 'finder', photoTrace });
           else {
             const kept = await rescueWithMeme({ pick: gone.pick, copy: gone.copy });
@@ -567,7 +850,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       placed = place(await finalOrder());
       final = placed.ready;
       if (final.length === 0) throw new Error('no stories survived');
-      rendered = await renderAndStore(final, false, placed.coverMeme);
+      rendered = await renderClean(false);
     }
 
     const { slideObjects, fit, visionProblems } = rendered;
@@ -592,7 +875,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       ideaIds: [...new Set(final.flatMap((r) => [r.pick.key, ...r.pick.refs]))],
       // `photo` is the result; the writer's request (copy.photo) is kept as `photoAsk` so the review screen sees both.
       stories: final.map((r, i) => ({
-        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null, leadIndex: leadAt.get(r.pick.key) ?? i,
+        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, ...(r.pick.builder != null ? { builder: r.pick.builder } : {}), net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null, leadIndex: leadAt.get(r.pick.key) ?? i,
         ...r.copy,
         photoAsk: r.copy.photo,
         photo: r.photo,
@@ -626,17 +909,26 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         record.seedError = err instanceof Error ? err.message : String(err);
       }
     }
-    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null }));
+    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, ...(r.pick.builder != null ? { builder: r.pick.builder } : {}), net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null }));
     record.stories = final.length;
+    // The queue's moves on the stories this post used are spent; a scheduled run uses up the placements it read.
+    if (night) {
+      const hand = new Set([...night.pins, ...night.placed.keys()]);
+      for (const r of final) {
+        for (const id of new Set([r.pick.key, ...r.pick.refs])) if (hand.has(id)) await markPromoteUsed(movesQ, 'last_few_days', `${LFD_STORY_IDEA}${id}`);
+      }
+      if (d.trigger === 'scheduled') await finishNightPlacements(movesQ, 'last_few_days', undefined, night.readAt);
+    }
     const spend = d.spend();
     // recorded false: the run row was no longer running (the worker timed it out); it stays failed.
-    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+    // Harvest and shared-finder spend (Serper + Haiku looks) is outside the run budget's tally: added here so the run total is whole.
+    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd + harvestBudget.usd + sharedBudget.usd, jevUsd: spend.jevUsd, record });
     return { ok: true, runId, postId, stories: final.length, short, recorded };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     try {
       const spend = d.spend();
-      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd + sharedBudget.usd, jevUsd: spend.jevUsd, record });
     } catch (finishErr) {
       return { ok: false, runId, error: `${error} (recording the failure also failed: ${finishErr instanceof Error ? finishErr.message : String(finishErr)})` };
     }

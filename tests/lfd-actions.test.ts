@@ -5,6 +5,7 @@ import test from 'node:test';
 import { approveContent } from '@/app/api/social-hub/actions/approve-content/handler';
 import { hardPublish } from '@/app/api/social-hub/actions/hard-publish/handler';
 import { rejectContent } from '@/app/api/social-hub/actions/reject/handler';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { lfdItemId } from '@/lib/lfd/items';
 import { approveLfdPost, hardPublishLfdPost, LFD_APPROVED_OFF_NOTE, LFD_PUBLISHING_OFF_NOTE, rejectLfdPost, scheduleLfdPost, unscheduleLfdPost } from '@/lib/lfd/schedule';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -32,7 +33,15 @@ async function lfdPost(query: Parameters<typeof readAll>[0]) {
 }
 
 const LIVE = { quota: null, typicalCostLabel: null, lfdPublishingLive: true };
-const live = (query: { (text: string, params?: unknown[]): Promise<unknown> }) => query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+type Q = { (text: string, params?: unknown[]): Promise<unknown> };
+/** The type's state (D16) as its two stored keys: Generate (auto_run) and publishing_live. */
+const setState = async (query: Q, state: 'paused' | 'approval' | 'live' | 'mismatch') => {
+  const set = (key: string, on: boolean) =>
+    query(`INSERT INTO lfd.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(on)]);
+  await set('auto_run', state === 'approval' || state === 'live');
+  await set('publishing_live', state === 'live' || state === 'mismatch');
+};
+const live = (query: Q) => setState(query, 'live');
 
 test('a post in review offers Approve, Reject, Schedule and Publish now, each naming the post', async () => {
   const { query } = await openHubTestDb();
@@ -66,7 +75,11 @@ function actionsOn(q: Query, now: Date): ContentActions {
     approvePost: (qq, id) => approveLfdPost(qq, id, now),
     rejectPost: rejectLfdPost,
     hardPublishPost: hardPublishLfdPost,
-    publishingLive: async (qq) => (await readLfdSettings(qq)).publishingLive,
+    // Live only (D16), as lib/publishing/actions/live.ts wires it.
+    publishingLive: async (qq) => {
+      const s = await readLfdSettings(qq);
+      return postsToInstagram(stateOf(s.autoRun, s.publishingLive).state);
+    },
     unschedulePost: unscheduleLfdPost,
     itemId: lfdItemId,
     placeItem: (qq, input) => placeItem(qq, { ...input, now, rng: () => 0 }),
@@ -130,21 +143,34 @@ test('a rejected post is refused by approve and Publish now, and the hub offers 
   }
 });
 
-test('while Last Few Days publishing is off: the hub offers no Publish now, Publish now refuses with 409, Approve approves without a slot', async () => {
-  const { query } = await openHubTestDb();
-  const q = query as unknown as Query;
-  const id = await seedLfdPost(query);
-  const post = await lfdPost(query);
-  for (const ctx of [{ quota: null, typicalCostLabel: null }, { quota: null, typicalCostLabel: null, lfdPublishingLive: false }]) {
-    const actions = actionsFor(post, ctx).filter((x): x is PostPlan => x.kind === 'post').map((x) => x.action);
-    assert.equal(actions.includes('hardPublish'), false);
-    assert.ok(actions.includes('approveContent'));
+test('while Last Few Days isn’t Live: the hub offers no Publish now, Publish now refuses with 409; Paused approves without a slot, Approval books it', async () => {
+  for (const state of ['paused', 'approval', 'mismatch'] as const) {
+    const { query } = await openHubTestDb();
+    await setState(query, state);
+    const q = query as unknown as Query;
+    const id = await seedLfdPost(query);
+    const post = await lfdPost(query);
+    for (const ctx of [{ quota: null, typicalCostLabel: null }, { quota: null, typicalCostLabel: null, lfdPublishingLive: false }]) {
+      const actions = actionsFor(post, ctx).filter((x): x is PostPlan => x.kind === 'post').map((x) => x.action);
+      assert.equal(actions.includes('hardPublish'), false, state);
+      assert.ok(actions.includes('approveContent'), state);
+    }
+    const a = actionsOn(q, TUE_330);
+    assert.deepEqual(await a.publishNow!({ lfdPostId: id }, 'tommy'), { ok: false, status: 409, note: LFD_PUBLISHING_OFF_NOTE }, state);
+    assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0, state);
+    const approved = await a.approve!({ lfdPostId: id }, 'tommy');
+    const slots = (await q(`SELECT count(*)::int AS n FROM social_hub.schedule WHERE status = 'scheduled'`)).rows[0].n;
+    if (state === 'approval') {
+      // Approval holds slots (contract §4.3): the post is ready in its own day's slot; it posts only once Live.
+      assert.equal(approved.ok, true, approved.note);
+      assert.match(approved.note, /^Approved and scheduled for 2026-10-13T1[34]:/);
+      assert.equal(slots, 1);
+    } else {
+      // Paused, and a Generate off + Live on mismatch (reads as paused): approved, it stays in Made (D17).
+      assert.deepEqual(approved, { ok: true, note: LFD_APPROVED_OFF_NOTE }, state);
+      assert.equal(slots, 0, state);
+    }
   }
-  const a = actionsOn(q, TUE_330);
-  assert.deepEqual(await a.publishNow!({ lfdPostId: id }, 'tommy'), { ok: false, status: 409, note: LFD_PUBLISHING_OFF_NOTE });
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0);
-  assert.deepEqual(await a.approve!({ lfdPostId: id }, 'tommy'), { ok: true, note: LFD_APPROVED_OFF_NOTE });
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0);
 });
 
 test('the hub reads Last Few Days publishing into the offer (Publish now appears once it is on)', async () => {
@@ -158,6 +184,9 @@ test('the hub reads Last Few Days publishing into the offer (Publish now appears
     const o = offerer(dataset, TUE_330).offer(post);
     return JSON.stringify(o).includes('hard-publish');
   };
+  assert.equal(await has(), false);
+  // Live with Generate off is a mismatch: it reads as paused, so still no Publish now (D16).
+  await setState(query, 'mismatch');
   assert.equal(await has(), false);
   await live(query);
   assert.equal(await has(), true);

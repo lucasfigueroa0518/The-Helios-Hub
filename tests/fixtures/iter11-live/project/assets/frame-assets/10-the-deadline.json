@@ -1,0 +1,178 @@
+{
+ "assets": [
+  {
+   "id": "V1",
+   "kind": "logo",
+   "file": "assets/media/V1.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMicrosoft_logo_(2012).svg",
+   "credit": "Logo: Microsoft (public domain) · Wikimedia Commons",
+   "license": null,
+   "shows": "The Microsoft logo (wordmark, on a light plate).",
+   "people": [],
+   "qids": [
+    "Q2283"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 960,
+   "height": 205,
+   "phash": "81958f6bee661199",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "logo_bank",
+    "logo",
+    "source:logo",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:microsoft",
+    "boxes:media/V1.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5191,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1200,
+    "chroma": 0.4516,
+    "phash": "81958f6bee661199",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V77",
+   "kind": "logo",
+   "file": "assets/media/V77.png",
+   "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/The_Seattle_Times_icon.svg/960px-The_Seattle_Times_icon.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail",
+   "source_page": "https://commons.wikimedia.org/wiki/File:The_Seattle_Times_icon.svg",
+   "credit": "Wikimedia Commons (commons.wikimedia.org)",
+   "license": null,
+   "shows": "The Seattle Times circular S-T icon in white on black.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 960,
+   "height": 960,
+   "phash": "c3b73d4c6ab3d00c",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:wish:W2:1",
+    "wish:W2",
+    "boxes:media/V77.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "chip": true,
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.2338,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1200,
+    "chroma": 0.0099,
+    "phash": "c3b73d4c6ab3d00c",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "M6",
+   "kind": "object",
+   "file": "assets/media/M6.png",
+   "url": null,
+   "source_page": null,
+   "credit": "Illustration: Helios",
+   "license": null,
+   "shows": "A marker drawing, made for this reel (not a photograph): Black marker line drawing for a whiteboard: a judge's wooden gavel resting on its round sound block, beside a wall calendar page drawn as a grid of blank day squares; plain objects, clean lines, room around them; no people, no words, letters or numbers.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1024,
+   "height": 1024,
+   "phash": null,
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "made",
+    "made:drawing",
+    "transparent"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": "drawing",
+   "regions": {
+    "visible": {
+     "x": 0.0566,
+     "y": 0.1445,
+     "w": 0.8848,
+     "h": 0.6563
+    },
+    "brightness": 0.0703,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1280,
+    "focus": {
+     "x": 0.5,
+     "y": 0.1458,
+     "w": 0.4271,
+     "h": 0.2083
+    },
+    "phash": "ea668539b09995d6",
+    "expression": null,
+    "dup_of": null
+   }
+  }
+ ]
+}

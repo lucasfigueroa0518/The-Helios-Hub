@@ -1,0 +1,38 @@
+{
+ "file": "0a363b52-03-define-props.js",
+ "job": "0a363b52-42a9-4e1e-9509-55aeb573777c",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.378Z",
+ "from": "assets/frames/03-define.props.js",
+ "props": {
+  "open slatted wooden crate": {
+   "source_name": "an open slatted wooden crate",
+   "tags": {
+    "is": "a low open wooden crate made of three slats on each visible side, nailed at the corners, open at the top; kept, a data card stands in it with its top edge above the rim",
+    "setting": [
+     "near the program",
+     "warehouse floor",
+     "local storage"
+    ],
+    "material": "plain wood slats, nails, paper card",
+    "parts": [
+     "floor board",
+     "three slats per side",
+     "nails",
+     "standing data card when kept"
+    ],
+    "not": [
+     "cardboard box",
+     "treasure chest",
+     "drawer",
+     "basket",
+     "bin",
+     "cage"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

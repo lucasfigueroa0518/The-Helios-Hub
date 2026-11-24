@@ -26,7 +26,7 @@ const START_GRACE_MS = 150;
 const FRESH_MS = 4 * 60 * 1000;
 const HOVER_DWELL_MS = 200;
 
-type RscWatch = { url: string; done: Promise<void> };
+type RscWatch = { url: string; done: Promise<void>; body: Promise<string> };
 
 const watches: RscWatch[] = [];
 const navInflight = new Map<string, Promise<void>>();
@@ -53,15 +53,16 @@ function ensureFetchWatch(): void {
     const url = requestUrl(input);
     const response = orig(input, init);
     if (url.includes('_rsc=')) {
+      let text = '';
       const done = response.then(async (res) => {
         try {
-          await res.clone().arrayBuffer();
+          text = await res.clone().text();
         } catch {
           // The body can already be closed. The click still navigates.
         }
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }, () => undefined);
-      watches.push({ url, done });
+      watches.push({ url, done, body: done.then(() => text) });
     }
     return response;
   }) as typeof window.fetch;
@@ -159,6 +160,41 @@ function reuseDocumentSeed(node: Element | null, pathname: string): boolean {
   return reuse;
 }
 
+const preloaded = new Set<string>();
+const STYLESHEET = /"(\/_next\/static\/css\/[^"]+\.css)"/g;
+const IMAGE_SRC = /"src":"((?:\/(?!\/)|https?:\/\/)[^"]+)"/g;
+const MAX_IMAGES = 12;
+
+/**
+ * Fetch what the page will wait on before it shows: its stylesheets (React holds a
+ * navigation until the route's CSS has loaded, then reveals it on a ~300 ms throttle)
+ * and its first images. Both land in the browser cache, so the click shows the page
+ * as soon as the router has it.
+ */
+function preloadAssets(rsc: string): void {
+  for (const match of rsc.matchAll(STYLESHEET)) {
+    const href = match[1]!;
+    if (preloaded.has(href) || document.querySelector(`link[rel="stylesheet"][href="${href}"]`)) continue;
+    preloaded.add(href);
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'style';
+    link.href = href;
+    document.head.appendChild(link);
+  }
+  let images = 0;
+  for (const match of rsc.matchAll(IMAGE_SRC)) {
+    if (images >= MAX_IMAGES) break;
+    const src = match[1]!.replace(/\\u0026/g, '&');
+    if (preloaded.has(src) || /\.(mp4|webm|mov)(\?|$)/i.test(src) || src.includes('media=video')) continue;
+    preloaded.add(src);
+    images += 1;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+  }
+}
+
 /** One data warm at a time so a menu sweep does not fan out DB reads. */
 function warmData(pathname: string): Promise<void> {
   if (!isDataWarmablePath(pathname)) return Promise.resolve();
@@ -196,8 +232,11 @@ function warmNavigation(
   ensureFetchWatch();
   const from = watches.length;
   router.prefetch(href, { kind: PrefetchKind.FULL });
-  const next = waitForPrefetch(pathname, from).then((found) => {
-    if (found) navFreshUntil.set(href, Date.now() + FRESH_MS);
+  const next = waitForPrefetch(pathname, from).then(async (found) => {
+    if (!found) return;
+    navFreshUntil.set(href, Date.now() + FRESH_MS);
+    const watch = matchingWatch(pathname, from);
+    if (watch) preloadAssets(await watch.body);
   }).finally(() => {
     navInflight.delete(href);
   });
@@ -205,7 +244,12 @@ function warmNavigation(
   return next;
 }
 
-export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }: ComponentProps<typeof Link>) {
+/**
+ * `eager`: load the full route (and its CSS and first images) once the page is idle,
+ * not at the click, so the click shows it at once. Hover refreshes it after FRESH_MS.
+ * For the one or two places people open most; each costs a page render per visit.
+ */
+export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, eager = false, ...props }: ComponentProps<typeof Link> & { eager?: boolean }) {
   const router = useRouter();
   const href = typeof props.href === 'string' ? props.href : null;
   const anchorRef = useRef<HTMLAnchorElement>(null);
@@ -233,6 +277,19 @@ export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur,
     if (pathnameOf(href) === window.location.pathname) {
       reuseDocumentSeed(anchor, pathnameOf(href));
     }
+    if (eager) {
+      // No shell prefetch first: a shell entry in place would make Next fetch the page twice.
+      shelled.current = true;
+      const run = () => void warmNavigation(href, anchor, router);
+      const idle = window.requestIdleCallback
+        ? window.requestIdleCallback(run, { timeout: 2000 })
+        : window.setTimeout(run, 300);
+      return () => {
+        if (window.cancelIdleCallback) window.cancelIdleCallback(idle);
+        else window.clearTimeout(idle);
+        clearDwell();
+      };
+    }
     const observer = new IntersectionObserver((entries) => {
       if (shelled.current || !entries.some((entry) => entry.isIntersecting)) return;
       shelled.current = true;
@@ -244,7 +301,7 @@ export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur,
       observer.disconnect();
       clearDwell();
     };
-  }, [href, router]);
+  }, [href, router, eager]);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
@@ -265,7 +322,9 @@ export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur,
       prefetch={false}
       onMouseEnter={(event) => {
         onMouseEnter?.(event);
-        if (href) queueDataWarm(href);
+        if (!href) return;
+        if (eager) void warmNavigation(href, event.currentTarget, router);
+        else queueDataWarm(href);
       }}
       onMouseLeave={(event) => {
         onMouseLeave?.(event);

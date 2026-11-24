@@ -5,18 +5,22 @@ import { livePlan, runToday } from '@/lib/content-type/run-today-live';
 import { parseRunBody } from '@/lib/social-hub/run-today';
 import { HUB_DATA_TAG } from '@/lib/social-hub/views/cached-dataset';
 import { getSession } from '@/lib/session';
+import { noteHubDataChanged } from '@/lib/social-hub/views/cache-tags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** What Run now would start today, with a spend ceiling. Reads only. */
+/**
+ * What Run now would start today, with a spend ceiling. Reads only. Posts, slots and quotas come from
+ * the shared hub dataset (up to 60 s old, cleared by every hub action); POST re-plans from a fresh read.
+ */
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    return NextResponse.json(await livePlan());
+    return NextResponse.json(await livePlan(new Date(), { cachedHub: true }));
   } catch (error) {
     return NextResponse.json({ error: message(error) }, { status: 500 });
   }
@@ -31,6 +35,7 @@ export async function POST(req: Request) {
   const { only, target } = parsed;
   try {
     const out = await runToday(session.email, new Date(), only, target);
+    noteHubDataChanged();
     revalidateTag(HUB_DATA_TAG);
     return NextResponse.json(out);
   } catch (error) {

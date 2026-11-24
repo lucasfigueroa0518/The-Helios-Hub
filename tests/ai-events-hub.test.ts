@@ -10,6 +10,7 @@ import test from 'node:test';
 
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW, DEFAULT_AI_EVENTS_DAYS } from '@/lib/ai-events/config';
 import { isPostingType, writePosting, type PostingState } from '@/lib/content-type/posting';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { typeHubModel } from '@/lib/content-type/model';
 import { maxCapFor } from '@/lib/content-type/caps';
 import { EVENTS_FEED_STATE_ID as SNAPSHOT_STATE_ID } from '@/lib/networking/public-snapshot';
@@ -236,7 +237,14 @@ test('readDayQuotas asks for the Sunday posts only while auto_run is on', async 
   assert.equal((await readDayQuotas(query, Promise.resolve(query))).ai_events, 2, 'Miami and Boston');
 });
 
-const posting: PostingState = { type: 'ai_events', live: false, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, days: [0], schedule: null, nights: null, cap: null, costPerPostMicros: null };
+const posting: PostingState = { type: 'ai_events', state: 'approval', stateMismatch: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.ai_events, scheduledAhead: 0, live: false, generate: true, perDay: null, maxPerDay: null, series: null, days: [0], schedule: null, nights: null, cap: null, costPerPostMicros: null };
+
+test('health: Field Notes runs at 2 AM and is made 2 days ahead (Bald-Eagle D4), so night N asks about day N+2', () => {
+  const fn: PostingState = { ...posting, type: 'field_notes', days: [2, 5] };
+  assert.equal(quotaFor(fn, '2026-10-25'), 1, 'Sunday’s 2 AM run makes Tuesday’s post');
+  assert.equal(quotaFor(fn, '2026-10-27'), 0, 'Tuesday’s night asks about Thursday, not Tuesday');
+  assert.equal(quotaFor({ ...fn, nights: [{ nyDate: '2026-10-30', count: 1, trial: 0, main: 0, series: [], override: false }], cap: 1 }, '2026-10-28'), 1, 'template: the slot two days on');
+});
 
 test('health: the Sunday run and post are Monday’s night; a failed scheduled run is a run failure', async () => {
   assert.equal(quotaFor(posting, '2026-10-26'), 1, 'Monday asks about Sunday');
@@ -278,7 +286,7 @@ test('health: the public calendar snapshot is flagged stale after 8 days, on any
 test('posting: AI Events is a posting type with no daily quota; its pool goes stale after eight days, not three', async () => {
   assert.equal(isPostingType('ai_events'), true);
   await assert.rejects(() => writePosting('ai_events', { perDay: 1 }, 't'), /no daily quota/);
-  await assert.rejects(() => writePosting('ai_events', { cap: 3 }, 't'), /AI Events posts Miami and Boston, so its daily limit is 0 to 2/);
+  await assert.rejects(() => writePosting('ai_events', { cap: 3 }, 't'), /Calendar sets how many a day/);
   const sevenDaysAgo = new Date(SUN_NOON.getTime() - 7 * 86_400_000).toISOString();
   assert.equal(poolStale(sevenDaysAgo, SUN_NOON), true);
   assert.equal(poolStale(sevenDaysAgo, SUN_NOON, 'ai_events'), false);
@@ -289,10 +297,13 @@ test('AI Events copy: Generate names its Jev spend and no Claude; the switches n
   const type = readFileSync('components/content-type/TypeControls.tsx', 'utf8');
   assert.match(type, /export function AiEventsRunButton\(\)/);
   assert.match(type, />Generate<\/button>/);
-  assert.ok(type.includes('Make the AI Events post every Sunday at 12:00 PM? Each run ranks the coming week’s events with live Jev calls (about $0.02, up to the run cap). No Claude calls.'));
+  // The switch's words live in the type's config entry (lib/content-type/config.ts).
+  const config = readFileSync('lib/content-type/config.ts', 'utf8');
+  assert.ok(config.includes('Make the AI Events post every Sunday at 12:00 PM? Each run ranks the coming week’s events with live Jev calls (about $0.02, up to the run cap). No Claude calls.'));
+  // The Generate / Live switches are gone from the hub: the one state lives in the type's Settings tab (D8, D16).
   const hub = readFileSync('components/social-hub/content/HubControls.tsx', 'utf8');
-  assert.ok(hub.includes('Makes the week’s carousel at 12:00 PM on Sundays.'));
-  for (const file of ['components/content-type/TypeControls.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/content-type/ContentTypePage.tsx']) {
+  assert.ok(!hub.includes('Nightly run'));
+  for (const file of ['components/content-type/TypeControls.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/content-type/ContentTypePage.tsx', 'lib/content-type/config.ts']) {
     const strings = [...readFileSync(file, 'utf8').matchAll(/'([^'\n]*AI Events[^'\n]*)'/g)].map((m) => m[1]!);
     for (const s of strings) assert.doesNotMatch(s, /!/, `${file}: no exclamation marks in UI copy`);
   }

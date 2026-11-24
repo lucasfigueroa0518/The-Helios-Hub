@@ -147,7 +147,7 @@ async function main() {
   const { detectFacesLive } = await import('@/lib/social/photos/faces');
   const { createSecondPhotos } = await import('@/lib/social/photos/second-photo');
   const store = await createSocialStore();
-  const usedLog = store.usedPhotos;
+  let usedLog = store.usedPhotos;
   const { createPhotoBank } = await import('@/lib/media-library/bank');
   const bank = store.query ? createPhotoBank({ query: store.query, log: (line) => console.log(`photo bank: ${line}`) }) : undefined;
   type Selection = import('@/lib/social/ingest/select/select').Selection;
@@ -165,6 +165,8 @@ async function main() {
   const rerunLib = rerunPostArg ? await import('@/lib/social/overnight/rerun') : null;
   const rerun = rerunPostArg && rerunLib ? await rerunLib.loadRerunStory(store.query!, rerunPostArg) : null;
   if (rerunPostArg && !rerun) throw new Error(`--rerun-post ${rerunPostArg}: no such post with a saved brief`);
+  // Bald-Eagle D3: the post a rerun replaces still waits in review; its photos don't block its own remake.
+  if (rerun && store.query) usedLog = (await import('@/lib/social/store/pg')).createPgUsedPhotoLog(store.query, { excludeItem: { vertical: 'carousels', id: rerun.postId } });
   // Named stories: the stored groups from earlier selections. Not found fails the run; no other story takes its place.
   const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
   const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;
@@ -186,12 +188,20 @@ async function main() {
       if (found) extra.push({ candidate: found, key });
     }
   }
+  // Central intake Phase 2 (planning/Central Intake/PHASE2-CONTRACT.md, Owner C): with the carousel switched to the
+  // intake and the intake fresh, selection reads the intake's scored stories and nothing is fetched here. 'legacy'
+  // and 'stale-fallback' take today's path; so does an intake read that throws (inside the selection stage).
+  const intakeQuery: import('@/lib/intake/types').IntakeQuery | null = store.query ? { query: (text, params) => store.query!(text, params) } : null;
+  const intakeMode = !rerun && !pinned && intakeQuery
+    ? await (await import('@/lib/intake/read')).readConsumerMode(intakeQuery, 'carousel', now)
+    : 'legacy';
+  let intakeStatus: string = intakeMode;
   // A rerun reads no feeds: its one story is the stored post's. Neither does a run of named stories.
-  const ownArticles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
-  // The reels ingest's sources (Hacker News, papers, GitHub Trending, vendor notes, more outlets) join the pool;
-  // the carousel scoring filters the lot. Never blocks a run: any failure leaves the carousel's own feeds.
   const hub: import('@/lib/carousels/hub-sources').HubFetch = { articles: [], feeds: [], errors: [] };
-  if (!rerun && !pinned) {
+  const fetchToday = async () => {
+    const ownArticles = await fetchFeeds(HELIOS_SOCIAL_FEEDS);
+    // The reels ingest's sources (Hacker News, papers, GitHub Trending, vendor notes, more outlets) join the pool;
+    // the carousel scoring filters the lot. Never blocks a run: any failure leaves the carousel's own feeds.
     try {
       const hubLib = await import('@/lib/carousels/hub-sources');
       Object.assign(hub, await hubLib.fetchHubSources(await hubLib.liveHubAdapters(), new Date()));
@@ -199,9 +209,39 @@ async function main() {
       hub.errors.push({ adapterId: '(all)', error: error instanceof Error ? error.message : String(error) });
     }
     console.error(`[helios-social] hub sources: ${hub.articles.length} articles from ${hub.feeds.length} sources${hub.errors.length ? `; failed: ${hub.errors.map((e) => `${e.adapterId} (${e.error})`).join(', ')}` : ''}`);
-  }
-  const articles = [...ownArticles, ...hub.articles];
-  const allFeeds = [...HELIOS_SOCIAL_FEEDS, ...hub.feeds];
+    return { articles: [...ownArticles, ...hub.articles], feeds: [...HELIOS_SOCIAL_FEEDS, ...hub.feeds] };
+  };
+  const today = rerun || pinned || intakeMode === 'intake' ? { articles: [], feeds: [...HELIOS_SOCIAL_FEEDS] } : await fetchToday();
+  let articles = today.articles;
+  const allFeeds = today.feeds;
+  const intakeSelection: import('@/lib/social/pipeline/selection-stage').IntakeSelectionDeps | undefined = intakeMode === 'intake'
+    ? await (async () => {
+        const { listOrderStories } = await import('@/lib/intake/read');
+        // Feed health names each hub adapter the carousel reads; loading them fetches nothing.
+        const adapterNames = new Map<string, string>();
+        try {
+          const hubLib = await import('@/lib/carousels/hub-sources');
+          for (const a of (await hubLib.liveHubAdapters()).filter((x) => x.phase !== 'derived')) adapterNames.set(a.id, a.name);
+        } catch {
+          // Feed health then has the feeds' rows only.
+        }
+        return {
+          query: intakeQuery!,
+          listOrderStories,
+          adapterNames,
+          fallback: async () => {
+            const t = await fetchToday();
+            articles = t.articles;
+            return t;
+          },
+          onFallback: (error: unknown) => {
+            intakeStatus = 'read-failed-fallback';
+            console.error(`[helios-social] intake read failed, taking today's path: ${error instanceof Error ? error.message : String(error)}`);
+          },
+        };
+      })()
+    : undefined;
+  if (intakeMode !== 'legacy') console.error(`[helios-social] carousel intake mode: ${intakeMode}`);
 
   const jevTally = createJevTally();
   const jev = capped(tallied(createJevAsk(), jevTally), jevTally, capUsd);
@@ -222,6 +262,7 @@ async function main() {
       onSelection: (s) => {
         selection = s;
       },
+      ...(intakeSelection ? { intake: intakeSelection } : {}),
     }),
     create: liveMessagesCreate(newAnthropic()),
     jev,
@@ -248,6 +289,8 @@ async function main() {
     // One attempt per story plus three spares (Tommy, 2026-10-12: the 3:00 AM run made nothing after three attempts
     // all failed, $1.50 spent); an extra attempt is about $0.40, paid for by the run cap's extra 50 cents.
     maxReporterRuns: stories + 3,
+    // Phase 3 shared photo finder: reads the 'carousel' photo_finders switch once per run (legacy when unset or unreadable).
+    ...(store.query ? { photoFinders: { query: store.query } } : {}),
   });
   if (onlyRank !== undefined) {
     const score = stages.score;
@@ -301,16 +344,8 @@ async function main() {
   // Shared queue: a promote the run shipped is used; one it didn't is skipped with why (it stays promoted).
   if (promoteLib && promoted.length) await promoteLib.settlePins(store.query!, promoted.map((p) => p.id), result);
 
-  // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
-  // A PREVIEW run doesn't count (Tommy, 2026-10-06: not the acceptance batch).
-  // Each entry carries its bank tags (photo spec §2): source, verified subject, credit, and a stock photo's scene.
-  if (!preview) {
-    await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => {
-      if (!sl.photoUrl) return [];
-      const t = p.photos.find((x) => x.photo?.url === sl.photoUrl);
-      return [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1, source: t?.photo?.source, qid: t?.photo?.qid ?? null, subject: t?.photo?.subject ?? null, credit: sl.photoCredit, ...(t?.photo?.source === 'stock' ? { scene: t.request.query } : {}) }];
-    })));
-  }
+  // CI-32: a photo counts as used once its post is published (lib/photos/used.ts), never at build time;
+  // the publish paths and the nightly Instagram read (lib/photos/ig-sync.ts) write the ledger.
   const iconShare = (() => {
     const all = result.posts.flatMap((p) => p.photos);
     return all.length ? all.filter((t) => !t.photo).length / all.length : 0;
@@ -355,7 +390,7 @@ async function main() {
 
   await fsp.writeFile(
     path.join(runDir, 'run.json'),
-    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, startedAt: now.toISOString(), capUsd, ceilingUsd: budget.ceilingUsd, alreadyPosted, requestMix, articles: articles.length, hubSources: { articles: hub.articles.length, sources: hub.feeds.length, errors: hub.errors }, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
+    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, ...(intakeMode !== 'legacy' ? { intake: intakeStatus } : {}), startedAt: now.toISOString(), capUsd, ceilingUsd: budget.ceilingUsd, alreadyPosted, requestMix, articles: articles.length, hubSources: { articles: hub.articles.length, sources: hub.feeds.length, errors: hub.errors }, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
   if (preview) await fsp.writeFile(path.join(runDir, 'preview-report.md'), previewReport());
   // The database record (spec 2026-10-08-social-storage.md): written after the files, so a database failure loses nothing.

@@ -1,28 +1,10 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 
-import { PoolScreen } from '@/components/social-hub/content/PoolScreen';
-import { LoadError } from '@/components/social-hub/LoadError';
-import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
-import { loadForPage } from '@/lib/social-hub/live';
-import { timeHub, withHubTiming } from '@/lib/social-hub/server-timing';
-import { isVertical, verticalInfo } from '@/lib/social-hub/verticals';
-import { getSession } from '@/lib/session';
+import { isVertical, typeHref } from '@/lib/social-hub/verticals';
 
-export const dynamic = 'force-dynamic';
-
-export async function generateMetadata({ params }: { params: Promise<{ type: string }> }) {
+/** The old per-type pool page: each content type's own page now holds its pool. Unknown types still 404. */
+export default async function Page({ params }: { params: Promise<{ type: string }> }) {
   const { type } = await params;
-  return { title: `${isVertical(type) ? `${verticalInfo(type).label} pool` : 'Pool'} · Social Hub`, robots: { index: false, follow: false } };
-}
-
-export default function Page({ params, searchParams }: { params: Promise<{ type: string }>; searchParams: Promise<RawSearchParams> }) {
-  return withHubTiming(async () => {
-    const { type } = await params;
-    if (!isVertical(type)) notFound();
-    const session = await getSession();
-    if (!session) redirect('/');
-    const loaded = await timeHub('dataset', () => loadForPage(session.email));
-    if ('error' in loaded) return <LoadError message={loaded.error} />;
-    return <PoolScreen dataset={loaded} base={HUB_BASE} vertical={type} params={toParams(await searchParams)} now={new Date()} />;
-  });
+  if (!isVertical(type)) notFound();
+  permanentRedirect(typeHref(type));
 }

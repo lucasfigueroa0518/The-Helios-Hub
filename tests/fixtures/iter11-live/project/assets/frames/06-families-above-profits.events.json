@@ -1,0 +1,86 @@
+[
+ {
+  "t": 0,
+  "kind": "foley",
+  "what": "paper rustle",
+  "dur": 0.6
+ },
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "low office room tone",
+  "dur": 7
+ },
+ {
+  "t": 3.696,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 3.996,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.306,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 5.306,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.439,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.573,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.606,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.706,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.839,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.973,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 6.106,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 6.239,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 6.373,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 6.506,
+  "kind": "impact",
+  "kit": true
+ }
+]

@@ -22,12 +22,15 @@ test('store choice: Postgres when a database URL is set, files otherwise or when
   assert.equal(socialStoreKind({ DATABASE_URL: '  ' }), 'file');
 });
 
-test('used photos: the 7-day window is asked for in SQL, and every bank tag is written', async () => {
-  const { query, calls } = fakeQuery((t) => (t.includes('SELECT DISTINCT url') ? [{ url: 'a' }, { url: 'b' }] : []));
+test('used photos: recent() reads the CI-32 ledger (published rows, 20 days), and every bank tag is written', async () => {
+  const { query, calls } = fakeQuery((t) => (t.includes('FROM social.used_photos') && t.startsWith('SELECT') ? [{ url: 'a', phash: null, dhash: 'ff00' }, { url: 'b' }] : []));
   const log = createPgUsedPhotoLog(query);
   const now = new Date('2026-10-08T12:00:00Z');
   assert.deepEqual(await log.recent(now), new Set(['a', 'b']));
-  assert.deepEqual(calls[0]!.params, [now.toISOString(), 7]);
+  assert.deepEqual(calls[0]!.params, [now.toISOString(), 20]);
+  assert.match(calls[0]!.text, /vertical IS NOT NULL/, 'only published rows count');
+  assert.deepEqual((await log.ledger!(now)).dhashes, ['ff00']);
+  calls.splice(1);
   await log.record([{ url: 'u', usedAt: now.toISOString(), storyId: 's', slide: 2, source: 'stock', qid: null, subject: null, credit: 'c', scene: 'server racks' }]);
   assert.match(calls[1]!.text, /INSERT INTO social\.used_photos/);
   assert.match(calls[1]!.text, /ON CONFLICT .* DO NOTHING/s);

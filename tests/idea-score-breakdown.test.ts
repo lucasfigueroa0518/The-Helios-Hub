@@ -79,7 +79,6 @@ test('Morning Download: old or undated stories lose the recency points; a questi
 
 const reads = (morning: StoryCandidate[]): PoolReads => ({
   morning: async () => ({ reels: morning.filter((c) => c.origin === 'reels'), carousel: morning.filter((c) => c.origin === 'carousel') }),
-  numbers: async () => ({ numbers: [], unbriefed: [] }),
   leads: async () => [{ origin: 'catalog', ref: 'gimp', name: 'GIMP', url: 'https://gimp.org', description: 'Free image editor' }],
 });
 
@@ -99,8 +98,8 @@ test('pool refresh: Morning Download orders both sources on the news scale and s
   const md = ideas.filter((i) => i.group === 'Morning Download');
   assert.equal(md[0]!.scoreLabel, 'News score (0–1)');
   assert.ok(md.every((i) => i.breakdown?.parts.length));
-  assert.equal(ideas.find((i) => i.group === 'Free vs. Paid')!.scoreLabel, 'Source rank');
-  assert.equal(ideas.find((i) => i.group === 'Free vs. Paid')!.breakdown!.parts[1]!.detail, '#1 of 1');
+  // Free vs. Paid is retired (SS-27): the refresh fills Morning Download's pool only.
+  assert.deepEqual([...new Set(rows.map((r) => r.series))], ['morning_download']);
 });
 
 test('hub: a Morning Download row refreshed before the news score is scored on read, as of its refresh', () => {

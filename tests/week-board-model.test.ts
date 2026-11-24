@@ -40,7 +40,7 @@ test('an empty Wed explainer says which run makes it and on which day', () => {
   const m = boardModel({ days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!;
   assert.equal(c.status, 'empty');
-  assert.equal(c.statusText, 'Empty for now. The 2 AM run makes it on Wed Oct 21.');
+  assert.equal(c.statusText, 'Empty for now. The 2 AM run makes it on Mon Oct 19.', 'Explainers are made 2 days ahead (Bald-Eagle D4)');
   assert.equal(c.locked, false);
 });
 
@@ -163,18 +163,23 @@ test('edited is true only when the date has a person\'s own edit; a system pin o
   assert.ok(m.cards.filter((c) => c.day !== 3).every((c) => !c.mine));
 });
 
-test('a 4th explainer is over the daily cap; each Stories series counts on its own', () => {
+// A type's ceiling is its fixed maximum (D20); these pass a low one so the over-ceiling path stays covered.
+const LOW_CAPS = { ...DEFAULT_CAPS, explainers: 3, stories: 2 };
+
+test('a slot past the ceiling is over; each Stories-format type counts on its own (SS-1)', () => {
   const days = week();
   days[2]!.slots = [slot('explainers', 780), slot('explainers', 840), slot('explainers', 930), slot('explainers', 1000)];
-  const m = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS });
+  assert.deepEqual(boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, false], 'D20: every slot under the fixed maximum is made');
+  const m = boardModel({ days, posts: [], now: NOW, caps: LOW_CAPS });
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, true]);
   assert.equal(m.cards.find((c) => c.day === 2 && c.overCap)!.statusText, 'Over today’s limit, so nothing is made for this slot.');
   days[3]!.slots = [
-    slot('stories', 510, { series: 'morning_download' }), slot('stories', 540, { series: 'guess_the_number' }),
+    slot('stories', 510, { series: 'morning_download' }), slot('ai_trivia', 540, { series: 'ai_trivia' }),
     slot('stories', 600, { series: 'morning_download' }), slot('stories', 630, { series: 'morning_download' }),
   ];
-  const s = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 3);
-  assert.deepEqual(s.map((c) => c.overCap), [false, false, false, true]);
+  const s = boardModel({ days, posts: [], now: NOW, caps: LOW_CAPS }).cards.filter((c) => c.day === 3);
+  // Morning Download at a ceiling of 2; Trivia's slot counts against its own.
+  assert.deepEqual(s.map((c) => [c.vertical, c.overCap]), [['stories', false], ['ai_trivia', false], ['stories', false], ['stories', true]]);
 });
 
 test('outsideUsual flags a time away from the usual windows', () => {
@@ -214,12 +219,12 @@ test('stack: a pushed card pushes the next; a card past the stack is left alone;
 test('stack: Stories at one minute in different series stack in stable key order', () => {
   const cards = [
     { key: '1|stories|t0510:morning_download', day: 1, startMinute: 510 },
-    { key: '1|stories|t0510:free_vs_paid', day: 1, startMinute: 510 },
+    { key: '1|stories|t0510:real_or_ai', day: 1, startMinute: 510 },
   ];
   for (const list of [cards, [...cards].reverse()]) {
     const tops = stackOffsets(list, 780);
-    assert.equal(near(tops.get('1|stories|t0510:free_vs_paid')), 30);
-    assert.equal(near(tops.get('1|stories|t0510:morning_download')), 60);
+    assert.equal(near(tops.get('1|stories|t0510:morning_download')), 30);
+    assert.equal(near(tops.get('1|stories|t0510:real_or_ai')), 60);
   }
 });
 
@@ -328,12 +333,12 @@ test('drop: Last Few Days onto a Carousel day asks first', () => {
   assert.equal(d.confirm, 'remove-carousels');
 });
 
-test('drop: a day at its cap says "At the daily limit" but still allows the drop', () => {
+test('drop: a day at the type\'s ceiling says so but still allows the drop', () => {
   const s = state();
   s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main' }));
-  const d = dropState({ ctx: dayCtx(s, WED, CLOCK), vertical: 'explainers', series: null, raw: 720, caps: DEFAULT_CAPS });
+  const d = dropState({ ctx: dayCtx(s, WED, CLOCK), vertical: 'explainers', series: null, raw: 720, caps: LOW_CAPS });
   assert.equal(d.tone, 'cap');
-  assert.equal(d.tag, '12:00 PM · At the daily limit for Explainers (3)');
+  assert.equal(d.tag, '12:00 PM · Explainers can post at most 3 a day');
 });
 
 test('drop: a time already passed today lands on the next 15-minute mark', () => {
@@ -505,7 +510,7 @@ test('place picker: a Ready Story is offered only its series’ open slots on th
   const s = state();
   const wed = dayCtx(s, WED, CLOCK);
   assert.deepEqual(readyMinutes(wed, 'stories', 'morning_download'), [510]);
-  assert.deepEqual(readyMinutes(wed, 'stories', 'free_vs_paid'), [], 'no Free vs. Paid on Wednesday');
+  assert.deepEqual(readyMinutes(wed, 'stories', 'real_or_ai'), [], 'no Real or AI? on Wednesday');
   assert.deepEqual(readyMinutes(dayCtx(s, 1, CLOCK), 'stories', 'morning_download'), [], 'today’s 8:30 has started');
   assert.deepEqual(readyMinutes(wed, 'explainers', null), openMinutes(wed), 'other types take any open time');
   const off = dropState({ ctx: wed, vertical: 'stories', series: 'morning_download', raw: 720, caps: DEFAULT_CAPS, ready: { taken: () => false } });
@@ -675,4 +680,31 @@ test('reset day never deletes a tie whose hand-set partner has already started t
   const early = planReset(tiedToday(1), 1, { today: '2026-10-20', nowMinute: 500 });
   assert.ok(early.ok && !early.noop);
   assert.deepEqual(early.changes.map((c) => (c as { startMinute: number }).startMinute).sort(), [570, 690]);
+});
+
+/* Calendar look-back (planning/Social Hub/Calendar Look-back/PLAN.md): past days show what went out, each card opening its analytics. */
+
+test('look-back: a past post whose slot is gone still shows on its day, at its booked time', () => {
+  const moved = post({ id: 'gone', slotId: 't0615', nyDate: MON, status: 'published' }); // 10:15 AM: no Monday explainer slot there
+  const m = boardModel({ days: week(), posts: [moved], now: NOW, caps: DEFAULT_CAPS });
+  const c = m.cards.find((x) => x.booked?.id === 'gone')!;
+  assert.equal(c.day, 0);
+  assert.equal(c.startMinute, 615);
+  assert.equal(c.status, 'posted');
+  assert.equal(c.locked, true);
+  assert.equal(m.columns[0]!.count, 1);
+});
+
+test('look-back: a past post with no slot id is placed at the time it went out (15-minute floor, New York)', () => {
+  const p = { ...post({ id: 'free', slotId: 'x', nyDate: MON, status: 'published' }), slot: null, postedAt: '2026-10-19T19:07:00Z' } as unknown as HubPost; // 3:07 PM NY
+  const c = boardModel({ days: week(), posts: [p], now: NOW, caps: DEFAULT_CAPS }).cards.find((x) => x.booked?.id === 'free')!;
+  assert.equal(c.startMinute, 900);
+});
+
+test('look-back: a post on its own slot is not doubled, and today never gets the extra cards', () => {
+  const onSlot = post({ id: 'on', slotId: 't0780', nyDate: MON, status: 'published' });
+  const todayMoved = post({ id: 'today', slotId: 't0615', nyDate: '2026-10-20', status: 'published' });
+  const m = boardModel({ days: week(), posts: [onSlot, todayMoved], now: NOW, caps: DEFAULT_CAPS });
+  assert.equal(m.cards.filter((x) => x.booked?.id === 'on').length, 1);
+  assert.equal(m.cards.filter((x) => x.booked?.id === 'today').length, 0);
 });

@@ -12,6 +12,9 @@
  *      minimum size, no mid-word breaks.
  *   3. Bounds: nothing but photos and backdrop finishes leaves the frame.
  *   4. Safe zones: every `data-safe` element sits between y=250 and y=1580.
+ *   2b. Subject (RA-28): text stacks marked `data-avoid` move off the photo's
+ *      subject into empty space (avoid.ts); a stack that still covers it is a
+ *      problem.
  *   5. Contrast: text sits on a bleed photo only where it has faded below
  *      30% (S-44: every photo is a bleed fade; the stops come from fades.ts
  *      through `data-fade`). The masthead over a photo has its own shade.
@@ -24,6 +27,7 @@
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
+import { avoidSubject, type AvoidResult } from './avoid';
 import { appleEmoji } from './emoji';
 import { fadeAlpha } from './fades';
 import { fitText, type TextFitFailure } from './text-fit';
@@ -144,6 +148,7 @@ export async function openRenderer(): Promise<Renderer> {
 
       await page.evaluate(`window.__fadeAlpha = (${fadeAlpha.toString()})`);
       const fit = (await page.evaluate(`[...document.querySelectorAll('.st-host')].map((h) => (${fitText.toString()})(h))`)) as TextFitFailure[][];
+      const avoided = (await page.evaluate(`[...document.querySelectorAll('.st-host')].map((h) => (${avoidSubject.toString()})(h))`)) as AvoidResult[][];
 
       const measured = await page.evaluate(
         ({ tol, safeTop, safeBottom, frameH, maxAlpha }) => {
@@ -220,7 +225,11 @@ export async function openRenderer(): Promise<Renderer> {
       const reports: FrameReport[] = frames.map((f, i) => ({
         index: i + 1,
         role: f.data.role,
-        problems: [...(fit[i] ?? []).map((x) => `text fit: ${x.element} "${x.text}" (${x.reason}, min ${x.minPx}px)`), ...(measured[i] ?? [])],
+        problems: [
+          ...(fit[i] ?? []).map((x) => `text fit: ${x.element} "${x.text}" (${x.reason}, min ${x.minPx}px)`),
+          ...(avoided[i] ?? []).filter((a) => a.overlapPx > 0).map((a) => `text on the photo's subject (${a.overlapPx}px too tall for the empty space)`),
+          ...(measured[i] ?? []),
+        ],
         jpeg: jpegs[i]!,
         bytes: jpegs[i]!.length,
       }));

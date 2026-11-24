@@ -47,9 +47,11 @@ export const bySlotTime = (a: ResolvedSlot, b: ResolvedSlot): number => a.startM
 /**
  * The earliest untaken slot. `byDate` holds the type's slots per New York
  * date (they differ by weekday and override); dates are read ascending, those
- * before today (NY) are skipped, and the search stops after `throughDate`.
- * `taken` holds `${nyDate}|${slotId}`. Slots that cannot book (past, or boxed
- * in by feed posts) are skipped.
+ * before today (NY) and before `fromDate` are skipped, and the search stops
+ * after `throughDate`. `taken` holds `${nyDate}|${slotId}`. Slots that cannot
+ * book (past, or boxed in by feed posts) are skipped. A cushion type books its
+ * target date only: `fromDate = throughDate = target` (Bald-Eagle D4,
+ * lib/social-hub/lead.ts).
  */
 export function chooseSlotTime(
   byDate: ReadonlyMap<string, readonly ResolvedSlot[]>,
@@ -58,10 +60,12 @@ export function chooseSlotTime(
   busy: readonly Date[],
   rng: (n: number) => number,
   throughDate?: string,
+  fromDate?: string,
 ): SlotChoice | null {
   const today = calendarDateKey(now, SOCIAL_TIMEZONE);
   for (const nyDate of [...byDate.keys()].sort()) {
     if (nyDate < today) continue;
+    if (fromDate && nyDate < fromDate) continue;
     if (throughDate && nyDate > throughDate) break;
     for (const slot of [...byDate.get(nyDate)!].sort(bySlotTime)) {
       const id = slotId(slot.startMinute, slot.series);

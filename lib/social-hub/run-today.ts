@@ -14,13 +14,18 @@
  *   Stories          today's set for each series due today that has none
  *   Last Few Days    today's post, on its days
  *   AI Events        the coming week's carousel, on its day (Sunday); no model but Jev
+ *   Field Notes      a photo carousel from the next tip, on a day the calendar gives it a slot
+ *   AI Drama Reels   a production job for each missing pitch (under its daily render and spend caps)
  *
  * `planFrom` decides from plain inputs (tested offline); the live layer
  * (lib/content-type/run-today-live.ts) reads them and re-plans on the server
  * when the person clicks, so a stale page can't run more than today needs.
  */
 import { aiEventsDueOn, type AiEventsSettings } from '@/lib/ai-events/settings';
+import { FIELD_NOTES_AUTO_DAYS } from '@/lib/field-notes/config';
+import type { FieldNotesSettings } from '@/lib/field-notes/types';
 import { lfdDueOn, type LfdSettings } from '@/lib/lfd/settings';
+import { STORY_VERTICALS, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { quotaCandidates, type QuotaCandidate } from '@/lib/social-hub/views/day-rank';
@@ -34,14 +39,18 @@ export type RunInputs = {
   reels: TypeDay & { slateToday: boolean };
   carousels: TypeDay;
   explainers: TypeDay;
-  /** Series due today and whether each already has today's set. */
+  /** Series due today and whether each already has today's set; each makes its own type's step (SS-1). */
   series: Array<{ id: string; label: string; held: boolean }>;
   /** Last Few Days: due today (its days; any day from its own button) and whether today's post exists. Missing: no step. */
   lastFewDays?: { due: boolean; made: boolean };
   /** AI Events: due today (its day; any day from its own button) and whether the coming week's post exists. Missing: no step. */
   aiEvents?: { due: boolean; made: boolean };
-  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean };
-  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number };
+  /** Field Notes: due today (a calendar slot; any day from its own button) and whether a post is already waiting. Missing: no step. */
+  fieldNotes?: { due: boolean; made: boolean };
+  /** AI Drama Reels' day, the Explainers shape (targets are pitch ids). Missing: no step. */
+  reelAiDrama?: TypeDay;
+  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean; fieldNotesRun?: boolean; dramaPitches?: string[] };
+  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number; fieldNotesCap?: number; dramaCap?: number };
 };
 
 export type PlanStep = {
@@ -50,8 +59,8 @@ export type PlanStep = {
   quota: number;
   held: number;
   needed: number;
-  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run';
-  /** Idea refs (reel post ideas, explainer topics) or Stories series ids to act on. */
+  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run' | 'field_notes_run' | 'drama_jobs';
+  /** Idea refs (reel post ideas, explainer topics, AI Drama pitches) or Stories series ids to act on. */
   targets: string[];
   note: string;
   /** Rough ceiling for the spend this step starts. */
@@ -92,6 +101,17 @@ export function lfdDueToday(s: Pick<LfdSettings, 'autoRun' | 'days'>, today: str
  */
 export function aiEventsDueToday(s: Pick<AiEventsSettings, 'autoRun' | 'days'>, today: string, anyDay: boolean, calendarDay: boolean | null): boolean {
   return calendarDay !== null ? anyDay || (s.autoRun && calendarDay) : aiEventsDueOn(s, today, anyDay);
+}
+
+/**
+ * Field Notes for Run now, the same rule: due when today has its calendar slot and auto_run is on
+ * (auto_run ships off). With no calendar read (`calendarDay` null) its default days stand in.
+ * `anyDay`: its own Generate, any day.
+ */
+export function fieldNotesDueToday(s: Pick<FieldNotesSettings, 'autoRun'>, today: string, anyDay: boolean, calendarDay: boolean | null): boolean {
+  if (anyDay) return true;
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return s.autoRun && (calendarDay !== null ? calendarDay : FIELD_NOTES_AUTO_DAYS.includes(weekday));
 }
 
 const label = (v: Vertical) => verticalInfo(v).label;
@@ -140,11 +160,13 @@ export function planFrom(i: RunInputs): RunPlan {
     else steps.push({ ...base, action: 'explainer_renders', targets: missing.map((m) => m.ref), note: `Renders ${titles(missing)}.`, estimateUsd: missing.length * i.cost.explainerCap });
   }
 
-  {
-    const missing = i.series.filter((s) => !s.held);
-    const base = { vertical: 'stories' as const, label: label('stories'), quota: i.series.length, held: i.series.length - missing.length, needed: missing.length };
-    if (!i.series.length) steps.push({ ...base, action: 'none', targets: [], note: 'No series is due today.', estimateUsd: 0 });
-    else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Every series due today has its set.', estimateUsd: 0 });
+  // One step per Stories-format type (SS-1), each over its own series.
+  for (const vertical of STORY_VERTICALS) {
+    const due = i.series.filter((s) => verticalOfSeries(s.id) === vertical);
+    const missing = due.filter((s) => !s.held);
+    const base = { vertical, label: label(vertical), quota: due.length, held: due.length - missing.length, needed: missing.length };
+    if (!due.length) steps.push({ ...base, action: 'none', targets: [], note: 'No set is due today.', estimateUsd: 0 });
+    else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Today’s set is made.', estimateUsd: 0 });
     else steps.push({ ...base, action: 'story_sets', targets: missing.map((s) => s.id), note: `Makes ${missing.map((s) => s.label).join(', ')}.`, estimateUsd: missing.length * i.cost.storySet });
   }
 
@@ -164,6 +186,27 @@ export function planFrom(i: RunInputs): RunPlan {
     else if (d.made) steps.push({ ...base, action: 'none', targets: [], note: 'The coming week’s post is made. Rebuild post on its page re-renders it.', estimateUsd: 0 });
     else if (i.inFlight.aiEventsRun) steps.push({ ...base, action: 'none', targets: [], note: 'An AI Events run is already queued or running.', estimateUsd: 0 });
     else steps.push({ ...base, action: 'ai_events_run', targets: [], note: 'Ranks the coming week’s events in Miami, Boston, NYC and SF and renders the carousel. It waits for your approval.', estimateUsd: i.cost.aiEventsCap ?? 0.5 });
+  }
+
+  if (i.fieldNotes) {
+    const d = i.fieldNotes;
+    const base = { vertical: 'field_notes' as const, label: label('field_notes'), quota: d.due ? 1 : 0, held: d.made ? 1 : 0, needed: d.due && !d.made ? 1 : 0 };
+    if (!d.due) steps.push({ ...base, action: 'none', targets: [], note: 'Field Notes posts on the days the calendar gives it; today isn’t one. Generate on its page makes one anyway.', estimateUsd: 0 });
+    else if (d.made) steps.push({ ...base, action: 'none', targets: [], note: 'A Field Notes post is already waiting for review.', estimateUsd: 0 });
+    else if (i.inFlight.fieldNotesRun) steps.push({ ...base, action: 'none', targets: [], note: 'A Field Notes run is already queued or running.', estimateUsd: 0 });
+    else steps.push({ ...base, action: 'field_notes_run', targets: [], note: 'Picks the next tip, pairs it with photos from the pool and renders the carousel. It waits for your approval.', estimateUsd: i.cost.fieldNotesCap ?? 0.5 });
+  }
+
+  if (i.reelAiDrama) {
+    // The Explainers block, one production job per missing pitch.
+    const d = i.reelAiDrama;
+    const base = filled('reel_ai_drama', d);
+    const inFlight = i.inFlight.dramaPitches ?? [];
+    const missing = d.missing.filter((m) => !inFlight.includes(m.ref));
+    if (d.quota === 0) steps.push({ ...base, action: 'none', targets: [], note: 'Quota is 0.', estimateUsd: 0 });
+    else if (!d.missing.length) steps.push({ ...base, action: 'none', targets: [], note: d.held >= d.quota ? 'Today’s quota is made.' : 'The idea pool is empty.', estimateUsd: 0 });
+    else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Its missing reels are already being made.', estimateUsd: 0 });
+    else steps.push({ ...base, action: 'drama_jobs', targets: missing.map((m) => m.ref), note: `Makes ${titles(missing)}.`, estimateUsd: missing.length * (i.cost.dramaCap ?? 8) });
   }
 
   const estimateUsd = Number(steps.reduce((s, x) => s + x.estimateUsd, 0).toFixed(2));
@@ -190,7 +233,7 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
-const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 const TARGET_MAX = 2048;
 
 /**

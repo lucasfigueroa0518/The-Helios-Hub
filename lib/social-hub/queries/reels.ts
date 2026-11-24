@@ -140,7 +140,7 @@ export type ReelsRead = {
   requireApproval: boolean;
 };
 
-const SCORE_LATERAL = `
+const SCORE_COPY_LATERAL = `
        LEFT JOIN LATERAL (
          SELECT s.chosen_framework, s.chosen_bucket, s.blockbuster, s.net, s.origin
            FROM reels.idea_scores s
@@ -157,11 +157,12 @@ const SCORE_LATERAL = `
             AND c.status = 'ok'
           ORDER BY (v.slate_id IS NOT NULL AND c.slate_id = v.slate_id) DESC, sl.scored_at DESC
           LIMIT 1
-       ) copy ON true
+       ) copy ON true`;
+
+const SCORE_LATERAL = `${SCORE_COPY_LATERAL}
        LEFT JOIN LATERAL (
-         SELECT s.headline
-           FROM reels.post_idea_members m
-           JOIN reels.sources s ON s.id = m.source_id
+         SELECT m.headline
+           FROM reels.idea_sources_v m
           WHERE m.post_idea_id = %IDEA%
           ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
           LIMIT 1
@@ -173,6 +174,14 @@ const SCORE_LATERAL = `
  * video's own slate as before.
  */
 export const REEL_FACTS_SQL = `
+WITH heads AS (
+  -- The lead headline per idea, read once for every idea here. idea_sources_v resolves intake
+  -- merges with a recursive CTE; a correlated LIMIT 1 per row priced the plan into JIT (~80 ms).
+  SELECT DISTINCT ON (m.post_idea_id) m.post_idea_id, m.headline
+    FROM reels.idea_sources_v m
+   WHERE m.post_idea_id = ANY($1::uuid[])
+   ORDER BY m.post_idea_id, CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
+)
 SELECT r.idea::text AS post_idea_id, r.video::text AS video_job_id,
        left(v.motion_prompt, 500) AS motion_prompt, v.video_storage_path,
        v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id, vis.render AS visual_render,
@@ -181,7 +190,8 @@ SELECT r.idea::text AS post_idea_id, r.video::text AS video_job_id,
   FROM unnest($1::uuid[], $2::uuid[]) AS r(idea, video)
   LEFT JOIN reels.video_jobs v ON v.id = r.video
   LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
-  ${SCORE_LATERAL.replaceAll('%IDEA%', 'r.idea')}`;
+  ${SCORE_COPY_LATERAL.replaceAll('%IDEA%', 'r.idea')}
+  LEFT JOIN heads src ON src.post_idea_id = r.idea`;
 
 export const REEL_MADE_SQL = `
 SELECT DISTINCT ON (v.post_idea_id)
@@ -214,12 +224,12 @@ export const REEL_IDEAS_SQL = `
 WITH latest AS (
   SELECT id, scored_at FROM reels.score_slates ORDER BY scored_at DESC LIMIT 1
 ),
--- A person's typed-in ideas (design 2026-10-26-text-on-screen-seeding): sources marked adapter 'seed', theirs for a week.
+-- A person's typed-in ideas (design 2026-10-26-text-on-screen-seeding): seed members (legacy adapter 'seed', or an
+-- intake Reels seed), theirs for a week.
 seeds AS (
-  SELECT m.post_idea_id, so.ingest_time, (so.ingest_time > now() - interval '7 days') AS open
-    FROM reels.post_idea_members m
-    JOIN reels.sources so ON so.id = m.source_id
-   WHERE so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+  SELECT m.post_idea_id, m.ingest_time, (m.ingest_time > now() - interval '7 days') AS open
+    FROM reels.idea_sources_v m
+   WHERE m.seeded
 ),
 pool AS (
   SELECT s.post_idea_id, s.net, s.rank, s.selected, s.origin, latest.scored_at AS scored_at, true AS on_latest,
@@ -261,9 +271,8 @@ SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, s.scor
   FROM pool s
   LEFT JOIN reels.published_status ps ON ps.post_idea_id = s.post_idea_id
   LEFT JOIN LATERAL (
-    SELECT so.headline
-      FROM reels.post_idea_members m
-      JOIN reels.sources so ON so.id = m.source_id
+    SELECT m.headline
+      FROM reels.idea_sources_v m
      WHERE m.post_idea_id = s.post_idea_id
      ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
      LIMIT 1
@@ -289,9 +298,8 @@ SELECT DISTINCT ON (v.post_idea_id) v.post_idea_id::text AS post_idea_id, v.id::
  ORDER BY v.post_idea_id, v.finished_at DESC NULLS LAST, v.created_at DESC`;
 
 export const REEL_SOURCES_SQL = `
-SELECT DISTINCT m.post_idea_id, s.canonical_url AS url, s.headline
-  FROM reels.post_idea_members m
-  JOIN reels.sources s ON s.id = m.source_id
+SELECT DISTINCT m.post_idea_id, m.url, m.headline
+  FROM reels.idea_sources_v m
  WHERE m.role <> 'merged_duplicate'
    AND m.post_idea_id = ANY($1::uuid[])`;
 

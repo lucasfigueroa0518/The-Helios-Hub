@@ -101,7 +101,7 @@ const words = (frame, line, from, step) => {
   return { frame, duration_s: Number((list[list.length - 1].end + 0.06).toFixed(3)), words: list };
 };
 writeFileSync(join(project, 'audio_meta.json'), `${JSON.stringify({ bgm: null, voices: [
-  words(1, 'In the next 30 seconds, this busy writer will teach you an AI concept.', 0.15, 0.25),
+  words(1, 'In the next minute, this busy writer will teach you an AI concept.', 0.15, 0.25),
   words(2, 'Picture a pen copying the same long instructions onto every sheet, one costly line at a time.', 0.2, 0.36),
   words(3, 'Prompt caching is when a model provider saves the repeated start of your prompt, so later requests reuse it instead of reading it again.', 0.2, 0.33),
 ], sfx: [] }, null, 2)}\n`);

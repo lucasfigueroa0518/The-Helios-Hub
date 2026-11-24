@@ -164,7 +164,11 @@ function importsOf(text: string): string[] {
  * check, which every page must call (it upserts `outreach.users` at sign-in,
  * not on a hub read). Nothing else is exempt.
  */
-const BOUNDARIES = new Set(['lib/session.ts']);
+/**
+ * lib/session.ts, and the hub shell's warm link (perf #21): a client-side prefetch of the hub's own pages, same
+ * origin, GET only. It reads nothing outside the app and writes nothing.
+ */
+const BOUNDARIES = new Set(['lib/session.ts', 'components/hub-shell/warm-link.tsx']);
 
 /**
  * The one browser-side fetch: the Content House buttons posting to the hub's
@@ -179,12 +183,15 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
  * slot writes, the unschedule it offers on a booked slot, and Ready to place's place),
  * its Schedules dropdown (the schedule save and its Undo), and AI Events' pool buttons
  * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool), and the post view's revision box (Targeted Revisions:
- * revise, undo, continue, and its poll of the post's revision rows), and the shared Seed an idea drawer's five forms (one
- * file and one /seed endpoint each, 2026-11-02) with the refresh helper they share. Client components
+ * revise, undo, continue, and its poll of the post's revision rows), and the shared Seed an idea drawer's forms (one
+ * file and one /seed endpoint each, 2026-11-02; Field Notes' is components/field-notes/FieldNotesSeedForm.tsx) with the refresh helper they share, and the Cost
+ * page's nightly refill total (settings standard D19, /api/content-type/posting/refill-total), and the Photo Bank's
+ * Field Notes section (UI-REWORK D1, 2026-11-23): the pool grid's rest / retire / re-tag (/api/field-notes/pool) and the
+ * upload box's sign and finalize (/api/field-notes/photos/{sign,finalize}). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/social-hub/post/RevisionBox.tsx', 'components/content-type/ReelSeedForm.tsx', 'components/content-type/CarouselSeedForm.tsx', 'components/content-type/LfdSeedForm.tsx', 'components/content-type/StorySeedForm.tsx', 'components/content-type/ExplainerSeedForm.tsx', 'components/content-type/OneBoxSeedForm.tsx', 'components/content-type/SeedRequestCards.tsx', 'lib/content-type/refresh-client.ts']);
-const CONTROL_ENDPOINTS = /^(?:\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place|revise|undo-revision|continue-revision|revisions))|ai-events\/pool|(reels|carousels|last-few-days|stories)\/seed|seed\/one-box)\b|\/api\/explainers\/topics$)/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/field-notes/FieldNotesSeedForm.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/social-hub/post/RevisionBox.tsx', 'components/content-type/ReelSeedForm.tsx', 'components/content-type/CarouselSeedForm.tsx', 'components/content-type/LfdSeedForm.tsx', 'components/content-type/StorySeedForm.tsx', 'components/content-type/ExplainerSeedForm.tsx', 'components/content-type/OneBoxSeedForm.tsx', 'components/content-type/SeedRequestCards.tsx', 'lib/content-type/refresh-client.ts', 'components/social-hub/cost/RefillTotal.tsx', 'components/field-notes/PoolGrid.tsx', 'components/field-notes/upload-client.ts']);
+const CONTROL_ENDPOINTS = /^(?:\/api\/(content-type\/(posting|run-today|progress|idea-queue)|social-hub\/(slots|actions\/(unschedule|place|revise|undo-revision|continue-revision|revisions))|ai-events\/pool|field-notes\/(pool|photos\/(sign|finalize))|(reels|carousels|last-few-days|stories|field-notes)\/seed|seed\/one-box)\b|\/api\/explainers\/topics$)/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string, boundaries: ReadonlySet<string> = BOUNDARIES): string | null {

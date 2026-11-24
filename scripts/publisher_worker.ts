@@ -13,6 +13,9 @@
  *            can be compared with what the type workers actually did.
  *   live   – posts; the type workers stand down from releasing and posting.
  * Each type's own publishing_live still decides whether that type posts at all.
+ * In every mode but shadow, a due slot of a type that is not Live is cancelled with reason `slot-passed`
+ * (settings standard D17): it goes back to the Made tab still approved and is never posted late or re-slotted
+ * on its own (D18).
  * No Claude, no Jev: Instagram Graph and Supabase only, plus the website's deploy hook
  * (VERCEL_DEPLOY_HOOK_URL, when set) after an AI Events post refreshes the public calendar.
  */
@@ -39,6 +42,8 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 
 const POLL_MS = 15_000;
 const INSIGHTS_EVERY_MS = 30 * 60_000;
+/** How often the slot-passed sweep runs (D17); a minute late is still never a late post, since it can't post. */
+const SWEEP_EVERY_MS = 60_000;
 
 async function main(): Promise<void> {
   const { socialQuery } = await import('@/lib/social/store');
@@ -52,21 +57,25 @@ async function main(): Promise<void> {
   const { carouselsDriver } = await import('@/lib/publishing/drivers/carousels');
   const { lastFewDaysDriver } = await import('@/lib/publishing/drivers/last-few-days');
   const { aiEventsDriver } = await import('@/lib/publishing/drivers/ai-events');
+  const { fieldNotesDriver } = await import('@/lib/publishing/drivers/field-notes');
   const { liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
+  const { reelAiDramaDriver } = await import('@/lib/publishing/drivers/reel-ai-drama');
   const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
   const { createLiveMetaClient } = await import('@/lib/reels/music/meta');
   const { publisherMode, publisherTick, recordHeartbeat } = await import('@/lib/publishing/publisher');
+  const { cancelPassedSlots } = await import('@/lib/content-type/unslot');
   type PublishDriver = import('@/lib/publishing/drivers/types').PublishDriver;
 
   const query = await socialQuery();
   const slideBucket = mediaBucket(SLIDE_BUCKET);
   const token = () => process.env.META_USER_ACCESS_TOKEN!;
   const drivers: PublishDriver[] = [
-    carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
-    lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
+    carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token }),
+    lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token }),
     // A published AI Events post publishes the public calendar snapshot again (plan M3/M4).
-    aiEventsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token, snapshot: liveAiEventsSnapshot(query as unknown as HubQuery), log }),
+    aiEventsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token, snapshot: liveAiEventsSnapshot(query as unknown as HubQuery), log }),
+    fieldNotesDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token }),
     reelsDriver({ meta: createLiveMetaClient }),
   ];
 
@@ -76,6 +85,21 @@ async function main(): Promise<void> {
     drivers.push(explainersDriver({ db: await explainersDb(), meta: createLiveReelClient, signVideo: signArtifact, token }));
   } else {
     log('explainers_not_driven', { reason: 'Explainers are not on the shared database (EXPLAINERS_DB=supabase).' });
+  }
+
+  // AI Drama Reels ride the explainers handle (HUB-WIRING-CONTRACT §5): same database rule, plus its schema applied.
+  // This driver is the only thing that posts a drama reel; the drama worker has no publish loop.
+  if (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim()) {
+    const { explainersDb } = await import('@/lib/explainers/connection');
+    const { dramaSchemaReady } = await import('@/lib/reel-ai-drama/hub');
+    const db = await explainersDb();
+    if (await dramaSchemaReady((text, params) => db.query(text, params))) {
+      drivers.push(reelAiDramaDriver({ db, meta: createLiveReelClient, signVideo: signArtifact, token }));
+    } else {
+      log('reel_ai_drama_not_driven', { reason: 'The reel_ai_drama schema is not applied (npm run db:reel-ai-drama).' });
+    }
+  } else {
+    log('reel_ai_drama_not_driven', { reason: 'AI Drama Reels are not on the shared database (EXPLAINERS_DB=supabase).' });
   }
 
   let stopping = false;
@@ -91,6 +115,17 @@ async function main(): Promise<void> {
   let lastShadow = '';
   let lastInsights = 0;
   let lastMode = '';
+  let lastSweep = 0;
+  /**
+   * D17: before this sweep a due slot of a type that isn't Live stayed `scheduled` (publisherTick and the type
+   * workers release only Live types), so it posted late the moment the type went Live. Read only in shadow mode.
+   */
+  const sweepPassedSlots = async () => {
+    const notLive: PublishDriver['vertical'][] = [];
+    for (const d of drivers) if (!(await d.live().catch(() => true))) notLive.push(d.vertical);
+    const passed = await cancelPassedSlots(query, notLive);
+    if (passed.length) log('slot_passed', { cancelled: passed.length, slots: passed });
+  };
   try {
     while (!stopping) {
       try {
@@ -101,6 +136,10 @@ async function main(): Promise<void> {
           // Tell the type workers which types this publisher drives (they stand down only for those).
           await recordHeartbeat(query, drivers.map((d) => d.vertical)).catch((error) => log('heartbeat_failed', { error: errorText(error) }));
           const result = await publisherTick(query, drivers);
+          if (result.mode !== 'shadow' && Date.now() - lastSweep >= SWEEP_EVERY_MS) {
+            lastSweep = Date.now();
+            await sweepPassedSlots().catch((error) => log('slot_passed_failed', { error: errorText(error) }));
+          }
           if (result.mode !== lastMode) log('mode', { mode: result.mode });
           lastMode = result.mode;
           if (result.mode === 'shadow') {

@@ -10,6 +10,8 @@
  * The engine never finishes the run row: the worker (lib/ai-events/worker.ts) books the slot,
  * publishes the calendar snapshot and records the outcome and its spend.
  */
+import { EMPTY_LEDGER, readUsedLedger, type UsedLedger } from '@/lib/photos/used';
+import { usedReason, type GuardDeps } from '@/lib/photos/used-guard';
 import { addCalendarDays } from '@/lib/instagram/window';
 import { METRO_PROFILES } from '@/lib/networking/cities';
 import { rankWeek, type RankWeekInput, type RankWeekResult } from '@/lib/networking/pick/rank';
@@ -42,6 +44,10 @@ export type AiEventsEngineDeps = {
   rand?: () => number;
   /** The ranking (tests may pass a stub). */
   rank?: (input: RankWeekInput) => Promise<RankWeekResult>;
+  /** Downloads a poster for the used-photo hash check (CI-32). Absent: fetch. */
+  http?: typeof fetch;
+  /** Both hashes of a poster's bytes. Absent: hashesOf. For tests. */
+  hash?: GuardDeps['hash'];
 };
 
 /** `metros`: the post cities to make (the Sunday clock passes the ones with no post yet); all by default. */
@@ -118,6 +124,21 @@ export function toPickedEvent(e: StoredNetworkingEvent): PickedEvent | null {
 }
 
 /**
+ * Picks whose poster the used-photo ledger names lose it, so the row is drawn without an image (CI-32): by URL, then
+ * by picture (the poster is downloaded and hashed when the ledger holds hashes; a failed download never drops it).
+ * The input is unchanged.
+ */
+export async function withoutUsedPosters(cities: CityPicks[], used: UsedLedger, guard: GuardDeps = {}): Promise<CityPicks[]> {
+  const out: CityPicks[] = [];
+  for (const c of cities) {
+    const picks: CityPicks['picks'] = [];
+    for (const p of c.picks) picks.push(p.image && (await usedReason(used, { url: p.image }, guard)) ? { ...p, image: null } : p);
+    out.push({ ...c, picks });
+  }
+  return out;
+}
+
+/**
  * The ranking's ranked list per city (the picks, then deeper ranks for the post's spotlights), in
  * post order (AE-02); a city with no picks stays, with none. `remainingCount` counts past the list.
  */
@@ -189,7 +210,9 @@ export async function runAiEvents(d: AiEventsEngineDeps, input: AiEventsRunInput
 
   const deckEvents = rank.cities.flatMap((city) => (city.deck ?? city.picks).map((pick) => pick.event));
   await fillMissingCoverUrls(q, deckEvents);
-  const cities = cityPicksOf(rank);
+  // CI-32: a poster any post published in the last 20 days isn't shown again; its row takes the no-image path.
+  const used = await readUsedLedger(q, d.now).catch(() => EMPTY_LEDGER);
+  const cities = await withoutUsedPosters(cityPicksOf(rank), used, { http: d.http ?? fetch, ...(d.hash ? { hash: d.hash } : {}) });
   const postDate = postDateFor(week.weekKey);
   const posts: SavedCityPost[] = [];
   const skipped: Array<{ metro: AiEventsPostMetro; note: string }> = [];

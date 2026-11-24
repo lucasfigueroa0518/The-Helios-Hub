@@ -21,6 +21,7 @@ import type { Queryable } from '@/lib/stories/db';
 import { hasColumn } from '@/lib/social-hub/slots/columns';
 import { isStorySeries, slotId } from '@/lib/social-hub/slots/types';
 import { approveItem, clearDecision, ensureContentItem, rejectItem, type SpineQuery } from '@/lib/social-hub/spine';
+import { STORY_VERTICALS, verticalOfSeries } from '@/lib/social-hub/story-types';
 
 const spineOf = (db: Queryable): SpineQuery => (text, params) => db.query(text, params) as ReturnType<SpineQuery>;
 
@@ -54,7 +55,9 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
   const set = rows[0];
   if (!set) return;
   const spine = spineOf(db);
-  const itemId = await ensureContentItem(spine, { vertical: 'stories', format: 'story', nativeRef: set.id, ideaRef: `${set.series}:${set.ny_date}` });
+  // Each series is its own content type on the hub (SS-21); retired series read as Morning Download's `stories`.
+  const vertical = verticalOfSeries(set.series);
+  const itemId = await ensureContentItem(spine, { vertical, format: 'story', nativeRef: set.id, ideaRef: `${set.series}:${set.ny_date}` });
 
   if (set.status === 'rejected') await rejectItem(spine, itemId);
   else if (set.approved_at) await approveItem(spine, itemId, set.trigger === 'auto' ? 'auto' : 'user');
@@ -76,13 +79,14 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
     const { rows: attempt } = await db.query<{ id: string }>(
       `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, requested_at, started_at, finished_at,
               caption, payload, child_container_ids, media_id, error, legacy_id)
-       VALUES ($1, 'stories', $2, $3, coalesce($4::timestamptz, now()), now(), $5::timestamptz, '', $6::jsonb, $7::jsonb, $8, $9, $10::uuid)
-       ON CONFLICT (legacy_id) DO UPDATE SET status = excluded.status, finished_at = excluded.finished_at, payload = excluded.payload,
+       VALUES ($1, $11, $2, $3, coalesce($4::timestamptz, now()), now(), $5::timestamptz, '', $6::jsonb, $7::jsonb, $8, $9, $10::uuid)
+       ON CONFLICT (legacy_id) DO UPDATE SET content_item_id = excluded.content_item_id, vertical = excluded.vertical,
+              status = excluded.status, finished_at = excluded.finished_at, payload = excluded.payload,
               child_container_ids = excluded.child_container_ids, media_id = excluded.media_id, error = excluded.error
        RETURNING id`,
       [itemId, set.trigger === 'auto' ? 'auto' : 'approve', status, set.publish_at, finished, JSON.stringify(payload),
         JSON.stringify(frames.map((f) => f.ig_container_id).filter(Boolean)), live[0]?.ig_media_id ?? null,
-        status === 'failed' || status === 'partial' ? set.error : null, set.id],
+        status === 'failed' || status === 'partial' ? set.error : null, set.id, vertical],
     );
     attemptId = attempt[0]!.id;
   }
@@ -96,11 +100,12 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
     const mark = (await hasColumn(db, 'social_hub', 'schedule', 'slot_by')) ? (set.slot_by === 'person' ? 'person' : 'system') : null;
     await db.query(
       `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id, error, legacy_id${mark ? ', slot_by' : ''})
-       VALUES ($1, 'stories', $2::date, $3, $4::timestamptz, $5, $6, $7, $8, $9::uuid${mark ? ', $10' : ''})
-       ON CONFLICT (legacy_id) DO UPDATE SET ny_date = excluded.ny_date, slot = excluded.slot, publish_at = excluded.publish_at, status = excluded.status,
+       VALUES ($1, $10, $2::date, $3, $4::timestamptz, $5, $6, $7, $8, $9::uuid${mark ? ', $11' : ''})
+       ON CONFLICT (legacy_id) DO UPDATE SET content_item_id = excluded.content_item_id, vertical = excluded.vertical,
+              ny_date = excluded.ny_date, slot = excluded.slot, publish_at = excluded.publish_at, status = excluded.status,
               publish_attempt_id = excluded.publish_attempt_id, error = excluded.error${mark ? ', slot_by = excluded.slot_by' : ''}`,
       [itemId, set.ny_date, slot, set.publish_at, slotStatus, set.trigger === 'auto' ? 'auto' : 'user', attemptId,
-        slotStatus === 'failed' || slotStatus === 'cancelled' ? set.error : null, set.id, ...(mark ? [mark] : [])],
+        slotStatus === 'failed' || slotStatus === 'cancelled' ? set.error : null, set.id, vertical, ...(mark ? [mark] : [])],
     );
   }
 
@@ -109,7 +114,7 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
       `INSERT INTO social_hub.media_insights (media_id, ny_date, vertical, publish_attempt_id, captured_at, views, reach, shares,
               follows, profile_visits, total_interactions, extra, raw)
        SELECT DISTINCT ON (f.ig_media_id, (i.captured_at AT TIME ZONE 'America/New_York')::date)
-              f.ig_media_id, (i.captured_at AT TIME ZONE 'America/New_York')::date, 'stories', $2, i.captured_at,
+              f.ig_media_id, (i.captured_at AT TIME ZONE 'America/New_York')::date, $3, $2, i.captured_at,
               i.views, i.reach, i.shares, i.follows, i.profile_visits, i.total_interactions,
               jsonb_build_object('replies', i.replies, 'taps_forward', i.taps_forward, 'taps_back', i.taps_back,
                                  'exits', i.exits, 'swipe_forward', i.swipe_forward, 'final', i.final, 'seq', f.seq),
@@ -117,20 +122,24 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
          FROM stories.insights i JOIN stories.frames f ON f.id = i.frame_id
         WHERE f.set_id = $1 AND f.ig_media_id IS NOT NULL
         ORDER BY f.ig_media_id, (i.captured_at AT TIME ZONE 'America/New_York')::date, i.captured_at DESC
-       ON CONFLICT (media_id, ny_date) DO UPDATE SET captured_at = excluded.captured_at, views = excluded.views, reach = excluded.reach,
+       ON CONFLICT (media_id, ny_date) DO UPDATE SET vertical = excluded.vertical, captured_at = excluded.captured_at, views = excluded.views, reach = excluded.reach,
               shares = excluded.shares, follows = excluded.follows, profile_visits = excluded.profile_visits,
               total_interactions = excluded.total_interactions, extra = excluded.extra, raw = excluded.raw`,
-      [setId, attemptId],
+      [setId, attemptId, vertical],
     );
   }
 }
 
-/** Another type's post is in flight on the account (fresh, not a stale leftover): a Story set waits its turn. */
+/**
+ * Another type's post is in flight on the account (fresh, not a stale leftover): a Story set waits its turn. The
+ * Stories-format types share this worker, which publishes one set at a time, so none of them counts (SS-21).
+ */
 export async function accountBusy(db: Queryable): Promise<boolean> {
   const { rows } = await db.query<{ busy: boolean }>(
     `SELECT EXISTS (SELECT 1 FROM social_hub.publish_attempts
-                     WHERE vertical <> 'stories' AND status IN ('creating', 'processing', 'publishing')
+                     WHERE NOT (vertical = ANY($1::text[])) AND status IN ('creating', 'processing', 'publishing')
                        AND started_at > now() - interval '30 minutes') AS busy`,
+    [[...STORY_VERTICALS]],
   );
   return rows[0]?.busy === true;
 }

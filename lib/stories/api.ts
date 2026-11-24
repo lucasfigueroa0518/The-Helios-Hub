@@ -17,9 +17,12 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
+import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
-import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
+import { holdApprovedSet } from '@/lib/stories/unslot';
+import { SERIES, loadSettings, saveSeriesSetting, saveTypeSetting, seriesTypeSettings, type TypeSettings } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -31,9 +34,36 @@ const QUEUE: SetStatus[] = ['requested', 'building', 'ready', 'approved', 'sched
 const HISTORY: SetStatus[] = ['published', 'rejected', 'failed'];
 const TAGS = new Set(['story_choice', 'copy', 'photo', 'design', 'accuracy']);
 
+/** A series that can be requested now (Guess the Number, AT-14, and Free vs. Paid are retired). */
 export const isSeries = (s: unknown): s is Series => typeof s === 'string' && (SERIES as string[]).includes(s);
+/** Any series with sets on record, retired ones included: what the queue and history lists filter by. */
+export const isKnownSeries = (s: unknown): s is Series => isSeries(s) || s === 'guess_the_number' || s === 'free_vs_paid';
 
-export async function listView(db: Queryable, view: 'queue' | 'history', series?: Series) {
+/**
+ * The series a request names (SS-25): its Stories-format type's one series (`vertical`), or the series itself; when
+ * both are given they must agree. Throws a 400 for an unknown or retired one.
+ */
+export function requestedSeries(body: { vertical?: unknown; series?: unknown }): Series {
+  if (body.vertical !== undefined && body.vertical !== null) {
+    if (!isStoryVertical(body.vertical)) throw new ApiError(400, 'Unknown content type.');
+    const series = SERIES_OF_VERTICAL[body.vertical] as Series;
+    if (body.series !== undefined && body.series !== null && body.series !== series) throw new ApiError(400, 'That series is not this content type’s.');
+    return series;
+  }
+  if (!isSeries(body.series)) throw new ApiError(400, 'Unknown series.');
+  return body.series;
+}
+
+/** The series a list asks for (SS-25): a type's, with Morning Download's retired series' history; or one series; or all. */
+export function listedSeries(q: { vertical?: string | null; series?: string | null }): Series | Series[] | undefined {
+  if (q.vertical && isStoryVertical(q.vertical)) {
+    const vertical: StoryVertical = q.vertical;
+    return ([...SERIES, 'guess_the_number', 'free_vs_paid'] as Series[]).filter((s) => verticalOfSeries(s) === vertical);
+  }
+  return isKnownSeries(q.series) ? q.series : undefined;
+}
+
+export async function listView(db: Queryable, view: 'queue' | 'history', series?: Series | Series[]) {
   const sets = await listSets(db, { statuses: view === 'queue' ? QUEUE : HISTORY, series, limit: view === 'queue' ? 30 : 60 });
   const ids = sets.map((s) => s.id);
   const frames = ids.length
@@ -87,14 +117,15 @@ export const NO_OPEN_SLOT = 'No open Stories slot today.';
 /**
  * The slot a person's Generate fills (R15, one Stories behaviour everywhere):
  * null while legacy (a set with no slot, as before); in template mode the
- * series' first open Stories slot today (openStorySlots, the slots the 4 AM
- * worker would still request), or 'none' when every slot has its set. The
+ * series' first open Stories slot today (openStorySlots, the slots the 3 AM
+ * worker would still request, but a slot whose window has passed still counts:
+ * a click runs whenever it is clicked), or 'none' when every slot has its set. The
  * type page's Generate and Run now both ask here. SELECT only.
  */
 export async function openSlotMinute(db: Queryable, series: Series, now = new Date()): Promise<number | null | 'none'> {
   const slots = await storiesSlotsOn((text, params) => db.query(text, params), nyDate(now)).catch(() => null);
   if (!slots) return null;
-  const next = (await openStorySlots(db, slots, now)).get(series)?.open[0];
+  const next = (await openStorySlots(db, slots, now, { includePast: true })).get(series)?.open[0];
   return next ? next.startMinute : 'none';
 }
 
@@ -118,30 +149,40 @@ const guard = async <T>(fn: () => Promise<T>): Promise<T> => {
 const NY_TIME = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
 
 /**
- * Approve. While publishing is live and the set is today's with its window
- * still open, it gets its minute now (B1), the same draw the worker makes
- * (worker.ts step 3), so the Content page shows its time at once. The
- * returned set carries `approvalNote`: when it posts, or why it won't (the
- * window has passed: only Publish now posts it; publishing is off: it waits).
+ * Approve. While the type holds slots (Approval or Live, contract §4.3) and the
+ * set is today's with its window still open, it gets its minute now (B1), the
+ * same draw the worker makes (worker.ts step 3), so the Content page shows its
+ * time at once. Only Live posts it. The returned set carries `approvalNote`:
+ * when it posts, or why it won't (the window has passed: only Publish now posts
+ * it; Paused: it stays in the Made tab; Approval: it holds its slot but posts
+ * only once Live).
  * The spine slot's source follows the set's trigger (spine.ts projectSet).
  */
 export async function approve(db: Queryable, id: string, now = new Date()): Promise<StorySet & { approvalNote: string }> {
   const set = await guard(() => approveSet(db, id));
   let out: StorySet = set;
   let approvalNote = 'Approved.';
+  let state: TypeState | null = null;
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
+    // The type's state (D16): the series' auto switch with its type's publishing_live (SS-22). Approval and Live book.
+    state = stateOf(settings.series[set.series].auto, seriesTypeSettings(settings, set.series).publishingLive).state;
     // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
-    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, settings.publishingLive);
-    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
+    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, state);
+    const minute = holdsSlots(state) && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
     if (minute) {
       out = await scheduleSet(db, id, minute);
-      approvalNote = `Approved. It posts at ${NY_TIME.format(minute)}.`;
+      approvalNote = postsToInstagram(state)
+        ? `Approved. It posts at ${NY_TIME.format(minute)}.`
+        : `Approved. It holds its ${NY_TIME.format(minute)} slot, but nothing posts until this type is Live (its Settings tab). If the slot passes first, it goes back to the Made tab.`;
     }
   } catch {
     // The note and the minute are conveniences: the approval already happened, and the worker books an approved set within 15 seconds.
   }
+  // D18: approved while Paused, the worker's step 3 never books it later; only a person places it. Not a convenience,
+  // so a failure here is not swallowed.
+  if (state && !holdsSlots(state)) await holdApprovedSet(db, set.id, now);
   return { ...out, approvalNote };
 }
 
@@ -160,30 +201,58 @@ export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?:
 export async function regenerate(db: StoriesDb, id: string, by: string) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
+  if (!isSeries(got.set.series)) throw new ApiError(409, 'This series is retired: its sets stay in the history, and no new one is made.');
   await guard(() => rejectSet(db, id, { note: 'regenerated', by }));
   return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by, slotMinute: got.set.slot_minute ?? null });
 }
 
-/** Publish now: approve if needed, and post at the next minute (the worker is the clock). */
+/**
+ * Publish now: approve if needed, and post at the next minute (the worker is the clock). Refused unless the set's type
+ * is Live (D16): only Live posts, and a minute booked otherwise would only go back to the Made tab (D17).
+ */
 export async function publishNow(db: Queryable, id: string, now = new Date()) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
+  if (isSeries(got.set.series)) {
+    const settings = await loadSettings(db);
+    const series = got.set.series;
+    if (!postsToInstagram(stateOf(settings.series[series].auto, seriesTypeSettings(settings, series).publishingLive).state)) {
+      throw new ApiError(409, 'This type isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.');
+    }
+  }
   if (got.set.status === 'ready') await approve(db, id);
   else if (!['approved', 'scheduled'].includes(got.set.status)) throw new ApiError(409, `A ${got.set.status} set can't be published.`);
   return guard(() => scheduleSet(db, id, now));
 }
 
-/** Settings (plan §8): enabled and the auto switch; turning auto on needs `confirm` (S-05). */
-export async function updateSeries(db: Queryable, body: { series?: unknown; enabled?: unknown; auto?: unknown; confirm?: unknown }, by: string) {
-  if (!isSeries(body.series)) throw new ApiError(400, 'Unknown series.');
+/**
+ * Settings (plan §8; SS-25): one Stories-format type, named by `vertical` (or its `series`). Its series' enabled and
+ * auto switches (turning auto on needs `confirm`, S-05), and the type's own approval, publishing-live and daily cap.
+ */
+export async function updateSeries(
+  db: Queryable,
+  body: { vertical?: unknown; series?: unknown; enabled?: unknown; auto?: unknown; confirm?: unknown; requireApproval?: unknown; publishingLive?: unknown; dailyCapUsd?: unknown },
+  by: string,
+) {
+  const series = requestedSeries(body);
   const patch: { enabled?: boolean; auto?: boolean } = {};
   if (typeof body.enabled === 'boolean') patch.enabled = body.enabled;
   if (typeof body.auto === 'boolean') {
     if (body.auto && body.confirm !== true) throw new ApiError(400, 'Turning auto on needs confirmation.');
     patch.auto = body.auto;
   }
-  if (!Object.keys(patch).length) throw new ApiError(400, 'Nothing to change.');
-  return saveSeriesSetting(db, body.series, patch, by);
+  const type: Partial<TypeSettings> = {};
+  // Every post needs a person's approval (D16): approval is never turned off.
+  if (body.requireApproval === false) throw new ApiError(400, 'Every post needs a person’s approval; it cannot be turned off.');
+  if (body.requireApproval === true) type.requireApproval = true;
+  if (typeof body.publishingLive === 'boolean') type.publishingLive = body.publishingLive;
+  if (body.dailyCapUsd !== undefined) {
+    if (!(typeof body.dailyCapUsd === 'number' && Number.isFinite(body.dailyCapUsd) && body.dailyCapUsd > 0)) throw new ApiError(400, 'A daily cap is a dollar amount above zero.');
+    type.dailyCapUsd = body.dailyCapUsd;
+  }
+  if (!Object.keys(patch).length && !Object.keys(type).length) throw new ApiError(400, 'Nothing to change.');
+  if (Object.keys(type).length) await saveTypeSetting(db, verticalOfSeries(series), type, by);
+  return Object.keys(patch).length ? saveSeriesSetting(db, series, patch, by) : loadSettings(db);
 }
 
 export async function monthOverview(db: Queryable, now = new Date()) {

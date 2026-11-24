@@ -16,6 +16,8 @@
 .sh-list > .sh-item:first-child { border-top: 0; }
 .sh-group-label + .sh-list > .sh-item:first-child { border-top: 0; }
 .sh-item:hover { background: var(--color-surface-2); }
+/* The whole card opens the post (PostCard). */
+.sh-card-open { cursor: pointer; }
 .sh-item:not(:has(.sh-item__time)) { grid-template-columns: 48px minmax(0, 1fr) auto; }
 .sh-item__time { color: var(--color-text-muted); font-variant-numeric: tabular-nums; font-size: var(--sh-fs-small); white-space: nowrap; }
 .sh-item__thumb { display: block; line-height: 0; border-radius: 6px; }
@@ -238,3 +240,6 @@
 .sh-actions--card .sh-btn--primary { grid-column: 1 / -1; }
 /* Make it sits alone on its card: full width like Approve. */
 .sh-actions--card .sh-actions__row > .sh-btn:only-child { grid-column: 1 / -1; }
+
+/* Content look-ahead tabs: Today, Tomorrow, the day after (2026-11-15). */
+.sh-day-tabs { display: flex; margin: -4px 0 20px; }

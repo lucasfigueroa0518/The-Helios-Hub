@@ -1,0 +1,93 @@
+{
+ "frame": 7,
+ "id": "07-nadella-s-evening-email",
+ "duration": 5.229,
+ "voice_end": 5.099,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "That",
+   "start": 0.02,
+   "end": 0.144
+  },
+  {
+   "text": "evening,",
+   "start": 0.251,
+   "end": 0.429
+  },
+  {
+   "text": "Nadella",
+   "start": 0.692,
+   "end": 1.072
+  },
+  {
+   "text": "emailed",
+   "start": 1.144,
+   "end": 1.358
+  },
+  {
+   "text": "the",
+   "start": 1.429,
+   "end": 1.572
+  },
+  {
+   "text": "whole",
+   "start": 1.644,
+   "end": 1.715
+  },
+  {
+   "text": "company,",
+   "start": 1.858,
+   "end": 2.144
+  },
+  {
+   "text": "calling",
+   "start": 2.384,
+   "end": 2.492
+  },
+  {
+   "text": "the",
+   "start": 2.563,
+   "end": 2.599
+  },
+  {
+   "text": "border",
+   "start": 2.634,
+   "end": 2.849
+  },
+  {
+   "text": "policy",
+   "start": 2.92,
+   "end": 3.349
+  },
+  {
+   "text": "\"simply",
+   "start": 3.349,
+   "end": 3.849
+  },
+  {
+   "text": "cruel",
+   "start": 3.92,
+   "end": 4.349
+  },
+  {
+   "text": "and",
+   "start": 4.42,
+   "end": 4.492
+  },
+  {
+   "text": "abusive.\"",
+   "start": 4.599,
+   "end": 5.049
+  }
+ ],
+ "lines": [
+  {
+   "id": "L7",
+   "start": 0.02,
+   "end": 5.049,
+   "label": null,
+   "label_kind": null
+  }
+ ]
+}

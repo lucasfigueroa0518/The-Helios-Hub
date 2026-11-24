@@ -1,4 +1,4 @@
-// The Explainers world kit (from Explainer 2.0), seams (hx-3): how a shot leaves and how the next one arrives
+// The Explainers world kit (from Explainer 2.0), seams (hx-4): how a shot leaves and how the next one arrives
 // (VISUAL V-11). Shots join only by camera seams, cut at peak velocity with matched direction,
 // never by crossfades, dissolves, wipes, slides or fades: nothing here ever touches opacity.
 //
@@ -17,11 +17,11 @@
 //                 only), accelerating into the cut; zoomThroughIn lets the incoming shot finish the
 //                 push, decelerating to rest.
 //
-// Seams are camera moves, so they stay smooth (V-15): no twos. Every function is a pure function
+// Seams are camera moves, so they stay smooth (hx-4 moves everything smoothly). Every function is a pure function
 // of shot time, deterministic, and draws no color (V-T1). A seam returns { u, attrs, defs } (a
 // whip also gives its sweep `dx` and `blur`): wrap the world with seamed(seam, svg). Wrap only the
-// camera group and move the grid by `dx` instead when the grid and vignette are drawn in frame
-// space, so the sweep never shows their edge. The blur filter id goes through id(), so shots can
+// camera group; the ground is drawn in frame space underneath (hx-4 has no grid), so the sweep
+// never shows an edge. The blur filter id goes through id(), so shots can
 // share one document (E2-03).
 
 import { FRAME, POLARITY, clamp } from './core.js';

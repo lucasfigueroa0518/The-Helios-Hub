@@ -1,0 +1,34 @@
+[
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "open campus plaza, light wind",
+  "dur": 3
+ },
+ {
+  "t": 2.466,
+  "kind": "foley",
+  "what": "paper landing on paper",
+  "kit": true
+ },
+ {
+  "t": 2.766,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.17,
+  "kind": "click"
+ },
+ {
+  "t": 4.17,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 4.47,
+  "kind": "tick",
+  "kit": true
+ }
+]

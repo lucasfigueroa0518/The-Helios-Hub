@@ -3,6 +3,8 @@ import type { Message } from '@anthropic-ai/sdk/resources/messages';
 
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { dbQuery } from '@/lib/db';
+import { A4_DEPOSIT, B6_DEPOSIT } from '@/lib/intake/deposit';
+import { adapterById } from '@/lib/reels/adapters';
 import {
   MONTHLY_WATCH_USD,
   VISUAL_IMAGE_MODEL,
@@ -176,7 +178,7 @@ type Target = {
   members: VisualMember[];
 };
 
-async function loadTarget(slateId: string, postIdeaId: string): Promise<Target | null> {
+export async function loadTarget(slateId: string, postIdeaId: string): Promise<Target | null> {
   const { rows } = await dbQuery<{
     on_screen_copy: string | null;
     caption: string | null;
@@ -187,13 +189,13 @@ async function loadTarget(slateId: string, postIdeaId: string): Promise<Target |
     source_name: string;
     headline: string;
     body: string;
-    source_bucket: Bucket;
+    source_bucket: Bucket | null;
+    adapter_id: string;
   }>(
     `SELECT c.on_screen_copy, c.caption, c.full_story_cue, c.bucket, c.status AS copy_status,
-            m.role, src.source_name, src.headline, src.body, src.bucket AS source_bucket
+            m.role, m.source_name, m.headline, m.body, m.bucket AS source_bucket, m.adapter_id
        FROM reels.idea_copy c
-       JOIN reels.post_idea_members m ON m.post_idea_id = c.post_idea_id
-       JOIN reels.sources src ON src.id = m.source_id
+       JOIN reels.idea_sources_v m ON m.post_idea_id = c.post_idea_id
       WHERE c.slate_id = $1 AND c.post_idea_id = $2
       ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at`,
     [slateId, postIdeaId],
@@ -209,9 +211,20 @@ async function loadTarget(slateId: string, postIdeaId: string): Promise<Target |
       sourceName: row.source_name,
       headline: row.headline,
       body: row.body,
-      sourceBucket: row.source_bucket,
+      sourceBucket: memberBucket(row.source_bucket, row.adapter_id),
     })),
   };
+}
+
+/**
+ * A member's source bucket (reels.idea_sources_v). Legacy rows carry it; intake rows (null) take their adapter's
+ * from the registry, the A4/B6 deposits their adapter's, and anything else (a seed) 'A', as a legacy seed has.
+ */
+export function memberBucket(bucket: Bucket | null, adapterId: string): Bucket {
+  if (bucket) return bucket;
+  if (adapterId === B6_DEPOSIT.sourceId) return adapterById('claude-web-search')?.bucket ?? 'B';
+  if (adapterId === A4_DEPOSIT.sourceId) return adapterById('awesome-lists')?.bucket ?? 'A';
+  return adapterById(adapterId)?.bucket ?? 'A';
 }
 
 async function recentScenes(exceptId: string): Promise<string[]> {

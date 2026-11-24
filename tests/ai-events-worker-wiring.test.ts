@@ -11,21 +11,22 @@ test('the social worker runs AI Events in its own loop: the noon clock, claims, 
   // The Sunday 12:00 clock is a pure decision; the worker only asks it.
   assert.match(text, /let aiEventsAt = firstAiEventsCheckAt\(new Date\(\)\)/);
   assert.match(text, /const noon = noonQueue\(new Date\(\), ae, aePlan \? isAiEventsDay\(aePlan, aeToday\) : null\)/);
-  assert.match(text, /aiEventsStore\.requestRun\(lfdQuery, 'scheduled', ae\.runCapUsd\)/);
+  // Queued in every state (the ranking is the refill, D16): the run cap while it makes posts, else the refill cap.
+  assert.match(text, /const aeCap = noon\.make && ae\?\.runCapUsd != null \? ae\.runCapUsd : aeGate\.refillCapUsd;/);
+  assert.match(text, /aiEventsStore\.requestRun\(lfdQuery, 'scheduled', aeCap\)/);
   assert.match(text, /aiEventsAt = nextAiEventsRunAt\(new Date\(\)\)/);
-  // Claimed after Last Few Days' claim, inside the timeout wrapper.
+  // Claimed after Last Few Days' claim, inside the hang guard.
   const lfdClaim = text.indexOf('lfdStore.claimRun(lfdQuery)');
   const aeClaim = text.indexOf('aiEventsStore.claimRun(lfdQuery)');
   assert.ok(lfdClaim > 0 && aeClaim > lfdClaim, 'the AI Events claim comes after the Last Few Days claim');
-  assert.match(text, /withAiEventsTimeout\(\s*carryOutAiEventsRun\(/);
-  assert.match(text, /AI_EVENTS_RUN_TIMEOUT_MS/);
-  assert.match(text, /ai_events_run_timeout/);
-  assert.match(text, /aiEventsStore\.failRun\(lfdQuery, aeClaimed\.id, 'timed out after 30 minutes'\)/);
+  assert.match(text, /withHangGuard\(\s*carryOutAiEventsRun\(/);
+  assert.match(text, /ai_events_run_hung/);
+  assert.match(text, /aiEventsStore\.failRun\(lfdQuery, aeClaimed\.id, reason\)/);
   assert.match(text, /engine: \(_run, capUsd\) => liveAiEventsDeps\(lfdQuery, \{ capUsd \}\)/);
   assert.match(text, /snapshot: aiEventsSnapshot/);
-  // Release and publish only while the single publisher doesn't drive the type.
-  assert.match(text, /aeNow\?\.publishingLive && !\(await publisherOwnsPublishing\(query, AI_EVENTS_SPINE_VERTICAL\)\)/);
-  assert.match(text, /releaseDueAiEvents\(query, \{ requireApproval: aeNow\.requireApproval \}\)/);
+  // Release and publish only while Live (D16) and the single publisher doesn't drive the type; approval is never read as off.
+  assert.match(text, /\(await readTypeGate\(lfdQuery, 'ai_events', log\)\)\.posts && !\(await publisherOwnsPublishing\(query, AI_EVENTS_SPINE_VERTICAL\)\)/);
+  assert.match(text, /releaseDueAiEvents\(query, \{ requireApproval: true \}\)/);
   assert.match(text, /claimAndPublishAiEvents\(/);
   assert.match(text, /pollCarouselInsights\(query, client, new Date\(\), 200, 'ai_events'\)/);
 });
@@ -39,7 +40,7 @@ test('the AI Events engine never builds a Claude client', () => {
 
 test('the single publisher drives AI Events with the calendar snapshot', () => {
   const text = read('scripts/publisher_worker.ts');
-  assert.match(text, /aiEventsDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), token, snapshot: liveAiEventsSnapshot\(/);
+  assert.match(text, /aiEventsDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), photoHashes: \{\}, token, snapshot: liveAiEventsSnapshot\(/);
 });
 
 test('a deploy waits for a running AI Events run', () => {

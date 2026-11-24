@@ -1,0 +1,77 @@
+/*
+ * "Are you smarter than AI?" (CONTRACT-2 §2): the approved mock's values (planning/AI Trivia/gameshow-options/
+ * marquee-create.html), authored at 1080x1920. All motion is the GSAP timeline's (timeline.ts); the mock's
+ * CSS animations are tweens there. No photo, no dim. Type (AT-71): the Helios pair, Pragmatica Extended for the sign,
+ * Roboto for everything else, the same as Real or AI? and the rest of the hub.
+ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #C93A06; }
+#root { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+.tv-layer { position: absolute; inset: 0; }
+
+.stage { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 50px; padding: 220px 84px 280px; color: #fff; font-family: Roboto; background: linear-gradient(160deg, #FF7A2E, #C93A06); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+/* The marquee sign. */
+.title { position: relative; width: 100%; margin-top: var(--room, 0px); font: 700 52px/1.12 'Pragmatica Extended'; text-transform: uppercase; text-wrap: balance; text-align: center; background: #170b04; border: 8px solid #FF5E1A; border-radius: 40px; padding: 48px 56px 42px; box-shadow: 0 0 60px rgba(255, 94, 26, .35), 0 20px 50px rgba(0, 0, 0, .3); }
+.bulb { position: absolute; width: 30px; height: 30px; border-radius: 50%; background: #fff3d6; box-shadow: 0 0 20px 6px rgba(255, 190, 120, .75); }
+/* Step 0 of the chase: the first, third, ... bulb dim (the mock's odd children start half a cycle in). */
+.bulb.p0 { opacity: .22; }
+.bulb.p1 { opacity: 1; }
+
+.question { text-align: center; text-wrap: balance; font: 700 var(--qpx, 66px)/1.2 Roboto; }
+
+.choices { width: 100%; display: flex; flex-direction: column; gap: 20px; }
+.ch { display: flex; align-items: center; gap: 26px; background: #fff; color: #111; box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0); border-radius: 999px; padding: 22px 34px; font: 500 54px Roboto; }
+.ch b { width: 74px; height: 74px; border-radius: 50%; background: #000; box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0); color: #fff; display: grid; place-items: center; font: 700 40px Roboto; flex: none; }
+.ch b > * { grid-area: 1 / 1; }
+.ch b svg { width: 52px; height: 52px; }
+#tv-check { opacity: 0; }
+
+/* The footer slot: fixed, so nothing above it moves between the clips. */
+.foot { width: 100%; height: 210px; position: relative; margin-top: 6px; flex: none; }
+.foot > * { position: absolute; left: 0; right: 0; top: 0; }
+.tap { display: flex; align-items: center; justify-content: center; gap: 20px; font: 700 76px Roboto; }
+.tap svg { width: 170px; height: 90px; flex: none; }
+.timer { --p: 100%; width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(#170b04 var(--p), rgba(23, 11, 4, .2) 0); display: grid; place-items: center; flex: none; position: relative; margin-right: 6px; }
+.timer::before { content: ""; position: absolute; inset: 14px; border-radius: 50%; background: #fff; }
+.timer b { position: relative; grid-area: 1 / 1; font: 700 68px Roboto; color: #170b04; opacity: 0; }
+.timer b.on { opacity: 1; }
+.line { text-align: center; text-wrap: balance; font: 500 var(--lpx, 54px)/1.3 Roboto; }
+
+/* The reveal's confetti, flung from the correct pill's centre. */
+.conf { position: absolute; width: 26px; height: 14px; border-radius: 3px; z-index: 3; opacity: 0; }
+
+/* The critter (critter.ts): drawn over the stage, standing in the room above the sign. */
+.critter { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+
+/* The opponent (AT-74): a speech bubble right next to the critter, which stands on the sign's right (critter.ts,
+   feet at 80 % of the sign's width). The bubble's right edge stops short of the critter; its tail points at it. */
+.opp { position: absolute; left: -60px; right: calc(20% + 165px); bottom: calc(100% + 40px); text-transform: none; text-align: left; font-family: Roboto; text-wrap: nowrap; }
+.opp > * { position: absolute; right: 0; bottom: 0; }
+.bubble { border-radius: 36px; box-shadow: 0 12px 30px rgba(0, 0, 0, .22); }
+.bubble::after { content: ""; position: absolute; right: -22px; bottom: 26px; border: 16px solid transparent; border-left: 26px solid #fff; border-right: 0; }
+.opp-pre { display: flex; flex-direction: column; gap: 2px; background: #fff; color: #170b04; padding: 20px 30px; }
+.opp-n { font: 700 44px/1.1 Roboto; }
+.opp-t { font: 500 30px/1.2 Roboto; opacity: .75; }
+.opp-post { display: flex; align-items: center; gap: 18px; padding: 16px 30px 16px 16px; color: #fff; opacity: 0; transform-origin: 100% 100%; }
+.opp-post.ok { background: #138510; }
+.opp-post.ok::after { border-left-color: #138510; }
+.opp-post.no { background: #C8102E; }
+.opp-post.no::after { border-left-color: #C8102E; }
+.opp-post b { width: 60px; height: 60px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: none; }
+.opp-post.ok b { color: #138510; }
+.opp-post.no b { color: #C8102E; }
+.opp-post b svg { width: 40px; height: 40px; }
+.opp-post .opp-n { font: 700 38px/1.1 Roboto; }
+
+/* The question's slot (both clips) and, on clip 2, the answer line over it: the line may use the gaps either side. */
+.qslot { position: relative; width: 100%; }
+.lslot { position: absolute; left: 0; right: 0; top: calc(-1 * var(--lpad, 32px)); bottom: calc(-1 * var(--lpad, 32px)); display: flex; align-items: center; justify-content: center; }
+.lslot .line { width: 100%; }
+
+/* The website call to action (clip 2): a level white card in the tap row's place. */
+.foot > .cta { bottom: 0; display: flex; align-items: center; justify-content: center; }
+.cta-card { display: flex; flex-direction: column; align-items: center; gap: 8px; background: #fff; color: #170b04; border-radius: 18px; padding: 26px 46px 24px; box-shadow: 0 14px 34px rgba(0, 0, 0, .28); }
+.cta-m { font: 700 58px/1.1 Roboto; white-space: nowrap; }
+.cta-s { font: 700 42px/1.1 Roboto; color: #138510; display: flex; align-items: center; gap: 10px; }
+.cta-s svg { width: 46px; height: 46px; }

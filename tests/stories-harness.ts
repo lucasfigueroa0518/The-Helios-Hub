@@ -109,3 +109,60 @@ export async function stubRenderer(): Promise<Renderer & { renders: number }> {
   };
   return r;
 }
+
+/** "Are you smarter than AI?" (ai_trivia): its two frames as a stubbed builder returns them (CONTRACT-2 §3: copy only, no photo, no music). */
+export function triviaFrames(cellId = 't01a01') {
+  const copy = {
+    question: 'Which lab released the first public chatbot to reach a million users in five days?',
+    options: [{ letter: 'A' as const, text: 'OpenAI' }, { letter: 'B' as const, text: 'Google' }, { letter: 'C' as const, text: 'Meta' }],
+    correct: 'A' as const,
+    answerLine: 'ChatGPT got there in five days, faster than any app before it.',
+  };
+  return {
+    frames: [
+      { seq: 1, role: 'question' as const, backdrop: 'black' as const, copy: { role: 'question' as const, ...copy } },
+      { seq: 2, role: 'answer' as const, backdrop: 'black' as const, copy: { role: 'answer' as const, ...copy } },
+    ],
+    payload: { trivia: { q: { cellId, ...copy } }, cellId },
+    historyKeys: [`trivia:${cellId}`],
+  };
+}
+
+/** A clip renderer stub (renderTriviaClips' shape: frames, then optional deps): a tiny MP4 stand-in and a real tiny poster JPEG per frame. */
+export async function stubTriviaClips(): Promise<((frames: Array<{ data: { role: string } }>, deps?: unknown) => Promise<{ clips: Array<{ role: string; mp4: Buffer; poster: Buffer }> }>) & { calls: Array<{ roles: string[] }> }> {
+  const sharp = (await import('sharp')).default;
+  const poster = await sharp({ create: { width: 108, height: 192, channels: 3, background: '#111' } }).jpeg().toBuffer();
+  const calls: Array<{ roles: string[] }> = [];
+  const fn = async (frames: Array<{ data: { role: string } }>, _deps?: unknown) => {
+    calls.push({ roles: frames.map((f) => f.data.role) });
+    return { clips: frames.map((f) => ({ role: f.data.role, mp4: Buffer.from(`mp4:${f.data.role}`), poster })) };
+  };
+  return Object.assign(fn, { calls });
+}
+
+/**
+ * Real or AI?'s four still frames as a stubbed builder returns them (planning/Real or AI/CONTRACT.md §3, §4 A):
+ * question 1, reveal 1, question 2, reveal 2, with `payload.roa` and the two pool keys as history keys.
+ */
+export function roaFrames(keys: [string, string] = ['a1b2c3d4e5f60718', '0f1e2d3c4b5a6978']) {
+  const photo = (k: string) => ({ src: `https://img.test/roa/${k}.jpg`, credit: 'Photo: test', kind: 'scene' as const });
+  const [k1, k2] = keys;
+  const q = (round: 1 | 2, k: string) => ({ role: 'roa_question' as const, round, photo: photo(k) });
+  const reveal1 = { role: 'roa_reveal' as const, round: 1 as const, photo: photo(k1), truth: 'real' as const, payoff: 'effort' as const, line: 'A ranger waited three winters for this cloud.', proof: 'Mount Rainier, 2019 · Jane Doe, CC BY-SA' };
+  const reveal2 = { role: 'roa_reveal' as const, round: 2 as const, photo: photo(k2), truth: 'ai' as const, payoff: 'prompt' as const, prompt: 'Phone photo of a dinner plate with a fork, warm kitchen light', proof: 'gpt-image-2' };
+  const frames = [
+    { seq: 1, role: 'roa_question' as const, backdrop: 'black' as const, copy: q(1, k1), photo: photo(k1) },
+    { seq: 2, role: 'roa_reveal' as const, backdrop: 'black' as const, copy: reveal1, photo: photo(k1) },
+    { seq: 3, role: 'roa_question' as const, backdrop: 'black' as const, copy: q(2, k2), photo: photo(k2) },
+    { seq: 4, role: 'roa_reveal' as const, backdrop: 'black' as const, copy: reveal2, photo: photo(k2) },
+  ];
+  const payload = {
+    roa: {
+      rounds: [
+        { key: k1, truth: 'real' as const, difficulty: 0.7, provenance: { kind: 'commons' as const, url: 'https://commons.test/1', licence: 'CC BY-SA 4.0', credit: 'Jane Doe', place: 'Mount Rainier', year: '2019' } },
+        { key: k2, truth: 'ai' as const, difficulty: 0.6, provenance: { kind: 'generated' as const, model: 'gpt-image-2', prompt: 'a fork on a plate', createdAt: '2026-10-12T07:00:00Z' } },
+      ],
+    },
+  };
+  return { frames, payload, historyKeys: [`roa:${k1}`, `roa:${k2}`] };
+}

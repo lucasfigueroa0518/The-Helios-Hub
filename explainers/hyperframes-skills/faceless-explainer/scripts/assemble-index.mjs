@@ -471,6 +471,7 @@ if (existsSync(join(hyperframesDir, "compositions/captions.html"))) {
     `        id="el-captions"`,
     `        class="scene"`,
     `        data-composition-id="captions"`,
+    `        data-track-kind="captions"`,
     `        data-composition-src="compositions/captions.html"`,
     `        data-start="0"`,
     `        data-duration="${TOTAL}"`,

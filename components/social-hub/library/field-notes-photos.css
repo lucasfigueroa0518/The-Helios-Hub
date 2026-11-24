@@ -1,0 +1,105 @@
+/* Photo Bank → Field Notes section (UI-REWORK-CONTRACT C3). UploadBox and PoolGrid keep their `rh-`/`fn-` markup;
+   the hub page does not load app/reels/reels.css, so this scope maps the `--rh-*` tokens field-notes.css reads onto the
+   hub's tokens and styles the few `rh-` primitives those components use, in the Photo Bank's `sh-` look.
+   Loaded with components/field-notes/field-notes.css by the live and preview photo pages. */
+
+.sh-fnphotos {
+  --rh-bg: var(--color-surface-2);
+  --rh-surface: var(--color-surface);
+  --rh-ink: var(--color-text);
+  --rh-body: var(--color-text-muted);
+  --rh-muted: var(--color-text-muted);
+  --rh-faint: var(--color-text-subtle);
+  --rh-line: var(--sh-hairline);
+  --rh-line-strong: var(--color-border-strong);
+  --rh-accent: var(--color-primary);
+  --rh-accent-ink: var(--sh-needs-ink);
+  --rh-accent-soft: var(--color-primary-soft);
+  --rh-ok: var(--sh-positive-ink);
+  --rh-warn: var(--color-warning);
+  --rh-bad: var(--sh-failed-ink);
+  --rh-media: var(--color-surface-2);
+  --rh-radius: var(--radius-md);
+  --rh-ease: var(--sh-ease);
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.sh-fnphotos__meta { margin: 0; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-variant-numeric: tabular-nums; }
+.sh-fnphotos__upload { padding: 16px; }
+
+/* ---------- the rh- primitives UploadBox and PoolGrid use, as the hub's buttons and chips */
+
+.sh-fnphotos .rh-muted { color: var(--color-text-muted); font-size: var(--sh-fs-small); margin: 6px 0 0; }
+.sh-fnphotos .rh-empty { margin: 0; padding: 28px 24px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-text-muted); text-align: center; }
+.sh-fnphotos .rh-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--color-surface-2); color: var(--color-text-muted); font: inherit; font-size: var(--sh-fs-label); white-space: nowrap; }
+.sh-fnphotos .rh-spin { animation: sh-spin 900ms linear infinite; }
+
+.sh-fnphotos .rh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--sh-fs-body);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 150ms var(--sh-ease), border-color 150ms var(--sh-ease);
+}
+.sh-fnphotos .rh-btn:hover:not(:disabled) { background: var(--color-surface-hover); }
+.sh-fnphotos .rh-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.sh-fnphotos .rh-btn--primary { padding: 0 14px; border-color: var(--color-primary); background: var(--color-primary); color: var(--color-text-inverse); font-weight: var(--font-weight-semibold); }
+.sh-fnphotos .rh-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.sh-fnphotos .rh-btn--xs { min-height: 28px; padding: 0 10px; font-size: var(--sh-fs-small); }
+.sh-fnphotos button:focus-visible, .sh-fnphotos select:focus-visible, .sh-fnphotos input:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: 2px; }
+
+/* ---------- field-notes.css surfaces, re-cut to the Photo Bank's panels */
+
+.sh-fnphotos .fn-drop { border-radius: var(--radius-md); border-color: var(--color-border-strong); }
+.sh-fnphotos .fn-drop__text strong { font-weight: var(--font-weight-semibold); }
+.sh-fnphotos .fn-result { border-radius: var(--radius-sm); font-size: var(--sh-fs-small); }
+.sh-fnphotos .fn-pool { padding: 0; border: 0; background: transparent; gap: 12px; }
+.sh-fnphotos .fn-pool__variety { color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+.sh-fnphotos .fn-pool__warn { padding: 10px 14px; border: 0; border-radius: var(--radius-sm); background: var(--color-warning-soft); color: var(--color-warning); text-align: left; }
+.sh-fnphotos .fn-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.sh-fnphotos .fn-photo { gap: 8px; padding: 0 0 12px; background: var(--color-surface); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); overflow: hidden; }
+.sh-fnphotos .fn-photo > :not(.fn-photo__img) { margin-left: 12px; margin-right: 12px; }
+.sh-fnphotos .fn-photo > .rh-btn { justify-self: start; }
+.sh-fnphotos .fn-photo__img { border-radius: 0; background: var(--color-surface-2); }
+.sh-fnphotos .fn-chip--live { background: var(--color-primary-soft); color: var(--sh-needs-ink); }
+.sh-fnphotos .fn-kind { border: 1px solid var(--sh-hairline); background: var(--color-surface); }
+.sh-fnphotos .fn-kind.is-on { background: var(--color-primary-soft); color: var(--sh-needs-ink); border-color: var(--color-primary); }
+.sh-fnphotos .fn-kind-select { padding: 2px 6px; }
+.sh-fnphotos .fn-reject .helios-field-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+@media (max-width: 720px) {
+  .sh-fnphotos .fn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sh-fnphotos .rh-spin { animation: none; }
+  .sh-fnphotos .rh-btn { transition: none; }
+}
+
+/* The section's heading, for screen readers only (the page head already says Photo bank and the pill says Field Notes). */
+.sh-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -3,7 +3,7 @@
  * its own rows to `HubPost`; native metadata stays per vertical (SH-04).
  */
 
-export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days' | 'ai_events';
+export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama' | 'ai_trivia' | 'real_or_ai';
 
 export type Format = 'reel' | 'feed' | 'story';
 
@@ -132,9 +132,17 @@ export type HubPost = {
   costItemKey: string | null;
   /** Review notes the pipeline left (carousel render checks, story flags). */
   reviewNotes?: string[];
+  /** Field Notes: every tip on the post, in slide order, for the post panel. */
+  tipNotes?: TipNote[];
   /** Native ids the action routes need (schedule id, job id, set id …). */
   refs: Record<string, string>;
 };
+
+/**
+ * One tip on a Field Notes post, for the post panel: the tool's name and how to try it (from the caption's
+ * how-to-try line), and the tip's tags. `kind`, `want`, `knowHow` are display labels, null when not tagged.
+ */
+export type TipNote = { subject: string; kind: string | null; want: string | null; knowHow: string | null; name: string | null; tryIt: string | null };
 
 /** One line of where an idea's score comes from. */
 export type ScorePart = {
@@ -151,6 +159,8 @@ export type ScoreBreakdown = { formula: string; parts: ScorePart[]; note?: strin
 export type IdeaState ='idea_only' | 'content_ready' | 'on_deck' | 'published' | 'retired' | 'skipped';
 
 export type HubIdea = {
+  /** Teaching order on a curriculum (Explainers' syllabus rank), when the vertical has one: it outranks the score. */
+  curriculumRank?: number | null;
   id: string;
   vertical: Vertical;
   title: string;

@@ -60,8 +60,8 @@ export function readinessCard(r: Readiness): ReadinessCard {
     rate: pct(rate),
     lines: [['Approved as-is', String(r.approved)], ['Rejected', String(r.rejected)], ['Previous 30 days', trend]],
     note: meets
-      ? `At or above the ${pct(AUTO_PUBLISH_BAR)} auto-publish bar`
-      : gap > 0 ? `${gap} pts below the ${pct(AUTO_PUBLISH_BAR)} auto-publish bar` : `Just under the ${pct(AUTO_PUBLISH_BAR)} auto-publish bar`,
+      ? `At or above the ${pct(AUTO_PUBLISH_BAR)} publish-readiness bar`
+      : gap > 0 ? `${gap} pts below the ${pct(AUTO_PUBLISH_BAR)} publish-readiness bar` : `Just under the ${pct(AUTO_PUBLISH_BAR)} publish-readiness bar`,
     meets,
   };
 }

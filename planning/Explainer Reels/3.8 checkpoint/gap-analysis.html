@@ -1,0 +1,964 @@
+<title>Explainer Reels Gap Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column, a summary up top, gap cards grouped by layer, then the ledger and the plan. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #17202a;
+  --muted: #586370;
+  --rule: #d6dbd8;
+  --accent: #1d5ea8;
+  --accent-soft: #e4edf8;
+  --crit: #b3261e;
+  --crit-soft: #fbe9e7;
+  --high: #a85f00;
+  --high-soft: #fbf0df;
+  --med: #3f5f80;
+  --med-soft: #e7eef5;
+  --call: #6b3fa0;
+  --call-soft: #f1eaf8;
+  --quote: #f6f7f5;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161b; --surface: #182029; --ink: #e6eaee; --muted: #9aa5b1; --rule: #2b3540;
+    --accent: #82b3f0; --accent-soft: #1b2b3f; --crit: #f08a80; --crit-soft: #3a1d1b;
+    --high: #f0b45a; --high-soft: #352816; --med: #9fbad6; --med-soft: #1c2a38;
+    --call: #c9a6f2; --call-soft: #2a2038; --quote: #141b22; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161b; --surface: #182029; --ink: #e6eaee; --muted: #9aa5b1; --rule: #2b3540;
+  --accent: #82b3f0; --accent-soft: #1b2b3f; --crit: #f08a80; --crit-soft: #3a1d1b;
+  --high: #f0b45a; --high-soft: #352816; --med: #9fbad6; --med-soft: #1c2a38;
+  --call: #c9a6f2; --call-soft: #2a2038; --quote: #141b22; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; padding-inline: 16px; padding-block: 0 80px; }
+.wrap { max-width: 860px; margin: 0 auto; }
+h1, h2, h3, h4 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.55rem; font-weight: 700; margin-top: 3.2rem; padding-top: 1.2rem; border-top: 2px solid var(--ink); }
+h3 { font-size: 1.12rem; font-weight: 700; }
+h4 { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 1.1rem 0 0.3rem; }
+p { margin: 0.6rem 0; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.82em; }
+code { background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; overflow-wrap: anywhere; }
+.eyebrow { font-family: var(--display); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+header.top { padding-block: 48px 8px; display: grid; gap: 14px; }
+.meta { color: var(--muted); font-size: 0.95rem; }
+.lede { font-size: 1.18rem; line-height: 1.55; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 1.6rem 0 0.4rem; }
+.stat { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; display: grid; gap: 4px; align-content: start; }
+.stat b { font-family: var(--display); font-size: 1.9rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 0.88rem; color: var(--muted); line-height: 1.4; }
+.stat.c b { color: var(--crit); }
+ul, ol { padding-left: 1.3rem; margin: 0.5rem 0; }
+li { margin: 0.3rem 0; }
+.principles { display: grid; gap: 10px; margin-top: 1rem; }
+.principle { display: grid; grid-template-columns: 2.2rem 1fr; gap: 10px; align-items: start; }
+.principle .n { font-family: var(--display); font-weight: 800; font-size: 1.1rem; color: var(--accent); }
+.principle p { margin: 0; }
+.principle small { color: var(--muted); font-size: 0.85rem; }
+.tablewrap { overflow-x: auto; margin: 1rem 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; line-height: 1.45; }
+th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--display); font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--quote); }
+tr:last-child td { border-bottom: 0; }
+td.id { font-family: var(--display); font-weight: 700; white-space: nowrap; }
+.chip { display: inline-block; font-family: var(--display); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+.chip.crit { color: var(--crit); background: var(--crit-soft); }
+.chip.high { color: var(--high); background: var(--high-soft); }
+.chip.med { color: var(--med); background: var(--med-soft); }
+.chip.call { color: var(--call); background: var(--call-soft); }
+.chip.layer { color: var(--muted); border: 1px solid var(--rule); }
+.gap { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 18px 20px; margin: 16px 0; scroll-margin-top: 16px; }
+.gap.crit { border-left: 4px solid var(--crit); }
+.gap.high { border-left: 4px solid var(--high); }
+.gap.med { border-left: 4px solid var(--med); }
+.gap .head { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: baseline; }
+.gap .head .gid { font-family: var(--display); font-weight: 800; color: var(--muted); }
+.gap .head h3 { flex: 1 1 320px; min-width: 0; }
+.gap .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.gap p, .gap li { font-size: 0.97rem; }
+blockquote { margin: 0.5rem 0; padding: 8px 12px; background: var(--quote); border-left: 3px solid var(--rule); font-style: italic; font-size: 0.93rem; }
+blockquote cite { display: block; font-style: normal; font-family: var(--mono); font-size: 0.74rem; color: var(--muted); margin-top: 3px; }
+.fix { background: var(--accent-soft); border-radius: 4px; padding: 10px 14px; margin-top: 0.8rem; }
+.fix h4 { margin-top: 0; color: var(--accent); }
+.beats { display: grid; grid-template-columns: repeat(8, minmax(92px, 1fr)); gap: 6px; min-width: 780px; padding: 12px; }
+.beatsrow { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; margin: 0.8rem 0; }
+.beatlabel { padding: 10px 12px 0; font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.beat { border: 1px solid var(--rule); border-radius: 4px; padding: 8px; font-size: 0.8rem; line-height: 1.35; display: grid; gap: 4px; align-content: start; background: var(--bg); }
+.beat b { font-family: var(--display); font-size: 0.72rem; color: var(--muted); }
+.beat.w-analogy { border-top: 4px solid var(--high); }
+.beat.w-real { border-top: 4px solid var(--accent); }
+.beat.w-card { border-top: 4px solid var(--muted); }
+.beat.w-new { border-top: 4px solid var(--crit); }
+.beat.changed { box-shadow: inset 0 0 0 2px var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.82rem; color: var(--muted); margin: 0.3rem 0 0; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 4px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+.phase { display: grid; grid-template-columns: 4.5rem 1fr; gap: 14px; padding: 16px 0; border-top: 1px solid var(--rule); }
+.phase:first-of-type { border-top: 0; }
+.phase .pn { font-family: var(--display); font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.phase h3 { margin-bottom: 0.3rem; }
+.phase div { min-width: 0; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--call); border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
+.decision h3 { font-size: 1rem; }
+.decision p { margin: 0.35rem 0 0; font-size: 0.95rem; }
+.protect li { font-size: 0.95rem; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--display); font-size: 0.88rem; font-weight: 600; margin-top: 4px; }
+.toc a { text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.note { color: var(--muted); font-size: 0.9rem; }
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .gap { padding: 14px; }
+  .phase { grid-template-columns: 1fr; gap: 4px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Explainer Reels · Audit · 22 October 2026</div>
+  <h1>Explainer Reels Gap Analysis</h1>
+  <p class="meta">Scope:
+    <ul>
+      <li>every prompt the system writes with: idea, analogy, gap, director, story design, frame rules, frame workers and the picture checker (about 30,000 words);</li>
+      <li>the storyboard lint and the render pipeline's code;</li>
+      <li>the scripts and storyboards of the 9 latest reels;</li>
+      <li>the 14 first-viewer tests on the 7 newest reels.</li>
+    </ul>
+    This is analysis only: nothing was changed, rendered or committed. Your own viewing of the reels is still the judgment that counts.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#bottom">Bottom line</a><a href="#target">What teaching needs</a><a href="#summary">All gaps</a><a href="#structure">Structure</a><a href="#writing">Writing</a><a href="#checks">Checks</a><a href="#build">Build</a><a href="#ledger">Contradictions</a><a href="#plan">Fix plan</a><a href="#decisions">Your calls</a><a href="#protect">Keep these</a>
+  </nav>
+</header>
+
+<section id="bottom">
+  <h2>The bottom line</h2>
+  <p class="lede">The system is built to make reels that follow the rules, not reels that teach. Each part is written by a separate writer and scored on its own terms: the topic, the analogy, the gap, the script and every frame. Nobody owns the explanation as a whole.</p>
+  <p class="lede">The one check that measures understanding has failed on every recent reel, and it cannot stop a reel from being built.</p>
+  <p>The basic idea does land: in every test, the stranger could say back what the concept is. What fails is the part that makes a viewer feel enlightened:
+    <ul>
+      <li>the step that explains <em>why</em> it works;</li>
+      <li>knowing what stands for what while the analogy plays;</li>
+      <li>seeing the pattern again in the real example;</li>
+      <li>an ending that answers the opening question and leaves one clear takeaway.</li>
+    </ul>
+  These are design and structure problems. More rules won't fix them: the system already has more than 120 numbered decisions, and the rules collide.</p>
+  <div class="stats">
+    <div class="stat c"><b>14 / 14</b><span>first-viewer tests failed on the 7 newest reels, both tries each. None was stopped.</span></div>
+    <div class="stat c"><b>9 / 9</b><span>reels cut the step that explains why the mechanism works, to fit the word limits.</span></div>
+    <div class="stat"><b>6 / 7</b><span>builds skipped a check or a fix "to stay inside the budget". The picture check costs about 1 cent.</span></div>
+    <div class="stat"><b>~11k</b><span>words of rules each frame worker reads before any code, with no priority order. The director reads about 18k.</span></div>
+    <div class="stat"><b>0</b><span>rows of human feedback across 36 jobs. Every change so far came from one-off critiques.</span></div>
+  </div>
+</section>
+
+<section id="target">
+  <h2>What a reel that teaches needs</h2>
+  <p>This is the target the gaps are measured against. It draws on the established multimedia-learning principles (Mayer: signaling, contiguity, segmenting, pre-training) and on research on learning by analogy (comparing two cases that share one structure).</p>
+  <div class="principles">
+    <div class="principle"><span class="n">1</span><p><b>One spine.</b> The reel answers one question with one insight. Every beat moves toward that answer, and the answer lands as the payoff.</p></div>
+    <div class="principle"><span class="n">2</span><p><b>Name it while you show it.</b> The viewer learns what each part stands for at the moment it appears, not ten seconds later. <small>Signaling and temporal contiguity.</small></p></div>
+    <div class="principle"><span class="n">3</span><p><b>Say and show the why.</b> The step that makes the mechanism click is spoken and visible. A list of what happens is not an explanation.</p></div>
+    <div class="principle"><span class="n">4</span><p><b>See the pattern twice.</b> The real example walks the same steps as the analogy, in a different world, so the viewer makes the transfer themselves. <small>Analogical encoding.</small></p></div>
+    <div class="principle"><span class="n">5</span><p><b>One world at a time, with bridges.</b> Every switch between the analogy and the real thing is visible and explained.</p></div>
+    <div class="principle"><span class="n">6</span><p><b>Few new words, each defined.</b> Beyond the term, at most one or two technical words, each in plain words the first time. <small>Pre-training.</small></p></div>
+    <div class="principle"><span class="n">7</span><p><b>Room at the idea boundaries.</b> An energetic pace is fine (180–200 wpm is inside the range people understand), but the question and the click need a short beat after them. <small>Segmenting.</small></p></div>
+    <div class="principle"><span class="n">8</span><p><b>An earned ending.</b> The question from the gap is answered in real terms near the end, followed by one sentence the viewer keeps.</p></div>
+  </div>
+</section>
+
+<section id="summary">
+  <h2>All 24 gaps at a glance</h2>
+  <p class="note">Critical gaps stop the reels from teaching. High ones hurt every reel. Medium ones hurt some reels or the system's reliability. Purple marks a gap whose fix revisits a decision you made.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>#</th><th>Gap</th><th>Severity</th><th>Layer</th></tr></thead>
+    <tbody>
+      <tr><td class="id"><a href="#g1">G1</a></td><td>No teaching spine: analogy, gap and script are each optimized on their own</td><td><span class="chip crit">Critical</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g2">G2</a></td><td>The mapping comes after the analogy has already played</td><td><span class="chip crit">Critical</span> <span class="chip call">Your call</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g3">G3</a></td><td>The step that explains why gets cut</td><td><span class="chip crit">Critical</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g4">G4</a></td><td>The question is answered early and weakly; the ending trails off</td><td><span class="chip high">High</span> <span class="chip call">Your call</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g5">G5</a></td><td>Four worlds in a minute, with no bridge from hook to gap</td><td><span class="chip high">High</span> <span class="chip call">Your call</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g6">G6</a></td><td>The opener line is false for most reels</td><td><span class="chip high">High</span> <span class="chip call">Your call</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g7">G7</a></td><td>The hardest sentence, the definition, is spoken fastest</td><td><span class="chip med">Medium</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g8">G8</a></td><td>No beat to think after the question or the click</td><td><span class="chip med">Medium</span> <span class="chip call">Your call</span></td><td>Structure</td></tr>
+      <tr><td class="id"><a href="#g9">G9</a></td><td>Jargon creeps in through the real component names</td><td><span class="chip high">High</span></td><td>Writing</td></tr>
+      <tr><td class="id"><a href="#g10">G10</a></td><td>The real example doesn't walk the analogy's steps</td><td><span class="chip high">High</span> <span class="chip call">Your call</span></td><td>Writing</td></tr>
+      <tr><td class="id"><a href="#g11">G11</a></td><td>The analogy bends or breaks in the script</td><td><span class="chip med">Medium</span></td><td>Writing</td></tr>
+      <tr><td class="id"><a href="#g12">G12</a></td><td>The payoff has no owner (introduced in 3.8)</td><td><span class="chip med">Medium</span></td><td>Writing</td></tr>
+      <tr><td class="id"><a href="#g13">G13</a></td><td>Hundreds of rules, all "mandatory", none ranked</td><td><span class="chip high">High</span></td><td>Writing</td></tr>
+      <tr><td class="id"><a href="#g14">G14</a></td><td>Contradictory and stale instructions</td><td><span class="chip high">High</span></td><td>Writing</td></tr>
+      <tr><td class="id"><a href="#g15">G15</a></td><td>The understanding test can't tell good from bad, and can't block</td><td><span class="chip crit">Critical</span> <span class="chip call">Your call</span></td><td>Checks</td></tr>
+      <tr><td class="id"><a href="#g16">G16</a></td><td>The author is every judge</td><td><span class="chip high">High</span></td><td>Checks</td></tr>
+      <tr><td class="id"><a href="#g17">G17</a></td><td>The lint rewards form, and its fixed phrases make reels formulaic</td><td><span class="chip med">Medium</span></td><td>Checks</td></tr>
+      <tr><td class="id"><a href="#g18">G18</a></td><td>No feedback loop from you or from past tests</td><td><span class="chip med">Medium</span></td><td>Checks</td></tr>
+      <tr><td class="id"><a href="#g19">G19</a></td><td>Frame workers are never told what the picture must teach</td><td><span class="chip crit">Critical</span></td><td>Build</td></tr>
+      <tr><td class="id"><a href="#g20">G20</a></td><td>Visual caps and timing strip out the mechanism</td><td><span class="chip high">High</span></td><td>Build</td></tr>
+      <tr><td class="id"><a href="#g21">G21</a></td><td>The budget starves the checks</td><td><span class="chip high">High</span></td><td>Build</td></tr>
+      <tr><td class="id"><a href="#g22">G22</a></td><td>The script is locked into audio before the pictures are proven</td><td><span class="chip med">Medium</span></td><td>Build</td></tr>
+      <tr><td class="id"><a href="#g23">G23</a></td><td>Frame workers can't see each other; the hero leaks into the example</td><td><span class="chip med">Medium</span></td><td>Build</td></tr>
+      <tr><td class="id"><a href="#g24">G24</a></td><td>Failures go silent</td><td><span class="chip med">Medium</span></td><td>Build</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="structure">
+  <h2>Layer 1 · The reel's structure</h2>
+  <p>This is the eight-beat sheet as it plays now, colored by which world the viewer is in. The second row is the proposal from <a href="#plan">phase 2</a>. It keeps eight beats and roughly the same lengths, but changes the jobs of beats 1, 3, 4, 5, 6 and 7.</p>
+
+  <div class="beatsrow">
+    <div class="beatlabel">Now</div>
+    <div class="beats">
+      <div class="beat w-analogy"><b>1 · 4s</b>Hook in the analogy. "In the next 30 seconds, this ___ will teach you an AI concept."</div>
+      <div class="beat w-real"><b>2 · 9s</b>Gap about the real tech, in its own picture. No link to the hook.</div>
+      <div class="beat w-card"><b>3 · 7s</b>Dense dictionary definition, 12–26 words.</div>
+      <div class="beat w-analogy"><b>4 · 12s</b>Analogy plays with no labels. Its last line "answers" the gap.</div>
+      <div class="beat w-analogy"><b>5 · 10s</b>"The X is the Y, because…" for 3–4 pairs.</div>
+      <div class="beat w-new"><b>6 · 10s</b>Real example with its own unrelated steps.</div>
+      <div class="beat w-new"><b>7 · 6s</b>Another place you meet it, in a new scene.</div>
+      <div class="beat w-card"><b>8 · 2.5s</b>Logo. No voice, no recap.</div>
+    </div>
+  </div>
+  <div class="beatsrow">
+    <div class="beatlabel">Proposed</div>
+    <div class="beats">
+      <div class="beat w-analogy changed"><b>1 · 4s</b>Hook in the analogy, its problem said out loud.</div>
+      <div class="beat w-real"><b>2 · 9s</b>Gap: the same problem in real life, staged to echo the hook's picture.</div>
+      <div class="beat w-card changed"><b>3 · 6s</b>Short definition, ≤16 words: what it is and what it does.</div>
+      <div class="beat w-analogy changed"><b>4 · 12s</b>Analogy plays, mapped as it goes: "the jar, our cache…"</div>
+      <div class="beat w-analogy changed"><b>5 · 10s</b>Why it works (the click step), then where it breaks (the limit).</div>
+      <div class="beat w-real changed"><b>6 · 10s</b>Real example walking the same steps. The tracker carries the same step names.</div>
+      <div class="beat w-real changed"><b>7 · 6s</b>Payoff: the gap answered in real terms, plus the one-line takeaway.</div>
+      <div class="beat w-card"><b>8 · 2.5s</b>Logo.</div>
+    </div>
+  </div>
+  <div class="legend">
+    <span style="--c: var(--high)">analogy world</span>
+    <span style="--c: var(--accent)">the real technology</span>
+    <span style="--c: var(--muted)">card</span>
+    <span style="--c: var(--crit)">a new world</span>
+    <span style="--c: var(--accent); ">outlined: the job changes</span>
+  </div>
+
+  <article class="gap crit" id="g1">
+    <div class="head"><span class="gid">G1</span><h3>No teaching spine: every part is optimized on its own</h3></div>
+    <div class="chips"><span class="chip crit">Critical</span><span class="chip layer">Idea phase → director</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Four separate passes.</b> The idea phase scores the topic. Then the analogy writer runs, scored by Jev on 7 qualities. Then the gap writer runs, scored by Jev on pull, clarity and whether the analogy answers it.</li>
+      <li><b>Locked inputs.</b> The director gets the analogy and the gap fixed, and builds a story around them.</li>
+      <li><b>No shared target.</b> No step ever writes down the one insight the reel exists to deliver, or the step that makes it click. Nothing scores the analogy or the gap against them.</li>
+      <li><b>A "thesis" field exists</b> in the storyboard frontmatter. The director writes it, and no check reads it.</li>
+    </ul>
+    <h4>Why it hurts</h4>
+    <ul>
+      <li><b>The parts don't add up to one explanation.</b> Each part is strong on its own scale.</li>
+      <li><b>Cache reel example.</b> The gap asks why software shows out-of-date information on purpose, which is the trade-off. Frame 4 answers with speed. The trade-off appears once, in frame 5's last sentence, and never in the real example.</li>
+      <li><b>The 3.8 round's failures come from the same split.</b> A stricter analogy bar and gap floors, with no shared target, rejected most candidates without getting closer to a better reel.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <p><b>The idea phase writes a teaching spine first.</b> One Sonnet call per topic, about $0.02, with four fields:</p>
+      <ul>
+        <li><b>takeaway:</b> the one sentence the viewer keeps;</li>
+        <li><b>click:</b> the step that explains why it works;</li>
+        <li><b>misconception:</b> what people wrongly assume;</li>
+        <li><b>limit:</b> where it breaks, or its trade-off.</li>
+      </ul>
+      <p><b>Everything else is measured against it:</b></p>
+      <ul>
+        <li>The analogy writer gets the spine. Jev's analogy scoring adds "does the process show the click step?"</li>
+        <li>The gap writer gets the takeaway, and the gap's "closable" score asks whether the takeaway answers it.</li>
+        <li>BRIEF.md carries the spine. The director's beats are checked against it.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap crit" id="g2">
+    <div class="head"><span class="gid">G2</span><h3>The mapping comes after the analogy has already played</h3></div>
+    <div class="chips"><span class="chip crit">Critical</span><span class="chip layer">Beats 4–5</span><span class="chip call">Your call · beat jobs</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Frame 4</b> plays the scene for 12 seconds. Nothing says what the cook, the jar or the pantry stands for.</li>
+      <li><b>Frame 5</b> then lists "the X is the Y, because…": three or four pairs in about 10 seconds.</li>
+      <li><b>The format leaks:</b> 26 "because" clauses across 9 reels. Most justify the label rather than explain the mechanism.</li>
+    </ul>
+    <h4>Why it hurts</h4>
+    <ul>
+      <li><b>The viewer watches the key scene without knowing what it means.</b> Then they get a list too fast to follow by ear.</li>
+      <li><b>The test stranger flagged this in 4 of 7 full-reel tests.</b></li>
+    </ul>
+    <blockquote>jar and pantry mapping only named in beat 5<cite>first-viewer, cache reel 0a363b52, second try</cite></blockquote>
+    <blockquote>Beat 5 maps four things in a few seconds, so the labels were hard to follow by ear.<cite>first-viewer, API reel cdfe57f4</cite></blockquote>
+    <blockquote>The surgeon is the large model, because it is powerful.<cite>model routing b8e8d707, frame 5</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Map as it plays.</b> In frame 4, each element is introduced with its real name, spoken and labeled on the word: "The jar is our cache: small, and right by the stove."</li>
+        <li><b>Frame 5 changes job.</b> It becomes "why it works": the click step from the spine, shown in the scene. Then the limit: where the comparison, or the system, breaks.</li>
+        <li><b>The rule changes:</b> "because" must give the mechanism, not the reason for the label.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap crit" id="g3">
+    <div class="head"><span class="gid">G3</span><h3>The step that explains why gets cut</h3></div>
+    <div class="chips"><span class="chip crit">Critical</span><span class="chip layer">Beat 4 word budget</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Frame 4 has 20–36 words</b> to do four jobs:
+        <ul>
+          <li>pick up the scene;</li>
+          <li>introduce up to four elements, each "by name and job";</li>
+          <li>play 3–5 steps;</li>
+          <li>answer the gap in its last sentence.</li>
+        </ul>
+      </li>
+      <li><b>That doesn't fit.</b> Nothing marks which step is the essential one, so the director drops whichever step costs the most words. That is usually the causal one.</li>
+    </ul>
+    <h4>Why it hurts</h4>
+    <p>All 9 reels dropped the step their analogy was picked for.</p>
+    <ul>
+      <li><b>Cache:</b> the jar never gets refilled.</li>
+      <li><b>Model routing:</b> it never says how the router decides.</li>
+      <li><b>RAG:</b> it never says how the closest chunk is found.</li>
+      <li><b>Prompt injection:</b> it never says why the AI can't tell orders from content.</li>
+    </ul>
+    <blockquote>Watch the cook. The jar is empty, so the cook fetches salt from the pantry. Now the jar answers fast.<cite>cache 0a363b52, frame 4: the "fill the jar on the way back" step is skipped</cite></blockquote>
+    <blockquote>The video never says how the router decides a request is easy or hard.<cite>first-viewer, model routing b8e8d707</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>The spine's click step is required.</b> Frame 4 or frame 5 must say it and show it, and the editor (G16) checks that it does.</li>
+        <li><b>Rebalance the words.</b> Move words to beats 4 and 5 from beat 7, and from the shorter definition (G7).</li>
+        <li><b>Lighten frame 4's load.</b> Introducing elements moves into the mapping (G2), so it takes fewer words.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g4">
+    <div class="head"><span class="gid">G4</span><h3>The question is answered early and weakly; the ending trails off</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">Beats 4, 7, 8 · lint gap_closed</span><span class="chip call">Your call · beat 7's job</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Too early.</b> Frame 4's last sentence must answer the gap. That's at about 0:30, inside the analogy, before any mapping has been said.</li>
+      <li><b>Forced wording.</b> The lint requires that sentence to reuse two of the question's own key words. That produces lines that mix both worlds, or simply repeat the question.</li>
+      <li><b>The end goes flat.</b> Frames 5–7 have no open question left. Frame 7 is "another place you meet it", and frame 8 has no voice. No reel restates the takeaway.</li>
+    </ul>
+    <blockquote>That is why a program keeps an old copy: asking the pantry every time is slow.<cite>cache 0a363b52, frame 4: the pantry hasn't been mapped yet</cite></blockquote>
+    <blockquote>So a page loads fast, yet can be out of date.<cite>cache bdbd97f6, frame 4: the gap's answer just repeats the question</cite></blockquote>
+    <blockquote>That's how chatbots find the right paragraph: small pieces.<cite>RAG ec9c06a5, frame 4</cite></blockquote>
+    <blockquote>no recap at the close<cite>first-viewer, cache 0a363b52</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Beat 7 becomes the payoff.</b> It answers the gap's question in real terms, calls back to the hook (the cook no longer sprints), and says the spine's takeaway in one sentence.</li>
+        <li><b>Drop the key-word lint.</b> Replace <code>gap_closed</code>'s check with the editor's question: does this answer the question, or restate it?</li>
+        <li><b>Frame 4 builds toward the answer</b> instead of announcing it.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g5">
+    <div class="head"><span class="gid">G5</span><h3>Four worlds in a minute, with no bridge from the hook to the gap</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">Beats 1→2, 6, 7</span><span class="chip call">Your call · EX3-115</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The viewer moves through four worlds:</b> the analogy (beat 1), the real tech (2), a card (3), the analogy again (4–5), a new real example (6), and another new scene (7).</li>
+      <li><b>The 1→2 cut is deliberate</b> (EX3-115): the gap is about the real technology. But nothing visible or spoken connects the two.</li>
+    </ul>
+    <blockquote>hallway scene and phone scene look unrelated until frame 4<cite>first-viewer, cache 0a363b52</cite></blockquote>
+    <blockquote>The pizza opening has no visible link to the chatbot scene.<cite>first-viewer, RAG ec9c06a5</cite></blockquote>
+    <p>The test stranger flagged the jump in at least 5 of 7 gap tests.</p>
+    <p><b>The director files this as "by design".</b></p>
+    <div class="fix"><h4>Fix (pick one)</h4>
+      <ul>
+        <li><b>A. Visual rhyme.</b> Keep the analogy hook. Frame 2's picture repeats the hook's staging with the real thing: the same composition and the same motion, with the phone in the cook's place. The link is seen, not claimed. This avoids the "same spot" bridge sentence you rejected in EX3-101.</li>
+        <li><b>B. Real first.</b> Open on the real-world mystery and bring the analogy in as the answer. This removes one jump, but the real thing is usually harder to make thumb-stopping.</li>
+      </ul>
+      <p><b>Either way,</b> beat 7 stops adding a fourth world (G4).</p>
+    </div>
+  </article>
+
+  <article class="gap high" id="g6">
+    <div class="head"><span class="gid">G6</span><h3>The opener line is false for most reels</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">Beat 1 · SKILL.md:194, lint:41</span><span class="chip call">Your call · EX3-96</span></div>
+    <h4>Now</h4>
+    <p>The line is fixed: "In the next 30 seconds, this ___ will teach you an AI concept." It's wrong in two ways:</p>
+    <ul>
+      <li>The reels run 61–69 seconds.</li>
+      <li>Cache, API and DNS are not AI concepts.</li>
+    </ul>
+    <p>The test stranger flagged this line in all 7 gap tests. The director can't change it, so the rewrite loop can't fix the most common confusion.</p>
+    <blockquote>'In the next 30 seconds' sounds like standard intro filler.<cite>first-viewer, API cdfe57f4</cite></blockquote>
+    <blockquote>It's called an AI concept, but DNS isn't AI.<cite>first-viewer, DNS a895028f</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Code fills the facts.</b> "In the next minute", and "an AI concept" or "a tech concept" chosen from the topic's <code>ai_focus</code> score.</li>
+        <li><b>Better still,</b> let the slot voice the hook's problem, so the opener carries tension instead of a promise: "…this cook, who keeps running for salt, will teach you…"</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g7">
+    <div class="head"><span class="gid">G7</span><h3>The hardest sentence, the definition, is spoken fastest</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">Beat 3</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Frame 3 packs a lot into one sentence:</b> category, action, trigger and receiver, in 12–26 words.</li>
+      <li><b>It comes before any intuition.</b> The viewer hasn't seen the mechanism yet.</li>
+      <li><b>It's delivered at 3.0–3.6 words per second,</b> the fastest in the reel.</li>
+      <li><b>The test stranger called it dense by ear</b> in at least 4 tests.</li>
+    </ul>
+    <blockquote>Attention is a step where a language model scores how relevant each other word is to the word it is reading.<cite>attention ae2cf0e1, frame 3</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>Limit the definition to about 16 words: what it is and what it does, in words the viewer already uses.</li>
+        <li>The detail (trigger, receiver, trade-off) moves to beats 5 and 7, where the viewer has a picture to hang it on.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g8">
+    <div class="head"><span class="gid">G8</span><h3>No beat to think after the question or the click</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">pace.mjs</span><span class="chip call">Your call · EX3-79</span></div>
+    <h4>Now</h4>
+    <p>Every pause is capped at 0.2 seconds, including after the gap's question and after the line where it clicks. The reels average 180–200 words per minute.</p>
+    <h4>Why it matters</h4>
+    <ul>
+      <li><b>The speed itself is fine.</b> Comprehension holds up to about 250 words per minute (Foulke and Sticht), and fast, energetic speakers held edX viewers longest (Guo, Kim and Rubin, 2014).</li>
+      <li><b>The research supports breaks at idea boundaries,</b> not a slower voice (segmenting). Ours has none.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>Keep the pace and the 0.2s cap everywhere else.</li>
+        <li>Allow exactly two longer beats of about 0.4s: one after the gap's question, one after the click line.</li>
+        <li>Cut words in beats 3 and 5 rather than slowing the voice.</li>
+      </ul>
+    </div>
+  </article>
+</section>
+
+<section id="writing">
+  <h2>Layer 2 · The writing rules</h2>
+
+  <article class="gap high" id="g9">
+    <div class="head"><span class="gid">G9</span><h3>Jargon creeps in through the real component names</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">Beats 5–6</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The mapping has to name real parts:</b> database, prompt, server. No rule says each one gets defined the first time it's said.</li>
+      <li><b>The only jargon check runs on frame 2,</b> the one frame the director is not allowed to edit.</li>
+      <li><b>Each reel speaks 5–8 technical words.</b></li>
+    </ul>
+    <blockquote>'Database', 'stale', 'server tower' used undefined<cite>first-viewer, cache 0a363b52</cite></blockquote>
+    <blockquote>The plate is the prompt, the text a model reads, because it holds little.<cite>RAG ec9c06a5, frame 5</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>A new-word budget:</b> beyond the term, at most two technical words. Each is said in plain words first ("the main store, the database"), or replaced by plain words.</li>
+        <li><b>The brief lists the allowed words.</b> The lint flags any other technical word in a voiceover.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g10">
+    <div class="head"><span class="gid">G10</span><h3>The real example doesn't walk the analogy's steps</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">Beat 6</span><span class="chip call">Your call · EX3-87</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The example's steps don't have to match.</b> Since EX3-87, the example has its own steps, and story-design says they "may follow the analogy's steps or not".</li>
+      <li><b>So the second pass at the pattern is optional,</b> and usually missing.</li>
+      <li><b>The scene builder's prompt still says the tracker prints the analogy's technical step names</b> (scene-builder.md:54). Two files now give two different answers.</li>
+    </ul>
+    <blockquote>Your browser asks DNS for its number. DNS replies with a four part number.<cite>DNS a895028f, frame 6: the narrowing chain the analogy taught never appears</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Map the steps one to one.</b> <code>example_steps</code> line up with the analogy's technical steps, and the tracker shows the same step names in frames 4 and 6.</li>
+        <li><b>The example stays a different world</b> (EX3-105 is kept): same steps, different things.</li>
+        <li><b>Add the missing kit component.</b> The tracker isn't in the kit yet (G20).</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g11">
+    <div class="head"><span class="gid">G11</span><h3>The analogy bends or breaks in the script</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">Director staging</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Jev scores the analogy writer's text for fidelity</b>, but nothing checks how the director stages it.</li>
+      <li><b>7 of 9 reels bent or broke it somewhere.</b> Examples:
+        <ul>
+          <li>copies that "cool" by themselves;</li>
+          <li>a waiter who is the API in frame 5, while frame 6 says "the weather service's API";</li>
+          <li>characters that switch roles between beats.</li>
+        </ul>
+      </li>
+    </ul>
+    <blockquote>Later, that water cools.<cite>cache bdbd97f6: suggests a cached copy goes stale by itself, not because the source changed</cite></blockquote>
+    <blockquote>The cat chased the fish because it was tired.<cite>attention ae2cf0e1, frame 6: a tired fish is just as plausible</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>The analogy writer adds one field, <code>breaks_at</code>: the part of the comparison that doesn't hold. The director avoids staging it.</li>
+        <li>The editor (G16) checks the script's analogy against the brief's process.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g12">
+    <div class="head"><span class="gid">G12</span><h3>The payoff has no owner (introduced in 3.8)</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">analogy-writer-v7 → director</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The 3.8 change took the payoff away from the analogy writer.</b> Its prompt now says the director writes it.</li>
+      <li><b>The director's prompts never say what the payoff is.</b> Frame 4 must "play the steps to the payoff", and that's all.</li>
+      <li><b>This one is my mistake</b> from the 3.8 work, and it isn't committed.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>The spine's takeaway is the payoff (G1).</li>
+        <li>story-design.md's beat 7 defines it and says how it lands (G4).</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g13">
+    <div class="head"><span class="gid">G13</span><h3>Hundreds of rules, all "mandatory", none ranked</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">All prompts</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The director's plan phase</b> reads about 18,000 words: SKILL.md, the workflow, story design, the skeleton, the format references and all of frame.md.</li>
+      <li><b>Each frame worker</b> reads about 11,000 words before any code, then kit files whose comments carry more rules. frame.md alone has 63 "never", 60 "every" and 22 "HARD CONSTRAINT".</li>
+      <li><b>About 250–300 obligations,</b> roughly 70 of them numeric.</li>
+      <li><b>Every file says "Every rule here is mandatory."</b> HARD marks sit on style details (outline about 3–4px, shadow 10–18%), while the frame treatments that carry the teaching are unmarked.</li>
+      <li><b>No tie-break.</b> Nothing says what wins when two hard rules collide.</li>
+      <li><b>Rules pile up.</b> The register has 122 numbered decisions, and most fixes added a rule rather than removing a cause.</li>
+    </ul>
+    <h4>Why it hurts</h4>
+    <ul>
+      <li><b>Teaching guidance is a small share of what the models read.</b> When it competes with format rules that the lint enforces, the format rules win.</li>
+      <li><b>The self-checks are format checklists.</b></li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Rank the rules.</b> Add a priority block at the top of SKILL.md and the frame worker's role file: teach the idea → keep continuity and looks → layout → style.</li>
+        <li><b>Every rule stays hard.</b> The ranking only decides which wins when two collide.</li>
+        <li><b>Trim frame.md per frame,</b> so each worker reads only its own treatment.</li>
+        <li><b>Keep each number in one place,</b> imported by the prompts, the lint and the kit.</li>
+        <li><b>Clear out old rules.</b> Retire superseded rules from the live files.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g14">
+    <div class="head"><span class="gid">G14</span><h3>Contradictory and stale instructions</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">All prompts</span></div>
+    <p>There are 26 places where two files, or a file and the lint, disagree, or where a file points at something that no longer exists. Full list in <a href="#ledger">the contradiction ledger</a>. The two that do the most damage:</p>
+    <ul>
+      <li><b>Frame 2's picture.</b> Four places tell frame 2's worker to show the analogy's scene, and four others say "Never the analogy's scene."</li>
+      <li><b>The hero's orange.</b> The hero must be orange "in every frame", while the example must share none of the anchor scene's characters. In three reels the hero walked into the real example.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4><p>A one-session cleanup that changes no design (phase 1).</p></div>
+  </article>
+</section>
+
+<section id="checks">
+  <h2>Layer 3 · The checks</h2>
+
+  <article class="gap crit" id="g15">
+    <div class="head"><span class="gid">G15</span><h3>The understanding test can't tell good from bad, and can't block</h3></div>
+    <div class="chips"><span class="chip crit">Critical</span><span class="chip layer">Session A · job.ts:598–608</span><span class="chip call">Your call · EX3-108</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The pass rule can't be met.</b> A test fails if anything at all is listed as confusing, and the stranger is told never to be polite about confusion. So every test fails: 14 of 14 on the 7 newest reels, both tries each.</li>
+      <li><b>Nothing happens on a fail.</b> The worker logs it and builds anyway ("Recorded, never blocking").</li>
+      <li><b>The director grades itself.</b> It writes the verdict and explains each fail away.</li>
+      <li><b>Its notes go nowhere.</b> Notes the director leaves for the build are never read.</li>
+      <li><b>The test is missing what viewers see.</b> Its input leaves out the title card, so some complaints that the concept "is never named" come from the test, not the reel.</li>
+    </ul>
+    <blockquote>That link is the design (the analogy returns in frame 4 and closes the gap), so it is recorded only.<cite>director, cache 0a363b52, gap-check.json</cite></blockquote>
+    <h4>Why it hurts</h4>
+    <ul>
+      <li><b>The test's own findings could have driven the fixes.</b> It has been reporting the same structural problems for seven reels: the vague opener, the hook-to-gap jump, late mapping, undefined words, no recap.</li>
+      <li><b>No reel gets better because of the test.</b></li>
+      <li><b>Every test fails, so a pass/fail count can't tell a good reel from a bad one.</b></li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Graded severity, computed by code</b> from the stranger's JSON:
+          <ul>
+            <li><b>Blocking:</b> the mechanism is said back wrong, the example's answer is wrong or ambiguous, the gap's question goes unanswered, or a character seems to change.</li>
+            <li><b>Minor:</b> a single word or a picture detail.</li>
+          </ul>
+        </li>
+        <li><b>A blocking finding stops audio</b> until one rewrite has been tried. If it still fails, the reel builds and is flagged to you.</li>
+        <li><b>Recurring confusions get reported to you.</b> Ones that come from the fixed design are rolled up across reels into a design report, so they stop being excused one reel at a time.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g16">
+    <div class="head"><span class="gid">G16</span><h3>The author is every judge</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">Session A and B</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>One agent does everything.</b> The director writes the story, rates its own hooks, writes the inputs for its own tests, judges the answers and rewrites.</li>
+      <li><b>It also judges its own pictures.</b> It compares the picture checker's words with "what you meant". The resulting rows can't be audited.</li>
+      <li><b>No step compares the stranger's understanding with what was actually drawn.</b></li>
+    </ul>
+    <blockquote>tile 1-20, frame all, pass true, meant: None<cite>picture-check.json, prompt injection 4bc9af1f</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>An independent teaching editor</b> runs between the plan and audio: one Sonnet call with a cached prompt, about $0.05–0.10.</li>
+        <li><b>What it reads:</b> the brief's spine, the storyboard, the script and the stranger's answers.</li>
+        <li><b>What it checks:</b>
+          <ul>
+            <li>whether the click step is said;</li>
+            <li>whether the mapping lands as the analogy plays;</li>
+            <li>whether the example walks the same steps;</li>
+            <li>whether the gap is answered, not restated;</li>
+            <li>whether any new words appear.</li>
+          </ul>
+        </li>
+        <li><b>What it can do:</b> send named beats back with exact findings.</li>
+        <li><b>Raw records:</b> code stores the picture checker's raw words.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g17">
+    <div class="head"><span class="gid">G17</span><h3>The lint rewards form, and its fixed phrases make reels formulaic</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">lint-storyboard.mjs</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>The lint passes a clean reel and an empty one alike.</b> The newest cache reel lints with zero violations, despite the problems above.</li>
+      <li><b>"At least two because" passes circular clauses.</b></li>
+      <li><b>Required phrases make every reel sound alike:</b>
+        <ul>
+          <li>"Here's a real example" in 9 of 9 reels;</li>
+          <li>"Back at / on / in…" in 7 of 9;</li>
+          <li>"In everyday life, you meet…" in 5 of 9.</li>
+        </ul>
+      </li>
+      <li><b>Several hard rules aren't enforced at all:</b>
+        <ul>
+          <li>hook clarity of 4 or more;</li>
+          <li>one new term per sentence;</li>
+          <li>no jargon outside frame 2;</li>
+          <li>never invent statistics.</li>
+        </ul>
+      </li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>Keep the lint for format, where it's reliable.</li>
+        <li>Move teaching judgments to the editor (G16).</li>
+        <li>Replace fixed-phrase checks with intent checks ("frame 6 says it is a real example"), so the wording can vary.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g18">
+    <div class="head"><span class="gid">G18</span><h3>No feedback loop from you or from past tests</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">explainers.feedback</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>No human feedback is stored.</b> The feedback table (verdict, failure tags, note) has 0 rows across 36 jobs.</li>
+      <li><b>Changes come only from your critiques</b> in chat, one reel at a time.</li>
+      <li><b>The tests' records are never read.</b> Nobody reads them across reels.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Rate each reel.</b> A 30-second rating on each reel (the fields already exist).</li>
+        <li><b>A weekly roll-up</b> of what the first-viewer tests flagged, grouped by beat, so design changes are aimed at the most common confusion.</li>
+      </ul>
+    </div>
+  </article>
+</section>
+
+<section id="build">
+  <h2>Layer 4 · The build</h2>
+
+  <article class="gap crit" id="g19">
+    <div class="head"><span class="gid">G19</span><h3>Frame workers are never told what the picture must teach</h3></div>
+    <div class="chips"><span class="chip crit">Critical</span><span class="chip layer">frame packets · frame-worker-core.md:32</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Each worker's packet holds only its own frame's block.</b> No anchor scene, so no mapping, states or layout. No hook, and no video direction.</li>
+      <li><b>The core worker file says the voiceover is "a timing reference only".</b></li>
+      <li><b>The Scene-line format asks for shot, position, motion and sound.</b> It never asks which step of the mechanism a moment shows, or what the viewer should understand by its end.</li>
+    </ul>
+    <h4>Why it hurts</h4>
+    <ul>
+      <li><b>Workers time objects to words instead of drawing the mechanism.</b></li>
+      <li><b>The result:</b> frame 4 plays as decoration under the narration, which is exactly where the click should be visible.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Give every packet the full context:</b> the anchor scene, the spine's click step and the video direction.</li>
+        <li><b>Rewrite core:32:</b> "The voiceover is what the picture must show: who acts, what changes, and the result, while it is said."</li>
+        <li><b>Add a <code>teaches:</code> line</b> to each Scene window.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g20">
+    <div class="head"><span class="gid">G20</span><h3>Visual caps and timing strip out the mechanism</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">frame.md · shots.js · picture check</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Six different limits on what can be on screen:</b>
+        <ul>
+          <li>at most three readable things;</li>
+          <li>a medium shot shows two or three entities;</li>
+          <li>every shot draws every entity;</li>
+          <li>at most four entities;</li>
+          <li>at most five objects;</li>
+          <li>half the frame empty, while the scene must also fill the frame.</li>
+        </ul>
+        The picture check fails a tile that names more than three things, and labels count as things.
+      </li>
+      <li><b>"One thing to read at a time"</b> rules out a label while captions are on, and captions are on whenever the voice speaks.</li>
+      <li><b>The orange highlight is fixed on the hero,</b> and the focus may change only at a beat boundary. So the step being spoken can't be highlighted.</li>
+      <li><b>Cuts come every 4.5 seconds at most,</b> on peak motion, and a frame ends 0.15s after its voice. The result of each step is barely on screen. In the cache reel, frame 4's establishing shot lasted 2 seconds.</li>
+      <li><b>The step tracker that beat 6 relies on doesn't exist</b> in the kit.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>One limit for what's on screen:</b> four entities, one of them the lead, the rest visible but quiet, with clear ground around the lead.</li>
+        <li><b>Allow the caption plus one label</b> that names what the caption is saying.</li>
+        <li><b>Separate identity from attention.</b> The hero keeps its identity through what it wears; the orange highlight moves with the spoken step.</li>
+        <li><b>Hold the result:</b> each step's end state stays on screen at least 0.8s. The establishing shot and the payoff shot may run up to 6s.</li>
+        <li><b>Build the missing tracker:</b> add <code>stepTracker()</code> to the kit's cards, drawn outside the camera like the dictionary card.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap high" id="g21">
+    <div class="head"><span class="gid">G21</span><h3>The budget starves the checks</h3></div>
+    <div class="chips"><span class="chip high">High</span><span class="chip layer">agent.ts:226 · settings.ts:37</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Session B gets whatever session A left of the $8 cap,</b> and the model rations it.</li>
+      <li><b>The build itself costs $5.40–6.30 per reel,</b> mostly Sonnet re-reading cached context.</li>
+      <li><b>The picture check costs about 1 cent</b> on Haiku, but it is the first thing dropped. In 6 of 7 builds a check or a fix was skipped "to stay inside the budget".</li>
+    </ul>
+    <blockquote>I did not run the blind picture check, which the workflow marks mandatory, because the session's USD budget was nearly spent<cite>cache bdbd97f6, session B</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>Run the picture check in worker code</b> after session B, outside the model's budget. Snapshot times come from each frame's exported shots.</li>
+        <li><b>Reserve about $1</b> of the cap for fixes.</li>
+        <li><b>On a cap,</b> still try the worker's own render.</li>
+        <li><b>Optional:</b> look at cutting session B's context, since most of its spend is re-reading files.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g22">
+    <div class="head"><span class="gid">G22</span><h3>The script is locked into audio before the pictures are proven</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">workflow Step 3.1</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Audio starts first.</b> It begins at the top of the build, before the anchor scene is drawn.</li>
+      <li><b>After that, a problem can only be redrawn, never reworded.</b> The model routing reel shipped its core analogy frame like this:</li>
+    </ul>
+    <blockquote>characters read as blobs; roles mostly not distinguishable … not re-dispatched: budget ceiling reached<cite>model routing b8e8d707, frame 4</cite></blockquote>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>Build <code>world.js</code> and picture-check the anchor scene's cast before audio.</li>
+        <li>If a role doesn't read, the script may still change.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g23">
+    <div class="head"><span class="gid">G23</span><h3>Frame workers can't see each other; the hero leaks into the example</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">parallel frame workers · try.mjs</span></div>
+    <h4>Now</h4>
+    <ul>
+      <li><b>Seven workers draw in parallel</b> without seeing each other's frames.</li>
+      <li><b>Frames with their own pictures invent their own objects.</b> In the cache reel, frames 2 and 3 drew two different server towers.</li>
+      <li><b>Workers add shots the plan never listed,</b> and no lint checks the built shots.</li>
+      <li><b>Two rules push the hero into the real example:</b> "orange in every frame" and the stranger's "is it the same character" question. That happened in 3 of 7 reels.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li><b>A shared registry of real-world objects</b> for frames 2, 3, 6 and 7, like <code>world.js</code> for the analogy.</li>
+        <li><b>Give each packet the neighboring frames' shots.</b></li>
+        <li><b>Lint the built shots.</b></li>
+        <li><b>Limit the hero's orange</b> to the analogy frames.</li>
+      </ul>
+    </div>
+  </article>
+
+  <article class="gap med" id="g24">
+    <div class="head"><span class="gid">G24</span><h3>Failures go silent</h3></div>
+    <div class="chips"><span class="chip med">Medium</span><span class="chip layer">job.ts · lint · policy</span></div>
+    <ul>
+      <li><b>Checks that fail record nothing:</b>
+        <ul>
+          <li>the lint always exits 0;</li>
+          <li>a bounds check that can't run records nothing;</li>
+          <li>a missing picture check is stored as null with no flag.</li>
+        </ul>
+      </li>
+      <li><b>The spend cap misses HeyGen.</b> HeyGen's cost is recorded as unknown, so the cap only counts Claude.</li>
+      <li><b>The final lint keeps only 5 rules,</b> so a build-time edit that breaks a plan rule goes unseen.</li>
+      <li><b>The SDK's own denial text tells the model to wait for the user, and it does.</b> That is how the cache reel lost frame 6.</li>
+      <li><b>One false failure:</b> a caption failure marks a finished video as failed.</li>
+    </ul>
+    <div class="fix"><h4>Fix</h4>
+      <ul>
+        <li>Each of these becomes a logged flag on the job, shown on the reel's page.</li>
+        <li>The headless rule tells the model that a denied call is never a person.</li>
+      </ul>
+    </div>
+  </article>
+</section>
+
+<section id="ledger">
+  <h2>The contradiction ledger</h2>
+  <p>File paths are under <code>explainers/</code> unless they start with <code>lib/</code>. "frame.md" is the preset; <code>recipe/frame.md</code> and <code>frame-presets/helios/FRAME.md</code> are byte-identical copies.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>#</th><th>One file says</th><th>Another says</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td class="id">1</td><td>Frame 2 is <code>anchor: scene</code> (story-design.md:253); "The anchor scene returns in beats 1, 2, 4 and 5" (frame.md:257); frame-worker.md:32, :71</td><td>"Never the analogy's scene." (frame.md:535); <code>anchor: own</code> (skeleton:49, SKILL.md:203, lint)</td><td>Frame 2's worker may draw the analogy before it is introduced</td></tr>
+      <tr><td class="id">2</td><td>"Frame 6's step tracker prints the <code>technical</code> names" (director/scene-builder.md:54)</td><td>The tracker shows "the example's own concrete steps" (frame.md:84)</td><td>Two trackers; no link between example and analogy</td></tr>
+      <tr><td class="id">3</td><td>"one cut back to the anchor scene" in beat 6 (frame.md:579, story-design.md:162)</td><td>Frame 6 has "none of the anchor scene's entities, setting, characters" (SKILL.md HARD 9)</td><td>An allowed move is also forbidden</td></tr>
+      <tr><td class="id">4</td><td>The hero is orange "in every frame" (SKILL.md HARD 11, frame.md:67)</td><td>The example shares no characters (HARD 9)</td><td>The hero walked into the example in 3 reels</td></tr>
+      <tr><td class="id">5</td><td>Frame 4 answers the gap "in its own words" (SKILL.md:206)</td><td>The lint requires 2 of the question's own key words (lint:683–690)</td><td>Circular or mixed-world closing lines</td></tr>
+      <tr><td class="id">6</td><td>"The focal changes only at a beat boundary." (frame.md:301)</td><td>Frame treatments move the focal within a beat (frame.md:559, 570, 581)</td><td>The highlight can't follow the step</td></tr>
+      <tr><td class="id">7</td><td>"exactly one thing to read" (frame.md:349); "Never two." (visual-design.md:100)</td><td>Captions show every spoken word; labels land as the voice names them (frame.md:384)</td><td>Every label breaks the rule</td></tr>
+      <tr><td class="id">8</td><td>At most three readable things (frame.md:202); medium shot = 2–3 entities (:263)</td><td>Every shot draws every entity (:268); at most 4 entities (scene-builder.md:103); at most five objects (visual-design.md:104)</td><td>Frame 4's wide shot of 4 entities can't pass the picture check</td></tr>
+      <tr><td class="id">9</td><td>"at least half of the frame empty" (frame.md:370, frame-worker-core.md:131)</td><td>"the scene fills the frame" (core:135); fails under 60% of the safe width (faceless SKILL.md:164)</td><td>Both can't hold</td></tr>
+      <tr><td class="id">10</td><td>Frame 5 may show "the object turning into its real counterpart" (frame.md:567)</td><td>Looks are locked (frame.md:243, SKILL.md HARD 11)</td><td>A morph breaks the locked looks</td></tr>
+      <tr><td class="id">11</td><td>The voiceover is "a timing reference only" (frame-worker-core.md:32)</td><td>"the picture explains" (frame.md:15); shots follow the voice (EX3-91)</td><td>Workers time, they don't illustrate (G19)</td></tr>
+      <tr><td class="id">12</td><td>"Exactly two files" (frame-worker-core.md:41, 138)</td><td>Workers also write <code>.props.js</code> (frame-worker.md:115)</td><td>3 of 7 workers wrote a third file</td></tr>
+      <tr><td class="id">13</td><td>Workers never run commands (core:68; no Bash in policy.ts:42)</td><td>"Try it with node assets/kit/try.mjs…" (frame-worker.md:67)</td><td>An instruction the worker can't follow</td></tr>
+      <tr><td class="id">14</td><td>Frame 1 writes "no events file" (frame.md:501)</td><td>At least 4 events on frames 1, 2, 4… (core:95; frame.md:670)</td><td>Frame 1 can't satisfy both</td></tr>
+      <tr><td class="id">15</td><td><code>space: crowd</code>, "which frames crowd" (visual-design.md:38, 93)</td><td>"never a crowd" (frame.md:369–376)</td><td>The director wrote "frame 1 crowds into motion"</td></tr>
+      <tr><td class="id">16</td><td>"with critters and props" (frame-worker.md:81, 102, 108)</td><td>Critters are "never the default" (frame.md:172); objects can act (SKILL.md HARD 7)</td><td>Characters added to object-led reels</td></tr>
+      <tr><td class="id">17</td><td>The reel is "acted by critters" (SKILL.md:11–12)</td><td>Objects can act; "none" means no critter (SKILL.md HARD 7)</td><td>Same as 16, at the director</td></tr>
+      <tr><td class="id">18</td><td>"the analogy was picked for simplicity" (story-design.md:200); "Everyday analogy" (beat 4, theme brief, REEL_SHAPE)</td><td>The writer picks "the most apt and memorable", in many shapes (analogy-writer-v7)</td><td>The director tones down an interesting analogy</td></tr>
+      <tr><td class="id">19</td><td>"its rung" (SKILL.md:36, story-design.md:23); "three candidates" (story-design.md:138)</td><td>No rung since v7; five candidates (EX3-122)</td><td>Stale</td></tr>
+      <tr><td class="id">20</td><td>"In the next 30 seconds…" (SKILL.md:194, skeleton:33)</td><td><code>duration: 60s</code> (skeleton:3); reels run 61–69s</td><td>A false statement in every reel (G6)</td></tr>
+      <tr><td class="id">21</td><td>Hold 0.15s (all prompts); frame 1 is 3.5s (skeleton, lint); cuts every 2.5–4s (frame.md:280)</td><td>Hold 0.2 (lint:29–36); frame 1 is 4–5s (SKILL.md:180, story-design.md:44); code enforces 1.5–4.5s (shots.js:71)</td><td>Numbers drift between prose and code</td></tr>
+      <tr><td class="id">22</td><td>The term is "spoken on purpose in the bridge" (lint comment :707)</td><td>An error when frame 2 says the term (lint:667)</td><td>Stale comment</td></tr>
+      <tr><td class="id">23</td><td>The gap test leaves out the title card (SKILL.md:119)</td><td>The real frame 1 shows the term on the title card</td><td>The test reports "never named" confusions that viewers don't have</td></tr>
+      <tr><td class="id">24</td><td>The jargon check runs on frame 2 only</td><td>Frame 2's words are fixed (EX3-120)</td><td>The only jargon check is on the one frame that can't change</td></tr>
+      <tr><td class="id">25</td><td>"director-v11 (Explainers 3.8)" (SKILL.md:3)</td><td>Heading "(Explainers 3.3)"; workflow "3.2"; frame.md "v9 (3.3)" citing EX3-117; scene builder "3.7"</td><td>Version labels can't be trusted</td></tr>
+      <tr><td class="id">26</td><td>Packets point at <code>hyperframes-animation/rules</code></td><td>That skill is excluded from jobs (lib/explainers/render/workspace.ts:46–56)</td><td>A dead path in every packet</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="plan">
+  <h2>Fix plan</h2>
+  <p>The phases go in order. Phase 1 is safe and changes no design. Phases 2 and 3 are where the teaching improves, and they need your approval first. Everything stays local and uncommitted until a reel validates it, as before.</p>
+
+  <div class="phase">
+    <span class="pn">Phase 1</span>
+    <div>
+      <h3>Clean up and stop starving the checks</h3>
+      <ul>
+        <li>Fix ledger rows 1–3 and 5–26. Row 4 needs your call on the hero's orange.</li>
+        <li>Keep one copy of frame.md, and each number in one place.</li>
+        <li>Add the priority block (G13).</li>
+        <li>Give every packet the anchor scene and the video direction, and replace "timing reference only" (G19).</li>
+        <li>Move the picture check into worker code, and reserve budget for fixes (G21).</li>
+        <li>Have code compute the test verdicts (G15, first half).</li>
+        <li>Make silent failures visible (G24).</li>
+        <li>Fix the opener's facts, if you approve (G6).</li>
+      </ul>
+      <p class="note">Offline tests only. No extra cost per reel.</p>
+    </div>
+  </div>
+  <div class="phase">
+    <span class="pn">Phase 2</span>
+    <div>
+      <h3>The teaching spine and the new beat jobs</h3>
+      <ul>
+        <li>The idea phase writes the spine. Jev's analogy and gap scoring are measured against it (G1).</li>
+        <li>Beat 4 maps as it plays (G2). Beat 5 becomes why it works plus where it breaks (G2, G3).</li>
+        <li>Beat 6 walks the same steps, with the new step tracker (G10, G20).</li>
+        <li>Beat 7 becomes the payoff and takeaway (G4, G12).</li>
+        <li>A shorter definition (G7) and a new-word budget (G9).</li>
+        <li>Words rebalanced toward beats 4–5.</li>
+        <li>The hook-to-gap bridge (G5, your pick of A or B).</li>
+        <li>Lighter phrase lints (G17).</li>
+      </ul>
+      <p class="note">About $0.02 more per topic for the spine. Then two live reels, on your go-ahead, about $7–8 each.</p>
+    </div>
+  </div>
+  <div class="phase">
+    <span class="pn">Phase 3</span>
+    <div>
+      <h3>An independent editor, and a test that can block</h3>
+      <ul>
+        <li>The teaching editor runs between the plan and audio, with authority to send beats back (G16).</li>
+        <li>Graded severity: blocking findings stop audio until one rewrite is tried (G15).</li>
+        <li>Check the anchor scene's picture before audio (G22).</li>
+        <li>A shared registry of real-world objects, and lint on the built shots (G23).</li>
+        <li>Visual caps unified, and results held on screen (G20).</li>
+      </ul>
+      <p class="note">About $0.10–0.25 more per reel for the editor and one more test run.</p>
+    </div>
+  </div>
+  <div class="phase">
+    <span class="pn">Phase 4</span>
+    <div>
+      <h3>Close the loop</h3>
+      <ul>
+        <li>Your 30-second rating on each reel.</li>
+        <li>A weekly roll-up of the first-viewer confusions by beat (G18).</li>
+        <li>This makes the next design change come from patterns, not from one reel.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Your calls</h2>
+  <p>These gaps can only be fixed by revisiting decisions you made. Each one names the decision and the smallest change that would fix it.</p>
+  <div class="decision"><h3>1 · The opener template (EX3-96)</h3><p>Keep the template, but have code fill in "the next minute" and pick AI or tech. Or let the slot voice the hook's problem.</p></div>
+  <div class="decision"><h3>2 · "Build anyway, record it" (EX3-108)</h3><p>Blocking findings only (mechanism wrong, example wrong or ambiguous, question unanswered) stop audio for one rewrite. After that, the reel builds and is flagged.</p></div>
+  <div class="decision"><h3>3 · Pauses of at most 0.2s (EX3-79)</h3><p>Keep the cap everywhere except two ~0.4s beats: after the gap's question and after the click line.</p></div>
+  <div class="decision"><h3>4 · What beats 4, 5 and 7 do (EX3-10)</h3><p>Eight beats stay. The jobs change:</p><ul><li>beat 4: map as it plays;</li><li>beat 5: why it works, and where it breaks;</li><li>beat 7: the payoff and takeaway, instead of another real-world scene.</li></ul></div>
+  <div class="decision"><h3>5 · The example's own steps (EX3-87)</h3><p>The example walks the same steps as the analogy, in a different world (EX3-105 stays).</p></div>
+  <div class="decision"><h3>6 · The hook-to-gap jump (EX3-115)</h3><p>A: frame 2 visually echoes the hook with the real thing. B: open on the real thing and bring the analogy in as the answer.</p></div>
+  <div class="decision"><h3>7 · The hero's orange (EX3-107)</h3><p>The hero is orange in the analogy frames only, so it never leaks into the real example.</p></div>
+</section>
+
+<section id="protect">
+  <h2>Keep these: what already works</h2>
+  <p>The fixes shouldn't lose these. Each is the system at its best.</p>
+  <ul class="protect">
+    <li><b>A gap that is a real contradiction:</b> "Software often shows you information that is slightly out of date, and it does it on purpose." <span class="note">(cache 0a363b52)</span></li>
+    <li><b>A gap answered by a concrete case:</b> "The app has no weather station of its own. So how does it get the forecast?" Frame 6 then returns to it: "It sends back a reply: 21 degrees." <span class="note">(API cdfe57f4)</span></li>
+    <li><b>A mechanism, a concrete example and the stakes:</b>
+      <ul>
+        <li>The mechanism: "The driver cannot tell whose cones they are."</li>
+        <li>The example: "Hidden white text on it says to praise the page."</li>
+        <li>The stakes: "One hidden line can give it orders you never gave."</li>
+      </ul>
+      <span class="note">(prompt injection 4bc9af1f)</span></li>
+    <li><b>A worked example the viewer can check:</b> "A customer asks, can I return shoes after 45 days? The chunk about shoes says 30 days. The chatbot answers no." <span class="note">(RAG ec9c06a5)</span></li>
+    <li><b>The trade-off in real life:</b> "If the logo changed, you see the old one." <span class="note">(cache bdbd97f6)</span></li>
+    <li><b>A clean rhythm of steps:</b> "The first points to a district. The next points to a street. The last gives the bakery's house number." <span class="note">(DNS a895028f)</span></li>
+    <li><b>The test stranger always got the basic idea.</b> The definition plus the analogy carry the "what". The fixes above are about the "how" and the "why".</li>
+  </ul>
+  <p class="note">How this audit was done: I read the prompts and rubrics myself. Three helper audits then covered the 9 reels' scripts and first-viewer records, the visual and frame-worker prompts and the world kit, and the lint, the budgets and the pipeline code. Their key citations were spot-checked against the files. Quotes are exact. The scores and judgments about the scripts are my reading, not acceptance.</p>
+</section>
+
+</div>

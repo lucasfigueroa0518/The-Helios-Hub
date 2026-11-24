@@ -17,6 +17,9 @@ test('a carousel keeps one id from Content ready → scheduled → publishing �
   const { pg, query } = await openHubTestDb();
   await seedHubFixture(pg);
   await pg.exec(`UPDATE social.posts SET slide_objects = '["a.jpg","b.jpg","c.jpg"]'::jsonb WHERE id = '${IDS.socPost2}'`);
+  // Carousels Live (D16): Approve books a slot (contract §4.3; Approval would too, Paused would not) and a due slot posts.
+  await pg.exec(`INSERT INTO social.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', 'true'::jsonb)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   const stableId = hubId('carousels', 'content', IDS.socPost2);
   const view = async () => {
     const d = buildDataset(await readAll(query), null, new Date('2026-10-08T12:00:00Z'));

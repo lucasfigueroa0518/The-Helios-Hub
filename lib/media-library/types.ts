@@ -7,12 +7,26 @@
 /** A SELECT/INSERT query function: the runtime passes lib/db.ts `dbQuery`, tests pass PGlite. */
 export type Query = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export type RunKind = 'carousel' | 'story' | 'backfill';
+/**
+ * reel_ai_drama: Reel AI Drama's harvest (lib/media-library/drama.ts). ai_trivia, real_or_ai: the Stories Split's
+ * content types (SS-24; Morning Download keeps `story`).
+ */
+export type RunKind = 'carousel' | 'story' | 'backfill' | 'reel_ai_drama' | 'ai_trivia' | 'real_or_ai';
 
 /** picked: a slide's winner · passed: a runner-up that passed every check · verified: an identity-verified headshot, second photo, CEO, headquarters or logo · rejected: failed the tag fit or the close-up check · used: imported from social.used_photos. */
 export type Outcome = 'picked' | 'passed' | 'verified' | 'rejected' | 'used';
 
-export type Licence = 'open' | 'government' | 'company' | 'unknown';
+/**
+ * generated (SS-24): an AI image Real or AI? made or imported. Stored with reuse_ok false and never served to another
+ * type (reader.ts allowGenerated, drama.ts).
+ */
+export type Licence = 'open' | 'government' | 'company' | 'unknown' | 'generated';
+
+/** Truth of a Real or AI? photo (photos.truth, SS-24): a real photograph, or an AI image. Null for every other photo. */
+export type PhotoTruth = 'real' | 'ai';
+
+/** Real or AI?'s own lane: its AI images (licence generated). Its real photos go in the `commons-search` scene lane. */
+export const REAL_OR_AI_LANE = 'real-or-ai';
 
 /** settings.finder_source: off (default) · compete (bank candidates join the online ones) · first (online search stops once the bank has enough). */
 export type FinderSourceMode = 'off' | 'compete' | 'first';

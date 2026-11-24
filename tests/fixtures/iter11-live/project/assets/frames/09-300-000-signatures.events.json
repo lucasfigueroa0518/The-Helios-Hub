@@ -1,0 +1,97 @@
+[
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "low room tone",
+  "dur": 6
+ },
+ {
+  "t": 2.063,
+  "kind": "foley",
+  "what": "paper chip laid on kraft",
+  "dur": 0.3
+ },
+ {
+  "t": 2.063,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 2.363,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 3.66,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 3.66,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 3.795,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 3.929,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 3.96,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.064,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.199,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.334,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.468,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.603,
+  "kind": "impact",
+  "kit": true
+ },
+ {
+  "t": 6.003,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 6.053,
+  "kind": "pop",
+  "kit": true
+ },
+ {
+  "t": 6.303,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 7.253,
+  "kind": "impact",
+  "kit": true
+ }
+]

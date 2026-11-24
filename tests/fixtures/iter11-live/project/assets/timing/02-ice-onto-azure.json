@@ -1,0 +1,133 @@
+{
+ "frame": 2,
+ "id": "02-ice-onto-azure",
+ "duration": 7.362,
+ "voice_end": 7.232,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "Microsoft",
+   "start": 0.02,
+   "end": 0.401
+  },
+  {
+   "text": "wrote",
+   "start": 0.437,
+   "end": 0.615
+  },
+  {
+   "text": "that",
+   "start": 0.687,
+   "end": 0.758
+  },
+  {
+   "text": "in",
+   "start": 0.83,
+   "end": 0.901
+  },
+  {
+   "text": "January,",
+   "start": 1.044,
+   "end": 1.544
+  },
+  {
+   "text": "in",
+   "start": 1.736,
+   "end": 1.739
+  },
+  {
+   "text": "a",
+   "start": 1.775,
+   "end": 1.811
+  },
+  {
+   "text": "post",
+   "start": 1.882,
+   "end": 2.096
+  },
+  {
+   "text": "announcing",
+   "start": 2.168,
+   "end": 2.525
+  },
+  {
+   "text": "ICE's",
+   "start": 2.596,
+   "end": 3.096
+  },
+  {
+   "text": "move",
+   "start": 3.168,
+   "end": 3.382
+  },
+  {
+   "text": "onto",
+   "start": 3.489,
+   "end": 3.596
+  },
+  {
+   "text": "its",
+   "start": 3.668,
+   "end": 3.739
+  },
+  {
+   "text": "government",
+   "start": 3.811,
+   "end": 4.096
+  },
+  {
+   "text": "cloud,",
+   "start": 4.168,
+   "end": 4.382
+  },
+  {
+   "text": "and",
+   "start": 4.731,
+   "end": 4.739
+  },
+  {
+   "text": "called",
+   "start": 4.811,
+   "end": 4.954
+  },
+  {
+   "text": "itself",
+   "start": 5.025,
+   "end": 5.311
+  },
+  {
+   "text": "proud",
+   "start": 5.48,
+   "end": 5.811
+  },
+  {
+   "text": "to",
+   "start": 5.882,
+   "end": 5.954
+  },
+  {
+   "text": "support",
+   "start": 6.025,
+   "end": 6.311
+  },
+  {
+   "text": "ICE's",
+   "start": 6.382,
+   "end": 6.811
+  },
+  {
+   "text": "work.",
+   "start": 6.882,
+   "end": 7.084
+  }
+ ],
+ "lines": [
+  {
+   "id": "L2",
+   "start": 0.02,
+   "end": 7.084,
+   "label": "January 2018",
+   "label_kind": "date"
+  }
+ ]
+}

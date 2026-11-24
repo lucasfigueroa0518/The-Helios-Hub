@@ -1,0 +1,57 @@
+/* The comment lab. Scoped under .pl. */
+.pl {
+  --pl-bg: #f6f6f4;
+  --pl-card: #ffffff;
+  --pl-ink: #161616;
+  --pl-ink-2: #5d5d5a;
+  --pl-line: #e2e2de;
+  --pl-accent: #e8590c;
+  --pl-bad: #c92a2a;
+  min-height: 100vh;
+  background: var(--pl-bg);
+  color: var(--pl-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  padding: 24px clamp(16px, 4vw, 40px) 48px;
+  box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  .pl { --pl-bg: #121212; --pl-card: #1c1c1c; --pl-ink: #ececea; --pl-ink-2: #a3a3a0; --pl-line: #2e2e2c; }
+}
+.pl *, .pl *::before, .pl *::after { box-sizing: border-box; }
+.pl > * { max-width: 760px; }
+.pl h1 { font-size: 26px; margin: 0 0 4px; }
+.pl-head { margin-bottom: 16px; }
+.pl-note { color: var(--pl-ink-2); margin: 0; font-size: 14px; line-height: 1.5; }
+.pl-small { font-size: 12px; }
+.pl-error { color: var(--pl-bad); font-size: 14px; margin: 8px 0; overflow-wrap: anywhere; }
+.pl button, .pl select { font: inherit; font-size: 14px; border: 1px solid var(--pl-line); background: transparent; color: var(--pl-ink); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+.pl select option { color: #161616; }
+.pl button:disabled, .pl select:disabled { opacity: 0.5; cursor: default; }
+.pl button:focus-visible, .pl select:focus-visible, .pl textarea:focus-visible { outline: 2px solid var(--pl-accent); outline-offset: 2px; }
+.pl .pl-primary { background: var(--pl-accent); border-color: var(--pl-accent); color: #fff; font-weight: 600; }
+.pl-card { background: var(--pl-card); border: 1px solid var(--pl-line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+.pl-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pl-row label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--pl-ink-2); }
+.pl-post-copy { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; }
+.pl-caption { margin-top: 10px; }
+.pl-caption summary { cursor: pointer; font-size: 12px; color: var(--pl-ink-2); margin-bottom: 4px; }
+.pl-head a, .pl-card a { color: inherit; }
+.pl textarea { width: 100%; font: inherit; font-size: 15px; padding: 10px; border: 1px solid var(--pl-line); border-radius: 8px; background: transparent; color: var(--pl-ink); margin-bottom: 8px; resize: vertical; }
+.pl-samples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.pl-samples button { font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.pl-comment { margin: 0 0 2px; font-weight: 600; overflow-wrap: anywhere; }
+.pl-route { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.pl-chip { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--pl-accent); border: 1px solid var(--pl-accent); color: #fff; white-space: nowrap; }
+.pl-chip-silent { background: transparent; border-color: var(--pl-line); color: var(--pl-ink-2); }
+.pl-chip-plain { background: transparent; border-color: var(--pl-line); color: var(--pl-ink); font-weight: 500; }
+.pl-label { margin: 10px 0 4px; font-size: 12px; color: var(--pl-ink-2); }
+.pl-bubble { margin: 0; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--pl-ink) 6%, transparent); font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pl-flag { margin: 8px 0 0; font-size: 12px; color: var(--pl-bad); }
+.pl-sources { margin-top: 8px; font-size: 13px; color: var(--pl-ink-2); }
+.pl-sources summary { cursor: pointer; }
+.pl-sources ul { margin: 6px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
+.pl-sources a { color: inherit; }
+.pl .pl-retry { margin-top: 10px; font-size: 13px; padding: 4px 10px; }
+.pl-soul { margin-top: 24px; }
+.pl-soul summary { cursor: pointer; font-size: 14px; margin-bottom: 10px; }
+.pl-soul pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 13px; line-height: 1.5; background: var(--pl-card); border: 1px solid var(--pl-line); border-radius: 12px; padding: 14px; color: var(--pl-ink-2); }

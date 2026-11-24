@@ -1,0 +1,37 @@
+{
+ "file": "0c566d74-new-props.js",
+ "job": "0c566d74-4577-484d-9d03-5d42e10d7974",
+ "topic": "model routing",
+ "added_at": "2026-11-17T02:00:18.379Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "curved triage reception desk": {
+   "source_name": "curved triage reception desk",
+   "tags": {
+    "is": "an emergency-room triage desk: a low curved reception counter, white front panel bulging toward the entrance, a dark counter top, and a small yellow TRIAGE plate on its front",
+    "setting": [
+     "hospital emergency room",
+     "clinic waiting area",
+     "triage"
+    ],
+    "material": "painted white panel, dark laminate top, yellow plate",
+    "parts": [
+     "curved front",
+     "dark overhanging counter top",
+     "yellow TRIAGE plate"
+    ],
+    "not": [
+     "dining table",
+     "kitchen counter",
+     "bar",
+     "school desk",
+     "shop checkout",
+     "bookshelf"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

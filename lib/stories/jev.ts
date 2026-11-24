@@ -39,8 +39,8 @@ export function createStoriesJev(transport: JevTransport, db: StoriesDb): Storie
       calls++;
       const cost = jevUsd(result.usage.input_tokens);
       usd += cost;
-      await recordJevLog(db, { setId: req.setId, component: req.component, questionSetId: req.set.id, questionSetVersion: req.set.version, resolvedModel: result.model, state: req.state, answers: result.answers, inputTokens: result.usage.input_tokens });
-      await recordCost(db, { setId: req.setId, vendor: 'jev', component: req.component, inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens, usd: cost });
+      await recordJevLog(db, { setId: req.setId, component: req.component, questionSetId: req.set.id, questionSetVersion: req.set.version, resolvedModel: result.model, state: req.state, answers: result.answers, inputTokens: result.usage.input_tokens ?? undefined });
+      await recordCost(db, { setId: req.setId, vendor: 'jev', component: req.component, inputTokens: result.usage.input_tokens ?? undefined, outputTokens: result.usage.output_tokens ?? undefined, usd: cost });
       return result;
     },
   };

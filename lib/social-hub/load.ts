@@ -1,18 +1,22 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { explainersHubQuery, liveHubQuery, type HubQuery } from '@/lib/social-hub/db';
 import { buildCostPart, buildDataset, type CostPart, type HubDataset, type VerticalReads } from '@/lib/social-hub/dataset';
 import { readCarousels } from '@/lib/social-hub/queries/carousels';
 import { readLastFewDays } from '@/lib/social-hub/queries/last-few-days';
 import { readAiEvents } from '@/lib/social-hub/queries/ai-events';
+import { readFieldNotes } from '@/lib/social-hub/queries/field-notes';
 import { readAccount } from '@/lib/social-hub/queries/account';
 import { readCosts } from '@/lib/social-hub/queries/costs';
 import { readExplainers } from '@/lib/social-hub/queries/explainers';
+import { readReelAiDramaIfReady } from '@/lib/social-hub/queries/reel-ai-drama';
 import { readLatestQuota } from '@/lib/social-hub/queries/quota';
 import { latestQuotaSnapshot } from '@/lib/social-hub/refresh';
 import { readReels } from '@/lib/social-hub/queries/reels';
 import { forVertical, readSpine, type SpineRead } from '@/lib/social-hub/queries/spine';
-import { readStories } from '@/lib/social-hub/queries/stories';
+import { readStories, storiesFor } from '@/lib/social-hub/queries/stories';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { consumeMoves, readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -37,10 +41,11 @@ function explainersShareMain(q: HubQuery): boolean {
   return process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
 }
 
-const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'];
-const SPINE_WITHOUT_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'last_few_days', 'ai_events'];
+// AI Drama Reels live on the explainers' connection (schema reel_ai_drama), so they go wherever explainers go.
+const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
+const SPINE_WITHOUT_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'last_few_days', 'ai_events', 'field_notes'];
 
-type SpineLazy = { get: () => Promise<SpineRead> };
+type SpineLazy = { get: () => Promise<SpineRead>; stories: () => ReturnType<typeof readStories> };
 const spineSlot = new AsyncLocalStorage<SpineLazy>();
 
 /**
@@ -51,7 +56,10 @@ const spineSlot = new AsyncLocalStorage<SpineLazy>();
 export function withSharedSpine<T>(q: HubQuery, run: () => Promise<T>): Promise<T> {
   const verticals = explainersShareMain(q) ? SPINE_WITH_EXPLAINERS : SPINE_WITHOUT_EXPLAINERS;
   let pending: Promise<SpineRead> | null = null;
-  return spineSlot.run({ get: () => (pending ??= readSpine(q, verticals)) }, run);
+  // The three Stories-format types (Stories, AI Trivia, Real or AI?) read the same Stories
+  // engine; in one rebuild that is one read, not three (about 0.4 s of SQL on a cold miss).
+  let stories: ReturnType<typeof readStories> | null = null;
+  return spineSlot.run({ get: () => (pending ??= readSpine(q, verticals)), stories: () => (stories ??= readStories(q)) }, run);
 }
 
 async function spineFor(q: HubQuery, vertical: Vertical): Promise<SpineRead> {
@@ -61,22 +69,29 @@ async function spineFor(q: HubQuery, vertical: Vertical): Promise<SpineRead> {
 }
 
 /**
- * One content type (an action refresh). Stories have no spine. Explainers on
+ * One content type (an action refresh). The Stories-format types have no spine: each reads the Stories
+ * engine and keeps its own series (SS-1). Explainers on
  * their own database read their spine there; on the shared database they use
  * the same spine as the other types.
  */
 export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(), explainersQ?: Promise<HubQuery>): Promise<NonNullable<VerticalReads[Vertical]>> {
-  if (vertical === 'stories') return readStories(q);
+  if (isStoryVertical(vertical)) return storiesFor(await (spineSlot.getStore()?.stories() ?? readStories(q)), vertical);
   if (vertical === 'explainers') {
     const eq = await (explainersQ ?? explainersHandle(q));
     const spine = explainersShareMain(q) ? await spineFor(q, 'explainers') : await readSpine(eq, ['explainers']);
     return readExplainers(eq, spine);
   }
+  if (vertical === 'reel_ai_drama') {
+    const eq = await (explainersQ ?? explainersHandle(q));
+    const spine = explainersShareMain(q) ? await spineFor(q, 'reel_ai_drama') : await readSpine(eq, ['reel_ai_drama']);
+    return readReelAiDramaIfReady(eq, spine);
+  }
   const spine = await spineFor(q, vertical);
   if (vertical === 'reels') return readReels(q, spine);
   if (vertical === 'carousels') return readCarousels(q, spine);
   if (vertical === 'last_few_days') return readLastFewDays(q, spine);
-  return readAiEvents(q, spine, now);
+  if (vertical === 'ai_events') return readAiEvents(q, spine, now);
+  return readFieldNotes(q, spine);
 }
 
 /**
@@ -87,18 +102,25 @@ export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(),
  */
 export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q), now = new Date()): Promise<VerticalReads> {
   const shared = explainersShareMain(q);
-  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'] : ['carousels', 'reels', 'last_few_days', 'ai_events']);
+  const mainSpine = readSpine(q, shared ? SPINE_WITH_EXPLAINERS : SPINE_WITHOUT_EXPLAINERS);
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
-  const [reels, explainers, carousels, stories, lastFewDays, aiEvents] = await Promise.all([
+  const dramaSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['reel_ai_drama']));
+  const storiesRead = readStories(q);
+  storiesRead.catch(() => undefined); // each Stories-format type reports the failure itself
+  const [reels, explainers, carousels, stories, aiTrivia, realOrAi, lastFewDays, aiEvents, fieldNotes, reelAiDrama] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
-    settle(readStories(q)),
+    settle(storiesRead.then((r) => storiesFor(r, 'stories'))),
+    settle(storiesRead.then((r) => storiesFor(r, 'ai_trivia'))),
+    settle(storiesRead.then((r) => storiesFor(r, 'real_or_ai'))),
     settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
     settle(mainSpine.then((spine) => readAiEvents(q, spine, now))),
+    settle(mainSpine.then((spine) => readFieldNotes(q, spine))),
+    settle(explainersQ.then(async (eq) => readReelAiDramaIfReady(eq, await dramaSpine(eq)))),
   ]);
-  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents };
+  return { reels, explainers, carousels, stories, ai_trivia: aiTrivia, real_or_ai: realOrAi, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: reelAiDrama };
 }
 
 /** Read and allocate the cost ledger on its own (it is cached apart from the content; views/cached-dataset.ts). */
@@ -122,8 +144,8 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date(), 
     readDayQuotas(q, explainersQ, now).catch(() => null),
     // Before the column exists (or if the read fails) nothing is hidden, so the hub never fails on it.
     readDeleted(q).catch(() => []),
-    // SELECT only (lib/lfd/settings.ts); an unreadable lfd schema reads as off.
-    readLfdSettings(q).then((s) => s.publishingLive).catch(() => false),
+    // SELECT only (lib/lfd/settings.ts): Live is the state (D16, stateOf), never the raw key; unreadable reads as off.
+    readLfdSettings(q).then((s) => postsToInstagram(stateOf(s.autoRun, s.publishingLive).state)).catch(() => false),
     readRejected(q).catch(() => []),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.

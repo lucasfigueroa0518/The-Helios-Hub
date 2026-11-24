@@ -90,10 +90,13 @@ test('the calm camera refuses big zooms, roll past 3°, and tilt (V-7)', () => {
   assert.throws(() => HX.validateLegs([{ at: 0, dur: 1, to: { zoom: 1.5 }, polarity: 'glide' }], 2), /within 1.2/);
 });
 
-test('colors are palette tokens; the grounds are paper, night, forest, and white for the close', () => {
+test('colors are palette tokens; the grounds are paper, stage, white for the close and room for the analogy (hx-6); night and forest read as stage (hx-4)', () => {
   assert.equal(HX.tok('paper'), '#F3F0EA');
   assert.throws(() => HX.mix('orange', '#00FF00', 0.5), /unknown token/);
-  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'night', 'forest', 'white']);
+  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'stage', 'white', 'room']);
+  assert.deepEqual(HX.groundOf('room'), { name: 'room', fill: '#F3F0EA', dark: false });
+  assert.equal(HX.groundOf('night').name, 'stage');
+  assert.equal(HX.groundOf('forest').name, 'stage');
   assert.equal(HX.GROUNDS.white.fill, '#FFFFFF');
 });
 
@@ -105,12 +108,12 @@ test('kit code draws only in palette colors (V-T1, V-16)', () => {
   }
 });
 
-test('the isometric projection and the stop-motion clock (V-2, V-15)', () => {
+test('the isometric projection, and motion is smooth: no stop-motion clock (V-2, V-15, hx-4)', () => {
   const P = HX.iso(500, 400, 2);
   assert.deepEqual(P(0, 0, 0), [500, 400]);
   assert.deepEqual(P(0, 0, 10), [500, 380]);
-  assert.equal(HX.onTwos(0.066), 0, 'a pose holds for two 30 fps frames');
-  assert.equal(HX.boilSeed(0.05), HX.boilSeed(0.65), 'six drawings, then it repeats');
+  assert.equal(HX.onTwos(0.066), 0.066, 'no poses held on twos: motion is smooth');
+  assert.equal(HX.boilSeed(0.05), HX.boilSeed(0.65), 'no boil: the seed never changes');
 });
 
 test('frame.md carries the kit palette, and the recipe copy matches the preset', () => {
@@ -196,7 +199,7 @@ test('try runs the world and every frame module in Node and reports problems by 
   has(/^03-define: event 2: a foley event needs "what"/);
 });
 
-test('try: the opener draws the title card, frame 3 the dictionary card, and long scene frames cut between shots', () => {
+test('try: the opener draws the title card and frame 3 the dictionary card (4.2: no minimum shot count)', () => {
   const root = project();
   const tryAll = () => spawnSync(process.execPath, ['assets/kit/try.mjs', 'all'], { cwd: root, encoding: 'utf8' });
   const opener = path.join(root, 'assets', 'frames', '01-opener.js');
@@ -208,7 +211,80 @@ test('try: the opener draws the title card, frame 3 the dictionary card, and lon
   const errors = JSON.parse(tryAll().stdout).errors as string[];
   assert.ok(errors.some((e) => /^01-opener:.*title card/.test(e)), errors.join('\n'));
   assert.ok(errors.some((e) => /^03-define:.*dictionary card/.test(e)), errors.join('\n'));
-  assert.ok(errors.some((e) => /^02-scene: export `shots`/.test(e)), errors.join('\n'));
+  assert.ok(!errors.some((e) => /^02-scene: export `shots`/.test(e)), 'a long frame with one shot is a craft call (4.2), never an error');
+});
+
+test("try checks a scene's own new drawings: tags, states, size, a clean draw (EX3-114)", () => {
+  const root = project();
+  const run = (what: string) => JSON.parse(spawnSync(process.execPath, ['assets/kit/try.mjs', what], { cwd: root, encoding: 'utf8' }).stdout) as { ok: boolean; errors: string[]; props?: { file: string; name: string; ok: boolean }[] };
+  assert.deepEqual(run('props'), { ok: true, errors: [], props: [] }, 'no new drawings, nothing to check');
+  const TAGS = "{ is: 'a surgeon\\'s scalpel: thin steel handle, small curved blade', setting: ['operating room'], material: 'steel', parts: ['thin handle', 'curved blade'], not: ['kitchen knife', 'dagger'] }";
+  fs.writeFileSync(path.join(root, 'assets', 'world', 'new-props.js'), [
+    "import { el } from '../kit/draw.js';",
+    'export const NEW_PROPS = {',
+    `  'surgical scalpel': { tags: ${TAGS}, size: [200, 40], states: ['default'], draw: () => [el('path', { d: 'M 0 0 L 120 -10', stroke: '#000' })] },`,
+    "  'mystery tool': { tags: { is: 'a tool' }, size: [10, 10], states: ['default'], draw: () => [el('rect', { width: NaN })] },",
+    '};',
+  ].join('\n'));
+  const found = run('props');
+  assert.equal(found.ok, false);
+  assert.deepEqual(found.props?.map((p) => [p.name, p.ok]), [['surgical scalpel', true], ['mystery tool', false]]);
+  assert.ok(found.errors.some((e) => /"mystery tool" has no setting tag/.test(e)), found.errors.join('\n'));
+  assert.ok(found.errors.some((e) => /"mystery tool" \(default\): the SVG contains "NaN"/.test(e)), found.errors.join('\n'));
+  // `all` reports them too, so the build fixes them.
+  assert.ok(run('all').errors.some((e) => /^props: .*mystery tool/.test(e)));
+});
+
+test('the bank grows: only verified, fully tagged, clean, kit-only drawings join it, and the catalog lists them (EX3-114)', async () => {
+  const { harvestNewProps } = await import('../lib/explainers/render/bank');
+  const { catalogEntries, bankManifests } = await import('../explainers/world-kit/props/catalog.mjs');
+  const root = project();
+  const bank = fs.mkdtempSync(path.join(os.tmpdir(), 'explainers-bank-'));
+  const tags = (is: string) => `{ is: ${JSON.stringify(is)}, setting: ['clinic'], material: 'steel', parts: ['blade'], not: ['kitchen knife'] }`;
+  fs.writeFileSync(path.join(root, 'assets', 'world', 'new-props.js'), [
+    "import { el } from '../kit/draw.js';",
+    'export const NEW_PROPS = {',
+    `  'surgical scalpel': { tags: ${tags("a surgeon's scalpel")}, size: [200, 40], states: ['default'], draw: () => [el('path', { d: 'M 0 0 L 120 -10', stroke: '#000' })] },`,
+    `  'reception desk': { tags: ${tags('a clinic reception desk')}, size: [300, 160], states: ['default'], draw: () => [el('rect', { width: 300, height: 120 })] },`,
+    `  table: { tags: ${tags('a steel instrument table')}, size: [200, 160], states: ['default'], draw: () => [el('rect', { width: 200, height: 20 })] },`,
+    '};',
+  ].join('\n'));
+  fs.writeFileSync(path.join(root, 'assets', 'frames', '06-example.props.js'), [
+    "import { CAST } from '../world/world.js';",
+    `export const NEW_PROPS = { 'chart': { tags: ${tags('a chart')}, size: [10, 10], states: ['default'], draw: () => [] } };`,
+  ].join('\n'));
+  fs.mkdirSync(path.join(root, '.hyperframes'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.hyperframes', 'picture-check.json'), JSON.stringify({
+    tiles: [],
+    assets: [
+      { name: 'surgical scalpel', meant: "a surgeon's scalpel", seen: 'a small surgical scalpel', pass: true },
+      { name: 'reception desk', meant: 'a clinic reception desk', seen: 'a wooden table', pass: false },
+      { name: 'table', meant: 'a steel instrument table', seen: 'a metal instrument table', pass: true },
+      { name: 'chart', meant: 'a chart', seen: 'a chart', pass: true },
+    ],
+  }));
+  const r = harvestNewProps({ projectDir: root, jobId: 'abcdef12-0000', topic: 'Model routing', bankDir: bank, now: new Date('2026-10-22T12:00:00Z') });
+  // The table's name clashes with the library's, so it is kept under a job-marked name.
+  assert.deepEqual(r.added.map((a) => a.name), ['surgical scalpel', 'table (abcdef12)']);
+  assert.deepEqual(r.skipped.map((x) => [x.name, x.why.split(' ')[0]]), [['reception desk', 'not'], ['chart', 'imports']]);
+  const [manifest] = bankManifests(bank);
+  assert.equal(manifest.file, 'abcdef12-new-props.js');
+  assert.equal(manifest.props['surgical scalpel'].seen, 'a small surgical scalpel');
+  assert.match(fs.readFileSync(path.join(bank, 'abcdef12-new-props.js'), 'utf8'), /from '\.\.\/\.\.\/draw\.js'/);
+  assert.match(fs.readFileSync(path.join(bank, 'index.js'), 'utf8'), /import \* as m0 from '\.\/abcdef12-new-props\.js'/);
+  const names = catalogEntries(bank).filter((e: { source: string }) => e.source === 'bank').map((e: { name: string }) => e.name);
+  assert.deepEqual(names, ['surgical scalpel', 'table (abcdef12)']);
+  // In a job's kit the bank loads with the library: prop() draws the banked scalpel.
+  const kitBank = path.join(root, 'assets', 'kit', 'props', 'bank');
+  fs.cpSync(bank, kitBank, { recursive: true });
+  const check = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import * as m from 'node:module';
+    m.registerHooks({ resolve: (s, c, n) => s.startsWith('https://cdn.jsdelivr.net/npm/perfect-freehand') ? { url: 'data:text/javascript,x', format: 'module', shortCircuit: true } : n(s, c),
+      load: (u, c, n) => u === 'data:text/javascript,x' ? { format: 'module', source: 'export const getStroke = (p) => p;', shortCircuit: true } : n(u, c) });
+    const { prop, PROPS } = await import('./assets/kit/props.js');
+    console.log(JSON.stringify({ svg: prop('surgical scalpel', 0, 0).includes('data-prop="surgical scalpel"'), tags: PROPS['table (abcdef12)'].tags.is }));
+  `], { cwd: root, encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(check.stdout), { svg: true, tags: 'a steel instrument table' }, check.stderr);
 });
 
 // ── Handwriting (EX3-61) ────────────────────────────────────────────────────
@@ -219,7 +295,7 @@ test('handwrite draws Hershey Sans strokes that reveal in order and measure thei
   const { handwrite, handwriteWidth, scope } = await import('../explainers/world-kit/draw.js');
   scope('t-', 'paper');
   assert.ok(Object.keys(HERSHEY_SANS).length >= 90, 'printable ASCII');
-  assert.equal(handwrite('hello', 100, 500, 60, 0), '<g data-k="text" data-text="hello" filter="url(#t-wobble)"></g>', 'tagged for bounds.mjs (EX3-92)');
+  assert.equal(handwrite('hello', 100, 500, 60, 0), '<g data-k="text" data-text="hello"></g>', 'tagged for bounds.mjs (EX3-92), with no wobble (hx-4)');
   const half = handwrite('hello', 100, 500, 60, 0.5, { role: 'title' });
   const full = handwrite('hello', 100, 500, 60, 1, { role: 'title' });
   assert.match(full, /data-role="title"/);
@@ -364,9 +440,12 @@ test('pace makes each frame its voice plus its hold, idempotently, and writes th
   assert.deepEqual(timing, { frame: 2, id: '02-scene', duration: 5.15, voice_end: 5, hold: 0.15, words: [{ text: 'in', start: 0.1, end: 0.3 }] });
 });
 
-test('quiet windows: all of frame 1 (the title card), all of frame 3, and the close', () => {
-  const f = (number: number, duration: number) => ({ number, duration, fields: {} });
-  assert.deepEqual(quietWindows([f(1, 3.5), f(2, 6), f(3, 7), f(4, 12)] as never), [[0, 3.5], [9.5, 16.5]]);
+test('quiet windows: all of frame 1 (the opener), the frame with the dictionary card, and the close', () => {
+  const f = (number: number, duration: number, fields: Record<string, string> = {}) => ({ number, duration, fields });
+  // 4.3: the dictionary card is frame 5's; frame 3's hand-off card keeps its captions.
+  assert.deepEqual(quietWindows([f(1, 3.5), f(2, 5), f(3, 3), f(4, 12), f(5, 10, { definition: '"A webhook is…"' })] as never), [[0, 3.5], [23.5, 33.5]]);
+  // A 4.2 storyboard: the card on frame 3.
+  assert.deepEqual(quietWindows([f(1, 3.5), f(2, 6), f(3, 7, { definition: 'x' }), f(4, 12)] as never), [[0, 3.5], [9.5, 16.5]]);
   assert.deepEqual(quietWindows([f(2, 6)] as never), []);
   // The voiceless close is quiet too (EX3-95); a legacy voiced frame 8 is not.
   assert.deepEqual(quietWindows([f(7, 6), { number: 8, duration: 2.5, fields: {} }] as never), [[6, 8.5]]);
@@ -539,31 +618,33 @@ test('textBox sizes its shape around the measured text, wraps long text, and tag
   // The box is centred on (x, y) and wider than the text by its padding on both sides.
   assert.ok(Math.abs(short.box.x + short.box.w / 2 - 518) < 0.01 && Math.abs(short.box.y + short.box.h / 2 - 1180) < 0.01);
   assert.ok(short.box.w >= handwriteWidth('happy to help!', 30) + 56 - 0.01, `${short.box.w}`);
-  // Long text wraps (at most two lines) or shrinks, never wider than maxW.
+  // Long text wraps onto more lines, never wider than maxW and never under 30 px (hx-4: readable at phone size).
   const long = textBox('your order ships tomorrow morning from our main warehouse', 540, 900, { kind: 'speech', size: 34, maxW: 420 });
   assert.ok(long.box.w <= 420 + 0.01, `${long.box.w}`);
-  assert.equal((long.svg.match(/data-k="text"/g) ?? []).length, 2, 'two lines');
+  assert.ok((long.svg.match(/data-k="text"/g) ?? []).length >= 3, 'it wraps rather than shrinking');
   const typed = textBox('refund policy?', 540, 900, { kind: 'screen', hand: false });
   assert.match(typed.svg, /<text data-k="text"[^>]*text-anchor="middle"[^>]*>refund policy\?<\/text>/);
   assert.throws(() => textBox('x', 0, 0, { kind: 'cloud' }), /textBox kind "cloud"/);
   for (const b of [short, long, typed]) assert.ok(!/NaN|undefined/.test(b.svg));
 });
 
-test('the close: the logo and AI BRAIN BREAK centred together, the words writing, fixed sounds, 2.5s (EX3-95)', async () => {
+test('the close: the logo and AI 101 centred together, the words writing, fixed sounds, 2.5s (EX3-95)', async () => {
   await import('../explainers/world-kit/try.mjs');
   const close = (await import('../explainers/world-kit/close.js')).default;
-  const { LOGO, WORDMARK, WORD_BASELINE } = await import('../explainers/world-kit/close.js');
+  const { LOGO, WORDMARK, WORD_BASELINE, WORD_SIZE } = await import('../explainers/world-kit/close.js');
   const { CLOSE, CLOSE_EVENTS } = await import('../explainers/world-kit/close-timing.js');
   assert.equal(CLOSE.duration, CLOSE_DURATION);
   assert.equal(close.ground, 'white');
   // The logo and the words, top of the logo to the words' baseline, are centred together.
   assert.equal(LOGO.cx, 540);
-  assert.ok(Math.abs((LOGO.cy - LOGO.w / 2 + WORD_BASELINE) / 2 - 960) < 6, 'centred (to the visible circle and ink)');
+  // the visible circle's top (the PNG keeps a 2.05% margin) to the bottom of the ink (half the pen line)
+  const ink = (WORD_SIZE * 0.08 * 1.25) / 2;
+  assert.ok(Math.abs((LOGO.cy - LOGO.w / 2 + LOGO.w * 0.0205 + WORD_BASELINE + ink) / 2 - 960) < 1, 'centred (to the visible circle and ink)');
   assert.ok(LOGO.cy < 960, 'the logo sits above the centre');
-  assert.equal(WORDMARK, 'AI BRAIN BREAK');
+  assert.equal(WORDMARK, 'AI 101');
   const start = close.draw(0.02);
   assert.match(start, /data-role="logo"/);
-  assert.match(close.draw(1.0), /data-text="AI BRAIN BREAK"/);
+  assert.match(close.draw(1.0), /data-text="AI 101"/);
   const end = close.draw(2.4);
   assert.match(end, new RegExp(`href="assets/Helios-logo\\.png" x="320" y="${LOGO.cy - LOGO.w / 2}" width="440" height="440"`));
   assert.ok((end.match(/<path/g) ?? []).length > (close.draw(1.0).match(/<path/g) ?? []).length, 'the words write on');
@@ -613,7 +694,7 @@ test('bounds: text cut off by the frame edge, outside its box, or in a keep-out 
   assert.deepEqual(summarize([{ t: 4, problems: ['x'] }, { t: 4.2, problems: ['x'] }, { t: 5, problems: ['y'] }]), ['x at 4.0–4.2s', 'y at 5.0s']);
 });
 
-test('shots: the active shot, its camera centring the subject, and the rules', async () => {
+test('shots: the active shot, its camera centring the subject, and the shape of the list (4.2: no pacing rules)', async () => {
   await import('../explainers/world-kit/try.mjs');
   const { shotAt, shotCamera, validateShots, SHOT_KINDS, SUBJECT_AT } = await import('../explainers/world-kit/shots.js');
   const shots = [{ at: 0, kind: 'wide', on: [500, 1100] }, { at: 3, kind: 'close', on: [700, 1000] }];
@@ -624,15 +705,15 @@ test('shots: the active shot, its camera centring the subject, and the rules', a
   // cameraTransform maps p to 540 + zoom·(p − 540 − x): the subject lands on SUBJECT_AT.
   assert.ok(Math.abs(540 + c.zoom * (700 - 540 - c.x) - SUBJECT_AT[0]) < 1e-6);
   assert.deepEqual(validateShots(shots, 6.5), []);
-  assert.ok(validateShots([{ at: 0, kind: 'wide' }], 7).some((e) => /at least 2 shots/.test(e)));
-  assert.ok(validateShots([{ at: 0, kind: 'wide' }, { at: 5, kind: 'close' }], 7).some((e) => /cut by 4\.5s/.test(e)));
-  assert.ok(validateShots([{ at: 0, kind: 'close', on: [1, 1] }, { at: 3, kind: 'close', on: [1, 1] }], 6).some((e) => /same picture/.test(e)));
+  // 4.2: shot counts, shot lengths and jump cuts are not the shape (pacing is craft; jumpCutProblems)
+  assert.deepEqual(validateShots([{ at: 0, kind: 'wide' }], 7), []);
+  assert.deepEqual(validateShots([{ at: 0, kind: 'wide' }, { at: 5, kind: 'close' }], 7), []);
+  assert.ok(validateShots([{ at: 0, kind: 'wide' }, { at: 0, kind: 'close' }], 7).some((e) => /shots run in order/.test(e)));
   assert.ok(validateShots([{ at: 0, kind: 'dolly' }], 3).some((e) => /unknown kind/.test(e)));
   // A shot is only a camera (EX3-90): no over-the-shoulder, no reverse, no loose insert, no foreground layer.
   assert.deepEqual(Object.keys(SHOT_KINDS), ['wide', 'medium', 'close', 'insert', 'reaction']);
   assert.ok(validateShots([{ at: 0, kind: 'ots' }], 3).some((e) => /over-the-shoulder was removed in 3\.3: it draws a second copy of a critter/.test(e)));
   assert.ok(validateShots([{ at: 0, kind: 'reverse' }], 3).some((e) => /reverse was removed/.test(e)));
-  assert.ok(validateShots([{ at: 0, kind: 'insert', zoom: 1.6 }], 3).some((e) => /an insert is a tight camera/.test(e)));
   assert.deepEqual(validateShots([{ at: 0, kind: 'insert' }], 3), []);
   const { shotFrame } = await import('../explainers/world-kit/shots.js');
   const { scope } = await import('../explainers/world-kit/draw.js');
@@ -661,6 +742,71 @@ test('the cast check: a critter drawn twice at once, or vanishing mid-frame, is 
   assert.deepEqual(castProblems([at(1, ''), at(2, hire)]), []);
 });
 
+test('the look check: a critter keeps its CAST look in every frame; only the hero is orange (EX3-107)', async () => {
+  const { lookProblems, castShapeProblems } = await import('../explainers/world-kit/try.mjs');
+  const { critter, lookKey } = await import('../explainers/world-kit/cast.js');
+  assert.equal(lookKey({ body: 'orange', wear: ['scarf', 'cap'] }), 'orange|cap+scarf|');
+  assert.match(critter(0, 0, { who: 'listener', body: 'orange', wear: ['cap'] }), /^<g data-who="listener" data-look="orange\|cap\|"/);
+  const cast = { listener: { body: 'orange', wear: ['cap'] }, crowd: { body: 'ink', wear: [] } };
+  const at = (t: number, ...critters: [string, Record<string, unknown>][]) => ({ t, svg: critters.map(([who, o]) => critter(0, 0, { who, ...o })).join('') });
+  const same = [at(1, ['listener', { body: 'orange', wear: ['cap'], mood: 'happy' }], ['crowd-1', {}], ['crowd-2', {}])];
+  assert.deepEqual(lookProblems(same, cast, lookKey), [], 'pose and mood change; the look does not');
+  // The attention reel: the listener drawn black with a white cap in beat 2, then white in beat 4.
+  const changed = lookProblems([at(2, ['listener', { body: 'ink', wear: ['cap'] }])], cast, lookKey);
+  assert.equal(changed.length, 1);
+  assert.match(changed[0], /"listener" is drawn as ink\|cap\| at 2\.00s, but CAST says orange\|cap\|/);
+  assert.match(lookProblems([at(1, ['crowd-3', { body: 'orange' }])], cast, lookKey)[0], /CAST says ink/);
+  // A critter outside CAST (frames 6 and 7) is never orange and never the hero's twin.
+  assert.match(lookProblems([at(1, ['reader', { body: 'orange' }])], cast, lookKey)[0], /only the hero is an orange critter/);
+  assert.deepEqual(lookProblems([at(1, ['reader', { body: 'paper', wear: ['glasses'] }])], cast, lookKey), []);
+  // CAST itself: required, and at most one orange critter.
+  assert.match(castShapeProblems(undefined)[0], /must export CAST/);
+  assert.match(castShapeProblems({ a: { body: 'orange' }, b: { body: 'orange' } })[0], /2 orange critters/);
+  assert.match(castShapeProblems({ a: { body: 'blue' } })[0], /body "blue" must be one of orange, green, ink, white/);
+  assert.deepEqual(castShapeProblems(cast), []);
+});
+
+test('the hero shows only in the analogy frames: never in frames 2, 3 or 6 (EX3-132)', async () => {
+  const { heroFrameProblems, NO_HERO_FRAMES } = await import('../explainers/world-kit/try.mjs');
+  const { critter, lookKey } = await import('../explainers/world-kit/cast.js');
+  assert.deepEqual(NO_HERO_FRAMES, [2, 3, 6]);
+  const cast = { listener: { body: 'orange', wear: ['cap'] }, crowd: { body: 'ink', wear: [] } };
+  const at = (t: number, ...critters: [string, Record<string, unknown>][]) => ({ t, svg: critters.map(([who, o]) => critter(0, 0, { who, ...o })).join('') });
+  const withHero = [at(0, ['crowd-1', {}]), at(1, ['listener', { body: 'orange', wear: ['cap'] }])];
+  for (const n of [2, 3, 6]) assert.match(heroFrameProblems(withHero, cast, lookKey, n)[0], new RegExp(`"listener" is drawn in frame ${n} at 1\\.00s`));
+  for (const n of [1, 4, 5, 7]) assert.deepEqual(heroFrameProblems(withHero, cast, lookKey, n), [], `frame ${n} may show the hero`);
+  // A copy of the hero under another id is the hero too.
+  assert.equal(heroFrameProblems([at(0, ['shopper', { body: 'orange', wear: ['cap'] }])], cast, lookKey, 6).length, 1);
+  assert.deepEqual(heroFrameProblems([at(0, ['crowd-1', {}], ['shopper', { body: 'paper', wear: ['glasses'] }])], cast, lookKey, 3), []);
+  // An object-led reel has no orange critter: nothing to check.
+  assert.deepEqual(heroFrameProblems(withHero, { crowd: { body: 'ink', wear: [] } }, lookKey, 2), []);
+});
+
+test('try holds every frame to CAST and the hook hero to orange (EX3-107)', () => {
+  const root = project();
+  const tryAll = () => JSON.parse(spawnSync(process.execPath, ['assets/kit/try.mjs', 'all'], { cwd: root, encoding: 'utf8' }).stdout) as { ok: boolean; errors: string[] };
+  assert.deepEqual(tryAll().errors, []);
+  // The writer turns orange in one frame: its look changed.
+  const world = path.join(root, 'assets', 'world', 'world.js');
+  fs.writeFileSync(world, fs.readFileSync(world, 'utf8').replace("who: 'writer' };", "who: 'writer', body: 'orange' };"));
+  assert.ok(tryAll().errors.some((e) => /"writer" is drawn as orange\|\| .* but CAST says ink\|\|/.test(e)), tryAll().errors.join('\n'));
+  // No CAST at all.
+  fs.writeFileSync(world, fs.readFileSync(world, 'utf8').replace('export const CAST = {', 'const NOT_CAST = {'));
+  assert.ok(tryAll().errors.some((e) => /^world: world\.js must export CAST/.test(e)));
+});
+
+test('no crowds: more than four critters on screen at once is an error (EX3-117)', async () => {
+  const { crowdProblems, MAX_CRITTERS_AT_ONCE } = await import('../explainers/world-kit/try.mjs');
+  const { critter } = await import('../explainers/world-kit/cast.js');
+  const at = (t: number, n: number) => ({ t, svg: Array.from({ length: n }, (_, i) => critter(0, 0, { who: `crowd-${i + 1}` })).join('') });
+  assert.equal(MAX_CRITTERS_AT_ONCE, 4);
+  assert.deepEqual(crowdProblems([at(0, 4), at(1, 3)]), []);
+  // The attention reel's party: a dozen critters at once.
+  const crowd = crowdProblems([at(0, 2), at(2.5, 12), at(3, 12)]);
+  assert.equal(crowd.length, 1, 'reported once per frame');
+  assert.match(crowd[0], /12 critters on screen at 2\.50s: at most 4, never a crowd/);
+});
+
 test('critters: poses, moods, accessories, and hands that hold props', async () => {
   await import('../explainers/world-kit/try.mjs');
   const { scope } = await import('../explainers/world-kit/draw.js');
@@ -670,8 +816,10 @@ test('critters: poses, moods, accessories, and hands that hold props', async () 
   for (const mood of Object.keys(MOODS)) assert.ok(!/NaN|undefined/.test(critter(0, 0, { mood })), mood);
   assert.ok(!/NaN|undefined/.test(critter(0, 0, { wear: WEAR })));
   const h = handAt(100, 500, { arms: 'reach', s: 2 });
-  assert.deepEqual(h.r, [100 + 156 * 2, 500 - 98 * 2]);
-  assert.deepEqual(handAt(100, 500, { arms: 'reach', s: 2, flip: true }).r, [100 - 156 * 2, 500 - 98 * 2]);
+  // critter D: a reach points up and out but stays a short stub (cast.js D_STUB), mirrored when flipped
+  assert.ok(h.r[0] > 100 && h.r[1] < 500, 'reach goes up and out');
+  const hf = handAt(100, 500, { arms: 'reach', s: 2, flip: true });
+  assert.ok(Math.abs((hf.r[0] - 100) + (h.r[0] - 100)) < 1e-6 && Math.abs(hf.r[1] - h.r[1]) < 1e-6, 'flip mirrors the hand');
   const w = walk(0.2);
   assert.ok(w.legs.l === -w.legs.r && w.steps[0] > 0);
 });
@@ -744,19 +892,33 @@ function inkInBox(svg: string, box: Box): string[] {
 test('critter accessories never cover or crowd the eyes or mouth (EX3-103); glasses sit on the eyes', async () => {
   await import('../explainers/world-kit/try.mjs');
   const { scope } = await import('../explainers/world-kit/draw.js');
-  const { WEAR, WEAR_ON_EYES, FACE_KEEPOUT, wearDrawing, critter } = await import('../explainers/world-kit/cast.js');
+  const { WEAR, WEAR_ON_EYES, FACE_KEEPOUT, wearDrawing, critter, D } = (await import('../explainers/world-kit/cast.js')) as any;
+  const { WEAR_TO_ROLE, DK } = D;
   const zones = FACE_KEEPOUT as Box[];
   assert.deepEqual(zones.map((z) => z.part), ['eyes', 'mouth']);
   assert.deepEqual(WEAR_ON_EYES, ['glasses']);
+  // hx-6: main's stock wear draws as the wear.js piece it translates to (critter D), or bare
+  const tileY = (localY: number) => localY / DK + 192;
+  const eyeTop = tileY(zones[0].y);
   for (const ground of ['paper', 'night']) {
     scope('f-', ground);
     for (const item of WEAR as string[]) {
       for (const body of ['ink', 'paper', 'orange']) {
         const { front } = wearDrawing([item], { body });
-        assert.ok(front.length > 0 || item === 'backpack', item);
-        for (const zone of zones) {
-          if (zone.part === 'eyes' && (WEAR_ON_EYES as string[]).includes(item)) continue;
-          assert.deepEqual(inkInBox(front, zone), [], `${item} on a ${body} critter (${ground}) is in the ${zone.part} keep-out`);
+        const t = WEAR_TO_ROLE[item];
+        assert.equal(front.length > 0, !!t, item);
+        if (t?.head && !['glasses', 'headphones'].includes(t.head)) {
+          // a hat sits on the flat top of the tile, above the eye keep-out
+          const ys = [...front.matchAll(/(?:^|[^\w-])(?:y|cy)="([\d.]+)"/g)].map((m) => Number(m[1]));
+          for (const y of ys) assert.ok(y < eyeTop, `${item}: ${y} is above the eyes (${eyeTop.toFixed(1)})`);
+        }
+        if (t?.head === 'headphones') {
+          // the cups ride the sides, outside the eye keep-out
+          for (const m of front.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/g)) {
+            const x0 = (Number(m[1]) - 100) * DK;
+            const x1 = (Number(m[1]) + Number(m[2]) - 100) * DK;
+            assert.ok(x1 < zones[0].x || x0 > zones[0].x + zones[0].w, `headphones cup ${x0}..${x1} clear of the eyes`);
+          }
         }
       }
       // critter() draws exactly these accessories
@@ -789,7 +951,20 @@ test('the prop library: every prop draws in every state, focal or not, with its 
       }
     }
   }
-  assert.throws(() => prop('hand', 0, 0), /no prop "hand"/);
+  assert.throws(() => prop('hand', 0, 0), /no asset "hand" in the bank; draw it new/);
+  // Every asset carries its tags (EX3-113); the catalog lists them all, with no missing field.
+  const { TAG_FIELDS } = await import('../explainers/world-kit/props/tags.js');
+  const { catalogEntries, catalogProblems, catalogMarkdown } = await import('../explainers/world-kit/props/catalog.mjs');
+  for (const name of propNames()) {
+    const tags = (PROPS as Record<string, { tags?: Record<string, unknown> }>)[name].tags;
+    for (const field of TAG_FIELDS) assert.ok(tags?.[field], `${name} has no ${field} tag`);
+  }
+  assert.deepEqual(catalogProblems(), []);
+  assert.deepEqual(catalogEntries().map((e: { name: string }) => e.name).sort(), propNames());
+  // The two stand-ins Lucas saw: the bookcase is never grocery shelving, the dining table never a desk.
+  assert.ok((PROPS as Record<string, { tags: { not: string[] } }>).shelf.tags.not.includes('grocery store shelving'));
+  assert.ok((PROPS as Record<string, { tags: { not: string[] } }>).table.tags.not.includes('reception desk'));
+  assert.match(catalogMarkdown(), /## table\n- is: a plain four-legged wooden table with a plank top/);
   assert.throws(() => prop('light switch', 0, 0, { state: 'dim' }), /has states off, on/);
 });
 
@@ -797,9 +972,14 @@ test('music: banned moods and repeats are dropped, a long track wins, a short on
   const { pickTrack, styleOrder, STYLES, BANNED } = await import('../explainers/world-kit/music.mjs');
   const t = (id: string, duration: number, description: string) => ({ id, duration, description, audio_url: `u/${id}` });
   const results = [t('a', 90, 'calm corporate piano'), t('b', 30, 'groovy funk bass'), t('c', 70, 'upbeat electronic synth'), t('d', 75, 'driving funk groove'), t('e', 80, 'funky groove')];
-  assert.deepEqual(pickTrack(results, { total: 60 }), { track: results[3], loop: false });
-  assert.deepEqual(pickTrack(results, { total: 60, avoid: ['d', 'e'] as never[] }), { track: results[1], loop: true });
-  assert.equal(pickTrack([t('x', 15, 'funk')], { total: 60 }), null);
+  const screen = { sounds: {}, music: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'x', 'v'].map((id) => [id, { voice: 0.1 }])) };
+  assert.deepEqual(pickTrack(results, { total: 60, screen }), { track: results[3], loop: false });
+  assert.deepEqual(pickTrack(results, { total: 60, avoid: ['d', 'e'] as never[], screen }), { track: results[1], loop: true });
+  assert.equal(pickTrack([t('x', 15, 'funk')], { total: 60, screen }), null);
+  // The voice screen (2026-11-19): a voiced or unscreened track never plays.
+  assert.equal(pickTrack([t('v', 90, 'driving funk with female vocals')], { total: 60, screen }), null);
+  assert.equal(pickTrack([t('d', 90, 'driving funk groove')], { total: 60, screen: { sounds: {}, music: { d: { voice: 0.6 } } } }), null);
+  assert.equal(pickTrack([t('new', 90, 'driving funk groove')], { total: 60, screen }), null);
   assert.ok(BANNED.test('upbeat electronic instrumental') && !BANNED.test('energetic upbeat rock instrumental'));
   assert.deepEqual(styleOrder(4).map((s: { key: string }) => s.key), ['indie', 'hiphop', 'funk']);
   assert.ok(STYLES.every((s: { query: string }) => /105-128 BPM/.test(s.query)));

@@ -1,0 +1,14 @@
+{
+ "lat": 37.4205,
+ "lon": -122.2155,
+ "zoom": 14.2,
+ "label": "The restaurant",
+ "sublabel": "The town",
+ "width": 1620,
+ "height": 2880,
+ "pin": {
+  "x": 810,
+  "y": 1440
+ },
+ "plain": "V6.plain.jpg"
+}

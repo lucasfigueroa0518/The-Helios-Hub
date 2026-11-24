@@ -14,7 +14,7 @@ import { ALREADY_STARTED, PAST_DAY } from '@/lib/social-hub/slots/rules';
 import { DEFAULT_SEED_INPUTS, seedTemplate, type SeedInputs } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import { legacyKey } from '@/lib/social-hub/slots/legacy';
-import { applySlotChanges, parseChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
+import { applySlotChanges, parseChanges, setSlotSource, type SlotChange } from '@/lib/social-hub/slots/write';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -95,7 +95,8 @@ test('the first flip to template seeds the default times; later flips do not res
   const first = await setSlotSource(q, 'template', 'tommy@example.com');
   assert.equal(first.seeded, seedTemplate(DEFAULT_SEED_INPUTS).length);
   assert.deepEqual(await dayOf(q, '2026-10-19', 'explainers'), [780, 930]);
-  assert.deepEqual(await dayOf(q, '2026-10-19', 'stories'), ['510:guess_the_number', '510:morning_download']);
+  assert.deepEqual(await dayOf(q, '2026-10-19', 'stories'), ['510:morning_download']);
+  assert.deepEqual(await dayOf(q, '2026-10-19', 'ai_trivia'), ['510:ai_trivia'], 'Trivia seeds as its own type (SS-1)');
   const n = (await readTemplate(q)).length;
   await pg.query(`DELETE FROM social_hub.slot_template WHERE vertical = 'reels' AND weekday = 0`);
   await setSlotSource(q, 'legacy', 'tommy@example.com');
@@ -338,7 +339,8 @@ test('legacyKey maps each type\'s window ids to their start minutes', () => {
   assert.deepEqual(['afternoon', 'late'].map((w) => legacyKey('explainers', w)!.startMinute), [780, 930]);
   assert.deepEqual(['morning', 'afternoon'].map((w) => legacyKey('carousels', w)!.startMinute), [540, 870]);
   assert.deepEqual(legacyKey('last_few_days', 'morning'), { startMinute: 540, series: null });
-  assert.deepEqual(legacyKey('stories', 'free_vs_paid'), { startMinute: 510, series: 'free_vs_paid' });
+  assert.deepEqual(legacyKey('real_or_ai', 'real_or_ai'), { startMinute: 510, series: 'real_or_ai' });
+  assert.equal(legacyKey('stories', 'real_or_ai'), null, 'Real or AI? is its own type (SS-1)');
   assert.equal(legacyKey('reels', 'late'), null);
   assert.equal(legacyKey('stories', 'morning'), null);
 });
@@ -497,17 +499,11 @@ test('a no-op "Every Tuesday" edit on a started slot writes no hold for today', 
 
 // ── Caps ──
 
-test('readCaps returns the defaults; writeCaps merges and validates 0–10', async () => {
+test('readCaps is each type\'s fixed maximum (D20): Trivia, Real or AI?, LFD, Field Notes 1; AI Events 2; AI Drama 3', async () => {
   const { q } = await seeded();
   assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
-  await writeCaps(q, { explainers: 4 });
-  assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, explainers: 4 });
-  await writeCaps(q, { stories: 1 });
-  assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, explainers: 4, stories: 1 });
-  await assert.rejects(() => writeCaps(q, { explainers: 11 }));
-  await assert.rejects(() => writeCaps(q, { explainers: 1.5 }));
-  await assert.rejects(() => writeCaps(q, { nope: 2 } as never));
-  assert.equal((await readCaps(q)).explainers, 4);
+  assert.deepEqual([DEFAULT_CAPS.ai_trivia, DEFAULT_CAPS.real_or_ai, DEFAULT_CAPS.last_few_days, DEFAULT_CAPS.field_notes, DEFAULT_CAPS.ai_events, DEFAULT_CAPS.reel_ai_drama], [1, 1, 1, 1, 2, 3]);
+  assert.equal(DEFAULT_CAPS.explainers, 10);
 });
 
 // ── Parsing ──
@@ -516,7 +512,7 @@ test('parseChanges reads the new keys and rejects junk with a 400 message', () =
   const ok = parseChanges({ changes: [
     { scope: 'template', op: 'put', weekday: 1, vertical: 'reels', startMinute: 540, series: null, feedMode: 'trial' },
     { scope: 'date', op: 'move', from: { nyDate: '2026-10-20', vertical: 'stories', startMinute: 510, series: 'morning_download' }, to: { startMinute: 600 } },
-    { scope: 'template', op: 'delete', weekday: 1, vertical: 'stories', startMinute: 510, series: 'guess_the_number' },
+    { scope: 'template', op: 'delete', weekday: 1, vertical: 'stories', startMinute: 510, series: 'ai_trivia' },
   ] });
   assert.ok(Array.isArray(ok));
   assert.deepEqual((ok as SlotChange[])[1], { scope: 'date', op: 'move', from: { nyDate: '2026-10-20', vertical: 'stories', startMinute: 510, series: 'morning_download' }, to: { nyDate: '2026-10-20', startMinute: 600 } });

@@ -3,6 +3,7 @@
  * `reels.*`; it never writes there and never sweeps or backfills it
  * (CLAUDE.md rule 2): every read is today's pool for one build.
  */
+import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { Queryable } from '@/lib/stories/db';
 
 /** One news story a Stories build can use. */
@@ -24,6 +25,11 @@ export type StoryCandidate = {
   photo?: { url: string; credit: string } | null;
   /** Other sources merged into this one (S-03 merge). */
   alsoFrom?: string[];
+  /**
+   * Set when the candidate came from the central intake (lib/intake/pool-stories.ts): its story and the scores the
+   * intake stored for it, so Morning Download's lead queue reads them instead of asking Jev at build time.
+   */
+  intake?: { storyId: string; major: number | null; builder: number | null; eventDate: string | null; memberKeys?: string[] };
 };
 
 export const storyKey = (url: string) => {
@@ -84,26 +90,27 @@ export async function morningDownloadReels(db: Queryable, nyDate: string): Promi
   return [...top, ...extra].map(toCandidate);
 }
 
-/** Guess the Number, reels side (S-10, S-26): ideas bucketed as The Number in the last 7 days. */
-export async function theNumberIdeas(db: Queryable, nyDate: string): Promise<StoryCandidate[]> {
-  const { rows } = await db.query<IdeaRow>(
-    `${IDEA_SQL(`s.chosen_bucket = 'the_number' AND sl.ny_date > $1::date - 7 AND sl.ny_date <= $1::date`)} ORDER BY sl.ny_date DESC, s.net DESC NULLS LAST LIMIT 20`,
-    [nyDate],
-  );
-  return dedupe(rows.map(toCandidate));
+/**
+ * The New York day a freshness window ends on. Freshness is measured from the RUN, never from the
+ * day a set posts (Bald-Eagle D4: a set made 2 days ahead must not read sources 2 days "newer" than
+ * the night): pass the run time (`deps.now`) or the run's New York date.
+ */
+export function freshnessDay(runAt: Date | string): string {
+  return typeof runAt === 'string' ? runAt.slice(0, 10) : calendarDateKey(runAt, SOCIAL_TIMEZONE);
 }
 
 export type ToolLead = { origin: 'reels' | 'catalog' | 'github'; ref: string; name: string; url: string; description: string };
 
 /**
- * Free vs. Paid hints (plan §5.3): Ball Knowledge ideas from the last 14 days
- * and GitHub Trending sources. They are optional hints for fvp-pair@2, which
+ * Free vs. Paid hints (plan §5.3): Ball Knowledge ideas from the 14 days
+ * through the run day (`runAt`, freshnessDay) and GitHub Trending sources. They are optional hints for fvp-pair@2, which
  * mostly pairs well-known paid tools with established free ones it already
  * knows. The curated-list catalog is not read here (2026-10-13): it is mostly
  * awesome-selfhosted and ML research lists, so every pair drawn from it failed
  * "accessible" or was never proposed.
  */
-export async function freeToolLeads(db: Queryable, nyDate: string): Promise<ToolLead[]> {
+export async function freeToolLeads(db: Queryable, runAt: Date | string): Promise<ToolLead[]> {
+  const nyDate = freshnessDay(runAt);
   const ideas = await db.query<IdeaRow>(
     `${IDEA_SQL(`s.chosen_bucket = 'ball_knowledge' AND sl.ny_date > $1::date - 14 AND sl.ny_date <= $1::date`)} ORDER BY sl.ny_date DESC LIMIT 15`,
     [nyDate],

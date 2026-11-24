@@ -108,11 +108,21 @@ export function dbPoolSettings(mode: 'session' | 'transaction', env: DbEnv = pro
   };
 }
 
-function applicationName(): string {
-  if (process.env.VERCEL) return 'helios-web';
-  const argv = process.argv.join(' ');
-  if (argv.includes('reels_worker')) return 'helios-reels';
-  if (argv.includes('orchestration_worker')) return 'helios-worker';
+/**
+ * The name each process's connections carry in pg_stat_activity, so a busy database
+ * shows which service holds them (perf/db/prod-diagnose.sql). Workers started with
+ * `npm run <script>` are named after the script (social:worker -> helios-social-worker).
+ */
+export function applicationName(env: DbEnv = process.env, argv: string[] = process.argv): string {
+  if (env.VERCEL) return 'helios-web';
+  const joined = argv.join(' ');
+  if (joined.includes('reels_worker')) return 'helios-reels';
+  if (joined.includes('orchestration_worker')) return 'helios-worker';
+  const script = env.npm_lifecycle_event;
+  if (script && script !== 'worker') return `helios-${script.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}`.slice(0, 63);
+  if (script === 'worker') return 'helios-worker';
+  const file = argv.map((a) => a.match(/([a-z0-9_-]+_worker)\.[cm]?[jt]s$/i)?.[1]).find(Boolean);
+  if (file) return `helios-${file.replace(/_/g, '-').toLowerCase()}`;
   return 'helios-node';
 }
 
@@ -255,7 +265,8 @@ function getPool(): Pool {
     const pool = new Pool({
       connectionString: runtimeConnectionString(choice),
       application_name: applicationName(),
-      ssl: process.platform === 'win32' ? false : { rejectUnauthorized: false },
+      // A local Postgres (the localhost copy of the hub's data) has no TLS.
+      ssl: process.platform === 'win32' || /@(127\.0\.0\.1|localhost)[:/]/.test(runtimeConnectionString(choice)) ? false : { rejectUnauthorized: false },
       ...settings,
     });
     // Idle clients can drop on network blips; without this handler Node treats it as fatal.
@@ -295,11 +306,31 @@ async function queryWithConnectPolicy<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/** A statement slower than this (ms, from checkout to result) is logged as `db/slow_query`. 0 turns it off. */
+export function slowQueryThresholdMs(env: DbEnv = process.env): number {
+  const parsed = Number(env.DB_SLOW_QUERY_MS ?? 100);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 100;
+}
+
+/** The statement's shape for a log line: whitespace collapsed, cut short. Parameters are never logged. */
+export function slowQueryLabel(text: string): string {
+  return text.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
 export async function dbQuery<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  return withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
+  const threshold = slowQueryThresholdMs();
+  if (threshold === 0) return withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
+  const started = performance.now();
+  const result = await withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
+  const durationMs = Math.round(performance.now() - started);
+  if (durationMs >= threshold) {
+    // Includes the wait for a pool slot, so pool pressure shows up here too (perf/README.md).
+    logWarn({ component: 'db', event: 'slow_query', durationMs, rows: result.rowCount ?? null, sql: slowQueryLabel(text) });
+  }
+  return result;
 }
 
 /** Run related writes atomically. Roll back automatically when the callback throws. */

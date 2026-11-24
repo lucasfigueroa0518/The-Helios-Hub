@@ -6,14 +6,17 @@
  *
  *   npm run stories:worker
  *   npm run stories:run                        one pass
- *   npm run stories:run -- --request free_vs_paid    ask for today's set (a Generate click from the terminal)
+ *   npm run stories:run -- --request real_or_ai  ask for today's set (a Generate click from the terminal)
  *
  * STORIES_DB=local keeps the `stories` tables in PGlite at .stories-local/
  * (until the schema is applied to Supabase, S-61). reels.* and social.* are
  * always read from the shared database.
  *
  * Building a set makes live Claude, Jev and web calls: only for a set Lucas
- * requested (Generate, --request) or a series he switched to auto (rule 0.1).
+ * requested (Generate, --request) or a series whose type makes posts (auto on:
+ * Approval or Live, D16; rule 0.1). The refill (the 3:00 pool refresh, AI
+ * Trivia's daily writer, Real or AI?'s daily candidates) runs in every state,
+ * each held to its type's refill cap (stories.settings.types[<type>].refill_cap_usd).
  *
  * Photo bank (DECISIONS_LOG D49): the finder offers its vetted photos to the
  * bank in the shared database (nothing happens while its `capture` switch is
@@ -21,22 +24,30 @@
  * published, and before it exits.
  */
 import './stories_env';
+import { createIntakeJev } from '@/lib/intake/jev';
+import { INTAKE_TOPUP_CAP_USD } from '@/lib/intake/types';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
 import { createPhotoBank } from '@/lib/media-library/bank';
+import { buildAiTrivia } from '@/lib/stories/build/ai-trivia';
+import { buildMorningDownload } from '@/lib/stories/build/morning-download';
 import { createLivePhotoFinder } from '@/lib/stories/photos';
+import { sharedSeriesBuilders } from '@/lib/stories/photos-shared';
 import { createLiveStoryInsightsClient } from '@/lib/stories/publish/insights';
 import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
 import { createReviewCall } from '@/lib/stories/render/review';
 import type { Series } from '@/lib/stories/render/types';
-import { nyDate, requestSet } from '@/lib/stories/repository';
+import { nyDate, releaseBuildsAtStartup, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
+import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
+
 import { newAnthropic } from '@/lib/anthropic-client';
+import { liveOpponentClient } from '@/lib/stories/trivia/opponent';
 
 const POLL_MS = 15_000;
 const once = process.argv.includes('--once');
@@ -56,6 +67,13 @@ async function main() {
     log(`${created ? 'requested' : 'already have'} ${series} ${set.ny_date} (${set.status})`);
   }
 
+  // Daemon only (not --once, which may run beside the VM's service): a build still `building` at boot died with the
+  // previous process. Release it now instead of after the 12 h backstop (CI-33).
+  if (!once) {
+    const released = await releaseBuildsAtStartup(db).catch((err) => (log(`startup release failed: ${err instanceof Error ? err.message : String(err)}`), []));
+    if (released.length) log(`startup released ${released.length} build(s): ${released.join(', ')}`);
+  }
+
   let renderer: Renderer | null = null;
   let stopping = false;
   process.on('SIGTERM', () => (stopping = true));
@@ -64,24 +82,39 @@ async function main() {
   const deps = {
     db,
     sourceDb,
-    builder: async () => {
+    builder: async (series?: Series) => {
       renderer ??= await openRenderer();
       const settings = await loadSettings(db);
       const client = newAnthropic();
+      // Once per build: series on the shared photo finder get wrapped builders; none, and today's deps are unchanged.
+      const builders = await sharedSeriesBuilders({
+        query: sourceDb,
+        // Free vs. Paid is retired (Real or AI? replaces it, and makes its own images): neither is here.
+        builders: { morning_download: buildMorningDownload, ai_trivia: (d) => buildAiTrivia(d) },
+        log: (line) => log(`photo finder: ${line}`),
+      });
       return {
         db,
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank }),
+        // AI Trivia's opponent (AT-74/75): GPT-5 nano (OPENAI_API_KEY), Llama 3.1 8B on fal (FAL_API_KEY) if it is retired.
+        opponent: liveOpponentClient(),
+        // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
+        // A trivia build's picks are logged under its own run kind (SS-28).
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()), ...(series === 'ai_trivia' ? { runKind: 'ai_trivia' as const } : {}) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
+        ...(builders ? { builders } : {}),
       };
     },
     meta: () => createLiveStoriesMetaClient(),
     insights: () => createLiveStoryInsightsClient(),
     storage: () => createStoriesStorage(),
+    // A series on the central intake: the pool refresh's posted check asks Jev in the intake's own cost bucket, held to
+    // Morning Download's refill cap (D14) or the top-up cap, whichever is lower.
+    intake: { jev: (capUsd?: number) => createIntakeJev(liveJevTransport, sourceDb, null, Math.min(INTAKE_TOPUP_CAP_USD, capUsd ?? INTAKE_TOPUP_CAP_USD)) },
     log,
   };
 

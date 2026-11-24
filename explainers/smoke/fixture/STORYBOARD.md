@@ -14,7 +14,6 @@ music: none
 - metaphor: a critter writes the same long instructions on every request, and every finished line drops a coin
 - setting: table
 - ground: paper
-- hook: the pen races through the last lines while coins pour onto a tall stack
 - steps:
   - the pen writes the instructions — the model reads the prompt
   - a coin drops per line — input tokens are billed
@@ -38,7 +37,7 @@ music: none
 - ground: paper
 - type: hook
 - engagement: Open loop + visual hook + audio ramp
-- voiceover: "In the next 30 seconds, this busy writer will teach you an AI concept."
+- voiceover: "In the next minute, this busy writer will teach you an AI concept."
 - anchor: scene
 
 Fixture frame. Checks the hook (a critter writing), the title card animating from the first frame, the riser and hit, and sound events.

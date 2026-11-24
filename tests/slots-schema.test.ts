@@ -68,7 +68,8 @@ test('stories.sets: two live sets of a series on one day need different slot min
 test('daily_caps starts at the agreed numbers', async () => {
   const { pg } = await openHubTestDb();
   const r = await pg.query<{ value: unknown }>(`SELECT value FROM social_hub.settings WHERE key = 'daily_caps'`);
-  assert.deepEqual(r.rows[0]?.value, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2 });
+  // db/stories_split.sql (SS-24): AI Trivia and Real or AI? at 1; Morning Download keeps its two a day (R25).
+  assert.deepEqual(r.rows[0]?.value, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2, field_notes: 1, ai_trivia: 1, real_or_ai: 1 });
 });
 
 test('schedule_feed_mode_check: only reel types carry a feed mode', async () => {

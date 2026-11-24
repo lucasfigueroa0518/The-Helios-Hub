@@ -127,6 +127,37 @@ export async function backfillExplainers(query: SpineQuery): Promise<BackfillCou
   return { items, attempts, schedule, insights, approvals };
 }
 
+const REEL_AI_DRAMA = {
+  // A finished job with a review verdict: an approved reel not yet booked must carry its approval onto
+  // the spine, or it never posts. Drama's lifecycle has always lived on the spine (no legacy tables), so
+  // only items and verdicts are mirrored (HUB-WIRING-CONTRACT §6). Reads reel_ai_drama.jobs/feedback only.
+  items: `
+INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref)
+SELECT 'reel_ai_drama', 'reel', j.id::text, j.pitch_id::text
+  FROM reel_ai_drama.jobs j
+  JOIN reel_ai_drama.feedback f ON f.job_id = j.id
+ WHERE j.status = 'ok'
+ON CONFLICT DO NOTHING`,
+  // The review verdict is the source of truth (reel_ai_drama.feedback); the spine mirrors it.
+  approvals: `
+INSERT INTO social_hub.approvals (content_item_id, decision, decided_at, decided_by, via)
+SELECT ci.id, f.verdict, f.updated_at, f.created_by,
+       CASE WHEN f.note LIKE 'Approved by Hard publish%' THEN 'force' ELSE 'user' END
+  FROM reel_ai_drama.feedback f
+  JOIN social_hub.content_items ci ON ci.vertical = 'reel_ai_drama' AND ci.native_ref = f.job_id::text
+ON CONFLICT (content_item_id) DO UPDATE SET decision = excluded.decision, decided_at = excluded.decided_at,
+       decided_by = excluded.decided_by, via = excluded.via
+ WHERE social_hub.approvals.decision IS DISTINCT FROM excluded.decision`,
+};
+
+/** AI Drama Reels: items for reviewed `ok` jobs and their verdicts → social_hub (attempts/schedule/insights are spine-native). */
+export async function backfillReelAiDrama(query: SpineQuery): Promise<BackfillCounts> {
+  const run = async (sql: string) => (await query(`WITH moved AS (${sql.trim()} RETURNING 1) SELECT count(*)::int AS n FROM moved`)).rows[0].n as number;
+  const items = await run(REEL_AI_DRAMA.items);
+  const approvals = await run(REEL_AI_DRAMA.approvals);
+  return { items, attempts: 0, schedule: 0, insights: 0, approvals };
+}
+
 const REELS = {
   // The item is the video. An attempt whose video retention already deleted
   // (video_job_id NULL) gets its own item, 'attempt:<id>', so its record survives.

@@ -33,7 +33,7 @@ import {
   saveFrameRender,
   scheduleSet,
 } from '@/lib/stories/repository';
-import { DEFAULT_SETTINGS, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
+import { DEFAULT_SETTINGS, loadSettings, saveSeriesSetting, saveTypeSetting, seriesTypeSettings, typeSettings } from '@/lib/stories/settings';
 import { FREE_VS_PAID } from '@/lib/stories/render/fixtures/m1';
 
 const FRAMES = FREE_VS_PAID.map((copy, i) => ({ seq: i + 1, role: copy.role, backdrop: 'black' as const, copy, template: 'homemade' }));
@@ -51,7 +51,7 @@ test('schema applies, and re-applies cleanly', async () => {
   const { pg } = await openLocalStoriesDb();
   await pg.exec(schemaSql());
   const { rows } = await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'stories'`);
-  assert.equal(rows[0]!.n, 10);
+  assert.equal(rows[0]!.n, 15, 'the spine plus AI Trivia\'s trivia_cells, trivia_archive and trivia_game_days, and Real or AI?\'s roa_archive and roa_lab');
 });
 
 test('nyDate is the New York calendar date', () => {
@@ -161,7 +161,7 @@ test('insights: poll live frames every 2 hours until a final capture', async () 
 
 test('a build that died is handed back to requested', async () => {
   const { db, set } = await builtSet();
-  await db.query(`UPDATE stories.sets SET claimed_at = now() - interval '2 hours' WHERE id = $1`, [set.id]);
+  await db.query(`UPDATE stories.sets SET claimed_at = now() - interval '13 hours' WHERE id = $1`, [set.id]);
   assert.deepEqual(await releaseStaleBuilds(db), [set.id]);
   assert.equal((await getSet(db, set.id))?.set.status, 'requested');
   assert.deepEqual(await releaseStaleBuilds(db), []);
@@ -172,28 +172,55 @@ test('settings: defaults, auto off for every series, overrides persist', async (
   const s = await loadSettings(db);
   assert.deepEqual(s, DEFAULT_SETTINGS);
   for (const v of Object.values(s.series)) assert.equal(v.auto, false);
-  assert.equal(s.series.guess_the_number.style, 'homemade');
+  assert.equal(s.series.ai_trivia.style, 'polished');
+  assert.deepEqual(s.series.ai_trivia.window.days, [0, 1, 4]);
+  assert.equal(s.series.guess_the_number.enabled, false, 'Guess the Number is retired (AT-14)');
   assert.equal(s.series.morning_download.style, 'polished');
   assert.deepEqual(s.series.free_vs_paid.window.days, [2, 6]);
   assert.equal(s.models.review, 'claude-haiku-5-5');
-  const next = await saveSeriesSetting(db, 'guess_the_number', { auto: true }, 'lucas');
-  assert.equal(next.series.guess_the_number.auto, true);
+  const next = await saveSeriesSetting(db, 'ai_trivia', { auto: true }, 'lucas');
+  assert.equal(next.series.ai_trivia.auto, true);
   assert.equal(next.series.free_vs_paid.auto, false);
-  assert.equal((await loadSettings(db)).series.guess_the_number.window.start, '08:30');
-  // Every content type requires approval and ships with publishing off (docs/social-overnight.md).
-  assert.equal(s.requireApproval, true);
-  assert.equal(s.publishingLive, false);
+  assert.equal((await loadSettings(db)).series.ai_trivia.window.start, '08:30');
+  // Every content type requires approval and ships with publishing off (docs/social-overnight.md), each on its own (SS-20).
+  for (const v of ['stories', 'ai_trivia', 'real_or_ai'] as const) {
+    assert.deepEqual(typeSettings(s, v), { requireApproval: true, publishingLive: false, dailyCapUsd: 2, refillCapUsd: null });
+  }
 });
 
-test('candidates accept origin model; the pool still rejects it', async () => {
+test('settings (SS-20): the old engine-wide rows are every type’s fallback (a stored require_approval false still reads as true, D16); the first per-type save moves them into `types`', async () => {
+  const { db } = await openLocalStoriesDb();
+  for (const [key, value] of [['require_approval', false], ['publishing_live', true], ['daily_cap_usd', 3]] as const) {
+    await db.query(`INSERT INTO stories.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(value)]);
+  }
+  const old = await loadSettings(db);
+  for (const v of ['stories', 'ai_trivia', 'real_or_ai'] as const) assert.deepEqual(typeSettings(old, v), { requireApproval: true, publishingLive: true, dailyCapUsd: 3, refillCapUsd: null });
+
+  const next = await saveTypeSetting(db, 'ai_trivia', { publishingLive: false, dailyCapUsd: 1 }, 'lucas');
+  assert.deepEqual(next.types.ai_trivia, { requireApproval: true, publishingLive: false, dailyCapUsd: 1, refillCapUsd: null });
+  assert.deepEqual(next.types.stories, { requireApproval: true, publishingLive: true, dailyCapUsd: 3, refillCapUsd: null });
+  // Approval can't be turned off (D16).
+  await assert.rejects(saveTypeSetting(db, 'ai_trivia', { requireApproval: false }), /approval/);
+  assert.equal(seriesTypeSettings(next, 'guess_the_number').publishingLive, true, 'a retired series reads as Morning Download');
+
+  // The global rows no longer reach any type once `types` holds them all.
+  await db.query(`UPDATE stories.settings SET value = 'false'::jsonb WHERE key = 'publishing_live'`);
+  const after = await loadSettings(db);
+  assert.equal(after.types.stories.publishingLive, true);
+  assert.equal(after.types.real_or_ai.publishingLive, true);
+  await assert.rejects(saveTypeSetting(db, 'stories', { dailyCapUsd: 0 }), /above zero/);
+});
+
+test('candidates accept origin model; so does the pool (AI Trivia writes its own questions), and junk origins are refused', async () => {
   const { db, pg } = await openLocalStoriesDb();
-  const { set } = await requestSet(db, { series: 'guess_the_number', nyDate: '2026-10-10', trigger: 'click', style: 'homemade' });
+  const { set } = await requestSet(db, { series: 'ai_trivia', nyDate: '2026-10-10', trigger: 'click', style: 'polished' });
   await claimNextRequested(db);
   await saveBuild(db, set.id, { payload: {}, frames: FRAMES, candidates: [{ origin: 'model', ref: 'idea-1', score: 0.7, chosen: true }] });
   const rows = await pg.query<{ origin: string }>(`SELECT origin FROM stories.candidates WHERE set_id = $1`, [set.id]);
   assert.deepEqual(rows.rows.map((r) => r.origin), ['model']);
+  await pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('ai_trivia', 'k', 'model', 'r', 't')`);
   await assert.rejects(
-    pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('guess_the_number', 'k', 'model', 'r', 't')`),
+    pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('ai_trivia', 'k2', 'bogus', 'r', 't')`),
     /check/i,
   );
 });

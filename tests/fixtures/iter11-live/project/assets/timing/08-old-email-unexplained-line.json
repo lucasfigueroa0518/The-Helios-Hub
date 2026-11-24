@@ -1,0 +1,133 @@
+{
+ "frame": 8,
+ "id": "08-old-email-unexplained-line",
+ "duration": 7.303,
+ "voice_end": 7.173,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "But",
+   "start": 0.02,
+   "end": 0.02
+  },
+  {
+   "text": "he",
+   "start": 0.086,
+   "end": 0.158
+  },
+  {
+   "text": "said",
+   "start": 0.229,
+   "end": 0.301
+  },
+  {
+   "text": "the",
+   "start": 0.336,
+   "end": 0.372
+  },
+  {
+   "text": "ICE",
+   "start": 0.443,
+   "end": 0.801
+  },
+  {
+   "text": "contract",
+   "start": 0.872,
+   "end": 1.301
+  },
+  {
+   "text": "covered",
+   "start": 1.372,
+   "end": 1.658
+  },
+  {
+   "text": "old",
+   "start": 1.729,
+   "end": 1.872
+  },
+  {
+   "text": "email,",
+   "start": 1.943,
+   "end": 2.301
+  },
+  {
+   "text": "calendar",
+   "start": 2.658,
+   "end": 2.872
+  },
+  {
+   "text": "and",
+   "start": 2.943,
+   "end": 3.015
+  },
+  {
+   "text": "documents,",
+   "start": 3.086,
+   "end": 3.586
+  },
+  {
+   "text": "never",
+   "start": 3.812,
+   "end": 4.026
+  },
+  {
+   "text": "explained",
+   "start": 4.098,
+   "end": 4.455
+  },
+  {
+   "text": "the",
+   "start": 4.49,
+   "end": 4.526
+  },
+  {
+   "text": "blog's",
+   "start": 4.633,
+   "end": 4.812
+  },
+  {
+   "text": "facial",
+   "start": 4.883,
+   "end": 5.098
+  },
+  {
+   "text": "recognition",
+   "start": 5.169,
+   "end": 5.598
+  },
+  {
+   "text": "line,",
+   "start": 5.669,
+   "end": 5.883
+  },
+  {
+   "text": "and",
+   "start": 6.101,
+   "end": 6.141
+  },
+  {
+   "text": "kept",
+   "start": 6.247,
+   "end": 6.427
+  },
+  {
+   "text": "the",
+   "start": 6.462,
+   "end": 6.498
+  },
+  {
+   "text": "contract.",
+   "start": 6.569,
+   "end": 6.983
+  }
+ ],
+ "lines": [
+  {
+   "id": "L8",
+   "start": 0.02,
+   "end": 6.983,
+   "label": null,
+   "label_kind": null
+  }
+ ]
+}

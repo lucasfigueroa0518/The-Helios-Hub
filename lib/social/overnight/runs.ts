@@ -1,6 +1,6 @@
 import type { Query } from '@/lib/social/store/pg';
 
-import { SOCIAL_STALE_RUN_MINUTES } from './config';
+import { SOCIAL_STALE_RUN_MINUTES, SOCIAL_UNCLAIMED_REQUEST_MINUTES } from './config';
 
 /**
  * social.runs as a queue, like reels.runs: a run is inserted `requested`
@@ -36,9 +36,26 @@ export async function releaseStaleRuns(query: Query, now = new Date()): Promise<
               ELSE 'The worker stopped while this run was in progress.'
             END)
       WHERE (status = 'running' AND started_at < $1::timestamptz - make_interval(mins => $2))
-         OR (status = 'requested' AND requested_at < $1::timestamptz - make_interval(mins => $2))
+         OR (status = 'requested' AND requested_at < $1::timestamptz - make_interval(mins => $3))
       RETURNING id`,
-    [now.toISOString(), SOCIAL_STALE_RUN_MINUTES],
+    [now.toISOString(), SOCIAL_STALE_RUN_MINUTES, SOCIAL_UNCLAIMED_REQUEST_MINUTES],
+  );
+  return rows.length;
+}
+
+/**
+ * Called once when helios-social boots, before it claims anything: carousel runs run only as that daemon's child, so a
+ * run still `running` at boot died with the previous process (deploy restart). Failed with releaseStaleRuns' wording;
+ * `requested` runs are left queued. Returns how many were failed.
+ */
+export async function reapRunsAtStartup(query: Query, now = new Date()): Promise<number> {
+  const { rows } = await query(
+    `UPDATE social.runs
+        SET status = 'failed', finished_at = $1::timestamptz,
+            error = coalesce(error, 'The worker stopped while this run was in progress.')
+      WHERE status = 'running'
+      RETURNING id`,
+    [now.toISOString()],
   );
   return rows.length;
 }

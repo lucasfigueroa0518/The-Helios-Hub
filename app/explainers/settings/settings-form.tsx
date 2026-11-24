@@ -11,29 +11,41 @@ type Field = {
   key: SettingKey;
   label: string;
   help: string;
-  kind: 'bool' | 'number' | 'text' | 'optional-text' | 'mode';
+  kind: 'bool' | 'number' | 'text' | 'optional-text' | 'mode' | 'opener';
 };
 
 const FIELDS: Field[] = [
-  { key: 'mode', label: 'Mode', help: 'Production applies the daily caps (E-17).', kind: 'mode' },
+  { key: 'mode', label: 'Mode', help: 'Labels runs and costs. Production also applies the daily render cap (E-17).', kind: 'mode' },
   { key: 'auto_render', label: 'Auto-render', help: 'On runs the daily idea cycle and renders the top topic (A-5, A-7).', kind: 'bool' },
   { key: 'per_reel_cap_usd', label: 'Per-reel cap (USD)', help: 'Kills a render past this spend. Always on.', kind: 'number' },
   { key: 'daily_render_cap', label: 'Daily render cap', help: 'Production only.', kind: 'number' },
-  { key: 'daily_spend_cap_usd', label: 'Daily spend cap (USD)', help: 'Production only. Renders plus the idea run (A-4).', kind: 'number' },
+  { key: 'daily_spend_cap_usd', label: 'Daily spend cap (USD)', help: 'Renders plus the idea run (A-4). Applies in every mode.', kind: 'number' },
   { key: 'pool_size', label: 'Pool size', help: 'Candidates kept after each idea run (E-16).', kind: 'number' },
   { key: 'ideas_per_day', label: 'Ideas per day', help: 'Generated in one call (E-16).', kind: 'number' },
   { key: 'dedupe_lookback_days', label: 'Duplicate lookback (days)', help: 'Rendered topics checked for repeats (A-2).', kind: 'number' },
   { key: 'voice_id', label: 'HeyGen voice ID', help: 'Voice "Lucas Figueroa" (E-19). Fill after the lookup.', kind: 'optional-text' },
-  { key: 'orchestrator_model', label: 'Orchestrator model', help: 'E-18.', kind: 'text' },
-  { key: 'frame_worker_model', label: 'Frame worker model', help: 'E-18.', kind: 'text' },
+  { key: 'director_model', label: 'Director model', help: 'Explainers 4.2: Session A (the voiceover, then the shots) and its one fix session.', kind: 'text' },
+  { key: 'orchestrator_model', label: 'Orchestrator model', help: 'Explainers 4.2: Session B, which dispatches the builders, assembles, and fixes what the picture check finds.', kind: 'text' },
+  { key: 'scene_builder_model', label: 'Scene builder model', help: 'Explainers 4.1: draws the places, the cast and the identity map.', kind: 'text' },
+  { key: 'frame_worker_model', label: 'Frame builder model', help: 'Explainers 4.2: the world and blend frame builders, and the legacy frame worker Real Case uses.', kind: 'text' },
+  { key: 'tech_frame_worker_model', label: 'Mechanism frame builder model', help: 'Explainers 4.3: the frame builders for `look: mechanism` frames (Opus by default).', kind: 'text' },
+  { key: 'picture_check_model', label: 'Picture check model', help: 'One vision call over contact grids of every frame\'s shot stills (needs vision; Haiku by default).', kind: 'text' },
+  { key: 'reader_model', label: 'Reader model', help: 'Explainers 4.2: the understanding test\'s two readers and its diagnosis.', kind: 'text' },
   { key: 'idea_model', label: 'Idea generator model', help: 'E-16.', kind: 'text' },
+  { key: 'analogy_model', label: 'Analogy writer model', help: 'EX3-123: two calls per topic, a third when neither passes.', kind: 'text' },
   { key: 'music_enabled', label: 'Background music', help: 'E-20.', kind: 'bool' },
   { key: 'sfx_enabled', label: 'Sound effects', help: 'E-20.', kind: 'bool' },
+  { key: 'opener_voice', label: 'Opener', help: 'Silent opens on the visual hook; Spoken says "In the next minute, this ___ will teach you…" (EX6-14).', kind: 'opener' },
 ];
 
 const MODE_OPTIONS = [
   { value: 'development', label: 'Development' },
   { value: 'production', label: 'Production' },
+];
+
+const OPENER_OPTIONS = [
+  { value: 'silent', label: 'Silent' },
+  { value: 'spoken', label: 'Spoken' },
 ];
 
 type Draft = Record<SettingKey, string | boolean>;
@@ -47,7 +59,7 @@ const CONFIRM: Record<Confirm, { title: string; body: string; accept: string }> 
   },
   production: {
     title: 'Switch to production?',
-    body: 'The daily render and spend caps start applying.',
+    body: 'The daily render cap starts applying. The daily spend cap applies in every mode.',
     accept: 'Switch',
   },
 };
@@ -68,7 +80,16 @@ function fromDraft(field: Field, value: string | boolean): unknown {
   return String(value).trim();
 }
 
-export function SettingsForm({ initial, hide = [] }: { initial: ExplainersSettings; /** Settings shown elsewhere (the posting panel owns auto-render and the daily count). */ hide?: SettingKey[] }) {
+/** What the Explainers Settings tab shows; everything else is on the Advanced page (/explainers/settings). */
+export const TAB_KEYS: readonly SettingKey[] = ['music_enabled', 'sfx_enabled', 'opener_voice', 'per_reel_cap_usd', 'daily_spend_cap_usd'];
+
+export function SettingsForm({ initial, hide = [], only }: {
+  initial: ExplainersSettings;
+  /** Settings shown elsewhere (the Settings tab's State owns auto-render; the Calendar owns the daily count). */
+  hide?: SettingKey[];
+  /** Show only these, in this order (the Settings tab's short list). */
+  only?: readonly SettingKey[];
+}) {
   const [saved, setSaved] = useState(initial);
   const [draft, setDraft] = useState(() => toDraft(initial));
   const [busy, setBusy] = useState(false);
@@ -148,7 +169,7 @@ export function SettingsForm({ initial, hide = [] }: { initial: ExplainersSettin
           askSave();
         }}
       >
-        {FIELDS.filter((field) => !hide.includes(field.key)).map((field) => {
+        {(only ? only.map((key) => FIELDS.find((f) => f.key === key)!).filter(Boolean) : FIELDS.filter((field) => !hide.includes(field.key))).map((field) => {
           const id = `ex-setting-${field.key}`;
           const value = draft[field.key];
           const set = (next: string | boolean) => setDraft((d) => ({ ...d, [field.key]: next }));
@@ -173,6 +194,8 @@ export function SettingsForm({ initial, hide = [] }: { initial: ExplainersSettin
                   </label>
                 ) : field.kind === 'mode' ? (
                   <HeliosMenu value={String(value)} options={MODE_OPTIONS} onChange={set} />
+                ) : field.kind === 'opener' ? (
+                  <HeliosMenu value={String(value)} options={OPENER_OPTIONS} onChange={set} />
                 ) : (
                   <input
                     id={id}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { publishReadiness, queuePublish } from '@/lib/reels/music/publish';
-import { cancelScheduledPost, scheduleVideo } from '@/lib/reels/publish/schedule';
+import { cancelScheduledPost, publishingLive, REELS_NOT_LIVE_NOTE, scheduleVideo } from '@/lib/reels/publish/schedule';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Only Live posts (D16): Force is refused before anything is recorded.
+    if (!(await publishingLive())) return NextResponse.json({ queued: false, note: REELS_NOT_LIVE_NOTE }, { status: 409 });
     const ready = await publishReadiness(body.video_job_id, { trigger: 'force' });
     if (!ready.ok) return NextResponse.json({ queued: false, note: ready.note }, { status: ready.status });
     await cancelScheduledPost(ready.postIdeaId);

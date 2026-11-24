@@ -1,12 +1,12 @@
 import {
   attemptStatus,
+  boardDate,
   cancelNote,
   category,
   historyByMedia,
   iso,
   latest,
   num,
-  nyDateFor,
   scheduleStatus,
   slotCategory,
   slotText,
@@ -183,7 +183,8 @@ function attemptPost(row: ReelAttemptRow, history: Map<string, import('@/lib/soc
     statusNote: status === 'failed' ? text(row.error) : null,
     postedAt: status === 'published' ? finishedAt : null,
     publishAt: iso(row.schedule_publish_at),
-    nyDate: nyDateFor(status === 'published' ? finishedAt : null, row.schedule_publish_at, row.requested_at),
+    // An attempt is a post going out (posted, or its slot's day); with neither, the day it was asked for.
+    nyDate: boardDate({ postedAt: status === 'published' ? finishedAt : null, publishAt: row.schedule_publish_at, madeAt: row.requested_at }),
     slot: { id: slot, label: reelSlotLabel(slot) },
     permalink: row.permalink,
     pipelineHref: '/reels',
@@ -274,7 +275,9 @@ function schedulePost(row: ReelScheduleRow, requireApproval: boolean): HubPost {
 /**
  * A finished video with no slot yet (publishing off, or the night found no
  * window): made content that waits on a person's Approve, which books it a
- * slot today. Not on a clock, so it has no time.
+ * slot on its posting day. Not on a clock, so it has no time. The board shows
+ * it on that day, its slate's date (Text on Screen is made 2 days ahead,
+ * Bald-Eagle D4), not on the day it was made.
  */
 function madePost(row: ReelMadeRow, requireApproval: boolean): HubPost {
   const name = reelTitle(row.on_screen_copy, row.headline);
@@ -289,10 +292,10 @@ function madePost(row: ReelMadeRow, requireApproval: boolean): HubPost {
     name,
     description: text(row.headline) && text(row.headline) !== name ? text(row.headline) : null,
     status: 'ready',
-    statusNote: 'Made and waiting. Approve it to give it a slot today.',
+    statusNote: 'Made and waiting. Approve it to give it a slot on its day.',
     postedAt: null,
     publishAt: null,
-    nyDate: row.ny_date.slice(0, 10),
+    nyDate: boardDate({ target: row.ny_date, madeAt: row.video_finished_at }) ?? row.ny_date.slice(0, 10),
     slot: null,
     permalink: null,
     pipelineHref: '/reels',

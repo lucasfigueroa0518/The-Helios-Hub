@@ -11,14 +11,14 @@ type Queued = { queued: boolean; note?: string };
 type Place = (q: Query, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 const REJECTED_NOTE = 'This post was rejected, so it can’t be approved, published or rebuilt. Generate makes a new one for its week.';
-const PUBLISHING_OFF_NOTE = 'AI Events publishing is off. Turn it on before publishing.';
+const PUBLISHING_OFF_NOTE = 'AI Events isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 const PUBLISHED_NOTE = 'This post is already published, so it isn’t rebuilt.';
 
 /**
  * AI Events This Week (lib/ai-events/schedule.ts): approve (approved, and
- * booked in its own Sunday's 6–7 PM window while ai_events publishing_live
- * is on; otherwise approved without a slot), reject, Publish now (refused
- * while publishing is off), unschedule, delete, place or move on the
+ * booked in its own Sunday's 6–7 PM window in Approval or Live, contract
+ * §4.3; Paused: approved without a slot), reject, Publish now (refused
+ * unless Live, D16), unschedule, delete, place or move on the
  * calendar (D50), and regenerate, which is Rebuild post (AE-04): a queued
  * rebuild of the post's week from the pool and the cached scores, with the
  * person's pins and excludes. The social worker carries it out; no model is
@@ -29,7 +29,7 @@ export function aiEventsActions(deps: {
   approvePost: (q: Query, postId: string) => Promise<Placed>;
   rejectPost: (q: Query, postId: string, by: string | null) => Promise<boolean>;
   hardPublishPost: (q: Query, postId: string) => Promise<Queued>;
-  /** ai_events.settings publishing_live: Publish now is refused while it is off. */
+  /** Whether AI Events is Live (D16, stateOf): Publish now is refused otherwise. */
   publishingLive: (q: Query) => Promise<boolean>;
   unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   /** Queue a rebuild of the week (lib/ai-events/manual.ts queueAiEventsRun with kind 'rebuild'). */

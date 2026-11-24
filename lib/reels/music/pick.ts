@@ -190,7 +190,7 @@ export function buildShortlist(copyEmbedding: number[], songs: TaggedSong[]): St
 export type PickDeps = {
   clap?: ClapClient;
   jev?: JevRunner;
-  /** Called after an ok pick when auto-publish is on (D-156). */
+  /** Called after an ok pick (D-156). No caller passes it now: every post needs a person's approval (D16). */
   onPicked?: (videoJobId: string) => Promise<void>;
 };
 

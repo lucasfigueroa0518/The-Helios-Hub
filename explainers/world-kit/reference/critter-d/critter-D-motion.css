@@ -1,0 +1,25 @@
+body{margin:0}
+a{color:#171717}a:hover{color:#FF5E1A}
+.blink{transform-box:fill-box;transform-origin:center;animation:blink 4.6s infinite}
+.look{animation:look 7s infinite cubic-bezier(.16,1,.3,1)}
+.think{animation:think 5s infinite ease-in-out}
+.scan{animation:scan 1.6s infinite ease-in-out}
+.waitlook{animation:waitlook 3s infinite cubic-bezier(.16,1,.3,1)}
+.bob{animation:bob 2.8s infinite ease-in-out}
+.bob-fast{animation:bob 0.8s infinite ease-in-out}
+.hop{transform-box:fill-box;transform-origin:50% 100%;animation:hop 3s infinite}
+.bounce{transform-box:fill-box;transform-origin:50% 100%;animation:bounce 1.4s infinite}
+.wave{transform-box:view-box;transform-origin:165px 104px;animation:wave 1s infinite ease-in-out}
+.step-l{animation:step 0.8s infinite ease-in-out}
+.step-r{animation:step 0.8s infinite ease-in-out;animation-delay:-0.4s}
+@keyframes blink{0%,44%,50%,100%{transform:scaleY(1)}47%{transform:scaleY(.08)}}
+@keyframes look{0%,10%{transform:translate(0,0)}16%,36%{transform:translate(6px,-3px)}42%,60%{transform:translate(-6px,1px)}66%,82%{transform:translate(2px,4px)}88%,100%{transform:translate(0,0)}}
+@keyframes think{0%,100%{transform:translate(-5px,-7px)}50%{transform:translate(4px,-8px)}}
+@keyframes scan{0%,100%{transform:translate(-6px,3px)}50%{transform:translate(6px,3px)}}
+@keyframes waitlook{0%,60%{transform:translate(0,0)}68%,92%{transform:translate(0,-5px)}100%{transform:translate(0,0)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes hop{0%,62%,78%,100%{transform:translateY(0) scale(1,1)}66%{transform:translateY(0) scale(1.06,.92)}71%{transform:translateY(-14px) scale(.96,1.05)}}
+@keyframes bounce{0%,100%{transform:translateY(0) scale(1,1)}12%{transform:scale(1.07,.9)}30%{transform:translateY(-12px) scale(.95,1.06)}48%{transform:translateY(0) scale(1.04,.95)}60%{transform:scale(1,1)}}
+@keyframes wave{0%,100%{transform:rotate(0deg)}50%{transform:rotate(-22deg)}}
+@keyframes step{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media (prefers-reduced-motion: reduce){.blink,.look,.think,.scan,.waitlook,.bob,.bob-fast,.hop,.bounce,.wave,.step-l,.step-r{animation:none}}

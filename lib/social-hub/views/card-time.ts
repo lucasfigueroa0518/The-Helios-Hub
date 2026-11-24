@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubPost } from '@/lib/social-hub/types';
 import { clock } from '@/lib/social-hub/views/format';
 import { nyDateOf, nyDayStart } from '@/lib/social-hub/time';
@@ -13,8 +14,9 @@ export function cardTimeLine(post: HubPost, now: Date): string {
   const when = post.postedAt ?? post.publishAt;
   if (when) return clock(when);
   if (post.status === 'generating') return 'Being made';
-  if (post.vertical === 'stories' && post.status === 'ready' && !post.approval.approvedAt) {
-    const w = PLAN.stories.find((x) => x.label === post.idea?.label);
+  if (isStoryVertical(post.vertical) && post.status === 'ready' && !post.approval.approvedAt) {
+    // Each Stories-format type has its one series' window (SS-1).
+    const w = PLAN[post.vertical][0];
     if (w && now.getTime() < nyDayStart(nyDateOf(now)!).getTime() + w.endMinute * 60_000) return `No slot yet · posts ${windowRange(w)} once approved`;
   }
   return 'No slot yet';

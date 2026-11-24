@@ -1,7 +1,8 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
-import { QUEUE_LIVE, capQueued, poolLead, queueOrder, withoutArchived } from '@/lib/social-hub/queue';
-import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
+import { capQueued, poolLead, queueOrder } from '@/lib/social-hub/queue';
+import { movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
  * Idea pools (BRIEFS.md §1, REVISIONS C6): how full each type's tank is and
@@ -15,11 +16,11 @@ export const POOL_STALE_MS = 3 * 86_400_000;
 /** Last Few Days refills twice a week (Friday to Tuesday is four days), so its pool is stale only after five. */
 const LFD_STALE_MS = 5 * 86_400_000;
 
-/** AI Events ranks its pool once a week (Sunday noon), so it is stale only after eight days. */
+/** AI Events ranks its pool once a week (Sunday noon), and Field Notes runs one or two a week, so each is stale only after eight days. */
 export const AI_EVENTS_STALE_MS = 8 * 86_400_000;
 
 export function poolStale(lastRefill: string | null | undefined, now: Date, vertical?: Vertical): boolean {
-  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : vertical === 'ai_events' ? AI_EVENTS_STALE_MS : POOL_STALE_MS;
+  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : (vertical === 'ai_events' || vertical === 'field_notes') ? AI_EVENTS_STALE_MS : POOL_STALE_MS;
   return Boolean(lastRefill) && now.getTime() - Date.parse(lastRefill!) > limit;
 }
 
@@ -47,8 +48,11 @@ export type PoolSummary = {
 /** Open ideas with content already made lead the pool, whatever their score (a made idea must not sink to the bottom). */
 const madeOpen = (i: HubIdea) => (i.hasContent && OPEN.has(i.state) ? 1 : 0);
 
+/** Curriculum order first (fundamentals before depth), ideas off the curriculum after it. */
+const rankOf = (i: HubIdea) => i.curriculumRank ?? Infinity;
+
 export function rankIdeas(ideas: readonly HubIdea[]): HubIdea[] {
-  return [...ideas].sort((a, b) => madeOpen(b) - madeOpen(a) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
+  return [...ideas].sort((a, b) => madeOpen(b) - madeOpen(a) || rankOf(a) - rankOf(b) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
 }
 
 export function poolSummary(ideas: readonly HubIdea[], vertical: Vertical): PoolSummary {
@@ -71,8 +75,12 @@ export const REFILL_CADENCE: Record<Vertical, string> = {
   explainers: 'every night',
   carousels: 'every night',
   stories: 'every night',
+  ai_trivia: 'every night',
+  real_or_ai: 'every night',
   last_few_days: 'twice a week',
   ai_events: 'every Sunday at noon',
+  field_notes: 'on each run (one or two a week)',
+  reel_ai_drama: 'Weekly development session (Mondays), in every state; the pool is re-ranked daily.',
 };
 
 export function poolSummaries(ideas: readonly HubIdea[]): PoolSummary[] {
@@ -85,12 +93,10 @@ export type PoolFilter = 'open' | 'ready' | 'all';
 export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: PoolFilter, adjustments: readonly IdeaAdjustment[] = []): HubIdea[] {
   const mine = ideas.filter((i) => i.vertical === vertical);
   const kept = filter === 'all' ? mine : filter === 'ready' ? mine.filter((i) => i.state === 'content_ready') : mine.filter((i) => OPEN.has(i.state));
-  // A type whose night does not follow the queue yet keeps Promote and Demote, so the page never shows an order the night won't make.
-  if (!QUEUE_LIVE.has(vertical)) return applyMoves(withoutArchived(rankIdeas(kept), movesFor(adjustments, vertical)), movesFor(adjustments, vertical));
   const moves = movesFor(adjustments, vertical);
   if (filter === 'all') return queueOrder(rankIdeas(kept), moves, poolLead(kept)).map((q) => q.item);
-  // At most 30 open ideas per type (Stories: per series); pinned, dragged, yours and made ideas are never cut.
+  // At most 30 open ideas per type (a Stories-format type: per series, one each since SS-1); pinned, dragged, yours and made ideas are never cut.
   const groups = new Map<string, HubIdea[]>();
-  for (const idea of rankIdeas(kept)) groups.set(vertical === 'stories' ? idea.group ?? '' : '', [...(groups.get(vertical === 'stories' ? idea.group ?? '' : '') ?? []), idea]);
+  for (const idea of rankIdeas(kept)) groups.set(isStoryVertical(vertical) ? idea.group ?? '' : '', [...(groups.get(isStoryVertical(vertical) ? idea.group ?? '' : '') ?? []), idea]);
   return [...groups.values()].flatMap((list) => capQueued(queueOrder(list, moves, poolLead(list))).map((q) => q.item));
 }

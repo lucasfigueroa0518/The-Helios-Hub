@@ -16,11 +16,13 @@ export type ScheduleEntry = { vertical: Vertical; series: StorySeries | null; la
 export const SCHEDULE_ENTRIES: readonly ScheduleEntry[] = [
   { vertical: 'reels', series: null, label: 'Text on Screen' },
   { vertical: 'explainers', series: null, label: 'Explainers' },
+  { vertical: 'reel_ai_drama', series: null, label: 'AI Drama Reels' },
   { vertical: 'carousels', series: null, label: 'Carousels' },
   { vertical: 'last_few_days', series: null, label: 'Last Few Days' },
+  // The Stories-format types (SS-1), each with its one series.
   { vertical: 'stories', series: 'morning_download', label: 'Morning Download' },
-  { vertical: 'stories', series: 'guess_the_number', label: 'Guess the Number' },
-  { vertical: 'stories', series: 'free_vs_paid', label: 'Free vs. Paid' },
+  { vertical: 'ai_trivia', series: 'ai_trivia', label: 'Are you smarter than AI?' },
+  { vertical: 'real_or_ai', series: 'real_or_ai', label: 'Real or AI?' },
 ];
 
 export type ScheduleTime = { minute: number; feedMode: FeedMode | null };
@@ -109,7 +111,7 @@ export function checkSchedule(
     seen.add(t.minute);
   }
   if (s.times.length > ctx.cap) {
-    add(errors, `${label} can post ${ctx.cap} a day. Raise the daily limit on the ${label} page to add more.`);
+    add(errors, `${label} can post at most ${ctx.cap} a day.`);
   }
   if (s.entry.vertical === 'last_few_days' && s.times.length > 1) add(errors, LFD_ONCE);
 
@@ -150,7 +152,7 @@ export function checkSchedule(
 /** The day chips' order: Monday first (days are 0 = Sunday). */
 export const DAY_ORDER: readonly number[] = [1, 2, 3, 4, 5, 6, 0];
 
-/** "Add a time" stays on below the type's daily cap; Last Few Days takes one time whatever its cap. */
+/** "Add a time" stays on below the type's fixed maximum (D20); Last Few Days takes one time whatever its cap. */
 export function canAddTime(s: TypeSchedule, cap: number): boolean {
   const most = s.entry.vertical === 'last_few_days' ? Math.min(1, cap) : cap;
   return s.times.length < most;

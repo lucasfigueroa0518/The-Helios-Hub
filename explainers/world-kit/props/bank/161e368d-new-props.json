@@ -1,0 +1,106 @@
+{
+ "file": "161e368d-new-props.js",
+ "job": "161e368d-c240-4259-9f4c-2231f553bb07",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.380Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "cream retro kitchen fridge": {
+   "source_name": "cream retro kitchen fridge",
+   "tags": {
+    "is": "a tall single-door home kitchen fridge with rounded corners in cream, a vertical blue handle, shown closed or open with its warm lit inside, three bare shelves and a crisper drawer (a milk carton on the middle shelf in the carton state)",
+    "setting": [
+     "home kitchen",
+     "apartment kitchen",
+     "a cache drawn as a fridge beside a phone"
+    ],
+    "material": "enamelled metal, plastic liner, glass shelves",
+    "parts": [
+     "rounded cream body",
+     "vertical blue handle",
+     "door swung open on its left hinge",
+     "warm lit inside",
+     "three glass shelves",
+     "crisper drawer",
+     "plinth"
+    ],
+    "not": [
+     "freezer chest",
+     "vending machine",
+     "wardrobe",
+     "oven",
+     "dishwasher",
+     "safe",
+     "server rack",
+     "shop drinks cooler with glass door",
+     "mini bar"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "drip coffee maker with glass carafe": {
+   "source_name": "drip coffee maker with glass carafe",
+   "tags": {
+    "is": "a small black drip coffee maker: a base plate, a back tower and an overhanging brew head, with a glass carafe of coffee on the plate (or a teal mug in the mug state)",
+    "setting": [
+     "home kitchen counter",
+     "office kitchenette",
+     "breakfast"
+    ],
+    "material": "black plastic, glass carafe",
+    "parts": [
+     "base plate",
+     "back water tower",
+     "overhanging brew head",
+     "small power light",
+     "glass carafe with coffee",
+     "carafe handle"
+    ],
+    "not": [
+     "espresso machine with portafilter",
+     "kettle",
+     "toaster",
+     "blender",
+     "microwave",
+     "printer",
+     "server"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "teal coffee mug": {
+   "source_name": "teal coffee mug",
+   "tags": {
+    "is": "a plain teal ceramic coffee mug with a loop handle, empty or filled with milky coffee",
+    "setting": [
+     "home kitchen",
+     "breakfast table",
+     "office desk",
+     "coffee maker plate"
+    ],
+    "material": "glazed ceramic",
+    "parts": [
+     "round body",
+     "loop handle",
+     "milky coffee top when full"
+    ],
+    "not": [
+     "teacup on a saucer",
+     "paper coffee cup",
+     "glass",
+     "jar",
+     "vase",
+     "pot",
+     "trophy"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

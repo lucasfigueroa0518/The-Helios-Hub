@@ -10,6 +10,7 @@ import {
   type PublicFeedStorageConfig,
 } from '@/lib/networking/public-feed-storage';
 import { listKeptEvents, liveNetworkingQuery, type NetworkingQuery } from '@/lib/networking/repository';
+import { rsvpOrigin, saveRsvpLinks, withTrackedRsvp } from '@/lib/networking/rsvp-tracking';
 import { isoWeekKey } from '@/lib/networking/schedule';
 import { METROS, type Metro, type StoredNetworkingEvent } from '@/lib/networking/types';
 
@@ -39,8 +40,8 @@ export const SNAPSHOT_WINDOW_DAYS = 60;
 export const SUMMARY_MAX_CHARS = 280;
 export const MAX_PUBLIC_HOSTS = 8;
 export const MAX_PUBLIC_TAGS = 6;
-/** Ranked events per city that get a badge on the site: #1 gold, #2 silver, #3 bronze (AE-32). */
-export const MAX_PICKS_PER_METRO = 3;
+/** Ranked events per city that get a badge on the site: the top 10; #1 gold, #2 silver, #3 bronze, #4–#10 numbered (AE-37). */
+export const MAX_PICKS_PER_METRO = 10;
 /** `networking.publish_state` row of this feed. */
 export const EVENTS_FEED_STATE_ID = 'events.v1';
 /** The zone that decides which Mon-Sun is "this week" (the post is Sunday evening ET, AE-08). */
@@ -70,6 +71,12 @@ export type PublicEvent = {
   tags: string[];
   rsvpUrl: string;
   pick: { rank: number; week: string } | null;
+  /**
+   * The event's place in its city's whole ranking for the feed's week (1 = #1), or null when it
+   * was not ranked (another week, added after the ranking, or excluded). `pick` badges only the
+   * top 10; this orders the rest so the site can sort the week by rank (AE-40).
+   */
+  weekRank: number | null;
 };
 
 export type PublicFeedWeek = { key: string; start: string; end: string; picksPublished: boolean };
@@ -83,10 +90,13 @@ export type PublicEventsFeed = {
 };
 
 /**
- * One picked row of ai_events.pool, as the snapshot needs it. `pickRank` is the pick's place in
- * its city (pins first, as on the carousel); `rank` is the pool's score order, the fallback.
+ * One row of ai_events.pool, as the snapshot needs it. `pickRank` is the pick's place in its city
+ * (pins first, as on the carousel); `rank` is the pool's score order (gated events last).
+ * `picked` false is a ranked event outside the top 10; omitted means picked.
  */
-export type PoolPick = { weekKey: string; eventId: string; metro: Metro; rank: number | null; pickRank?: number | null };
+export type PoolPick = { weekKey: string; eventId: string; metro: Metro; rank: number | null; pickRank?: number | null; picked?: boolean };
+
+const isPicked = (p: PoolPick) => p.picked !== false;
 
 // ---------- Weeks ----------
 
@@ -224,7 +234,7 @@ function isPublicMetro(metro: string): metro is PublicMetroId {
 }
 
 /** One stored event as the site shows it, or null when it has no usable RSVP link or title. */
-export function toPublicEvent(e: StoredNetworkingEvent, pick: PublicEvent['pick']): PublicEvent | null {
+export function toPublicEvent(e: StoredNetworkingEvent, pick: PublicEvent['pick'], weekRank: number | null = null): PublicEvent | null {
   if (!isPublicMetro(e.metro)) return null;
   const rsvpUrl = safeHttpUrl(e.canonicalUrl) ?? e.listings.map((l) => safeHttpUrl(l.url)).find(Boolean) ?? null;
   const title = cleanEventTitle(e.title ?? '');
@@ -256,6 +266,7 @@ export function toPublicEvent(e: StoredNetworkingEvent, pick: PublicEvent['pick'
     tags: publicTags(e.sourceTags ?? []),
     rsvpUrl,
     pick,
+    weekRank,
   };
 }
 
@@ -268,20 +279,20 @@ export function toPublicEvent(e: StoredNetworkingEvent, pick: PublicEvent['pick'
 export function chooseWeek(picks: readonly PoolPick[], now: Date): PublicFeedWeek {
   const { coming, current } = snapshotWeeks(now);
   for (const week of [coming, current]) {
-    if (picks.some((p) => p.weekKey === week.key)) return { ...week, picksPublished: true };
+    if (picks.some((p) => p.weekKey === week.key && isPicked(p))) return { ...week, picksPublished: true };
   }
   return { ...coming, picksPublished: false };
 }
 
 /**
- * Pick ranks 1..3 per city for `weekKey`, keyed by event id: the carousel's pick order
+ * Pick ranks 1..10 per city for `weekKey`, keyed by event id: the carousel's pick order
  * (`pickRank`, pins first), then pool rank, then event id.
  */
 export function pickRanks(picks: readonly PoolPick[], weekKey: string): Map<string, number> {
   const ranks = new Map<string, number>();
   for (const metro of METROS) {
     const inMetro = picks
-      .filter((p) => p.weekKey === weekKey && p.metro === metro)
+      .filter((p) => p.weekKey === weekKey && p.metro === metro && isPicked(p))
       .sort(
         (a, b) =>
           (a.pickRank ?? Infinity) - (b.pickRank ?? Infinity) ||
@@ -293,12 +304,31 @@ export function pickRanks(picks: readonly PoolPick[], weekKey: string): Map<stri
   return ranks;
 }
 
-/** Pure: stored events and pool picks to the public feed at `now`. */
+/**
+ * Every ranked event's place in its city for `weekKey` (AE-40): the picks in pick order (so places
+ * 1..10 match the badges), then the rest of the pool by score order, gated events last.
+ */
+export function weekPlaces(pool: readonly PoolPick[], weekKey: string): Map<string, number> {
+  const places = new Map<string, number>();
+  const picked = pickRanks(pool, weekKey);
+  for (const metro of METROS) {
+    const rest = pool
+      .filter((p) => p.weekKey === weekKey && p.metro === metro && !picked.has(p.eventId))
+      .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity) || a.eventId.localeCompare(b.eventId));
+    const top = pool.filter((p) => p.weekKey === weekKey && p.metro === metro && picked.has(p.eventId));
+    top.forEach((p) => places.set(p.eventId, picked.get(p.eventId)!));
+    rest.forEach((p, i) => places.set(p.eventId, top.length + i + 1));
+  }
+  return places;
+}
+
+/** Pure: stored events and pool rows to the public feed at `now`. */
 export function buildPublicFeed(rows: readonly StoredNetworkingEvent[], picks: readonly PoolPick[], now: Date): PublicEventsFeed {
   const from = now.getTime();
   const to = from + SNAPSHOT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const week = chooseWeek(picks, now);
   const ranks = week.picksPublished ? pickRanks(picks, week.key) : new Map<string, number>();
+  const places = week.picksPublished ? weekPlaces(picks, week.key) : new Map<string, number>();
 
   const events: PublicEvent[] = [];
   const seen = new Set<string>();
@@ -307,7 +337,7 @@ export function buildPublicFeed(rows: readonly StoredNetworkingEvent[], picks: r
     if (e.status !== 'scheduled' || !(start >= from && start <= to)) continue;
     if (e.bucket !== 'tech' && e.bucket !== 'both') continue;
     const rank = ranks.get(e.id);
-    const event = toPublicEvent(e, rank ? { rank, week: week.key } : null);
+    const event = toPublicEvent(e, rank ? { rank, week: week.key } : null, places.get(e.id) ?? null);
     if (!event || seen.has(event.id)) continue;
     seen.add(event.id);
     events.push(event);
@@ -336,8 +366,9 @@ export function serializeFeed(feed: PublicEventsFeed): string {
 // ---------- Load and publish ----------
 
 /**
- * Picked rows of ai_events.pool for the given weeks. The table belongs to the AI Events type and
- * may not exist yet: then there are no picks. Excluded rows never count, whatever `picked` says.
+ * Rows of ai_events.pool for the given weeks, picked or not (the rest give the whole ranking's
+ * order, AE-40). The table belongs to the AI Events type and may not exist yet: then there are
+ * no picks. Excluded rows never count, whatever `picked` says.
  */
 export async function loadPoolPicks(q: NetworkingQuery, weekKeys: readonly string[]): Promise<PoolPick[]> {
   const { rows: present } = await q<{ reg: string | null }>(`SELECT to_regclass('ai_events.pool')::text AS reg`);
@@ -345,8 +376,7 @@ export async function loadPoolPicks(q: NetworkingQuery, weekKeys: readonly strin
   const { rows } = await q<Record<string, unknown>>(
     `SELECT p.*
        FROM ai_events.pool p
-      WHERE p.week_key = ANY ($1::text[])
-        AND p.picked IS TRUE`,
+      WHERE p.week_key = ANY ($1::text[])`,
     [[...weekKeys]],
   );
   return rows
@@ -357,6 +387,7 @@ export async function loadPoolPicks(q: NetworkingQuery, weekKeys: readonly strin
       metro: r.metro as Metro,
       rank: r.rank == null || !Number.isFinite(Number(r.rank)) ? null : Number(r.rank),
       pickRank: r.pick_rank == null || !Number.isFinite(Number(r.pick_rank)) ? null : Number(r.pick_rank),
+      picked: r.picked === true,
     }));
 }
 
@@ -415,6 +446,8 @@ export async function publishSnapshot(input: {
   fetch?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   log?: SnapshotLog;
+  /** The hub origin for counted RSVP links (default: rsvpOrigin()). */
+  rsvpOrigin?: string;
 }): Promise<PublishSnapshotResult> {
   const q = input.q ?? liveNetworkingQuery;
   const now = input.now ?? new Date();
@@ -422,7 +455,9 @@ export async function publishSnapshot(input: {
   const storage = input.storage ?? livePublicFeedStorageConfig();
 
   const { rows, picks } = await loadPublicFeedInputs(q, now);
-  const feed = buildPublicFeed(rows, picks, now);
+  // RSVP links go out as counted hub links (RT-2); the real URLs are stored for the redirect before the feed ships.
+  const tracked = withTrackedRsvp(buildPublicFeed(rows, picks, now), input.rsvpOrigin ?? rsvpOrigin());
+  const feed = tracked.feed;
   const contentHash = feedContentHash(feed);
 
   const { rows: stateRows } = await q<{ last_hash: string | null }>(
@@ -434,6 +469,7 @@ export async function publishSnapshot(input: {
     throw new Error('refusing to publish an empty events feed over a published one (pass allowEmpty to force)');
   }
 
+  await saveRsvpLinks(q, tracked.links, now);
   await uploadPublicFeed(EVENTS_FEED_OBJECT, serializeFeed(feed), { ...storage, fetch: input.fetch ?? storage.fetch, sleep: input.sleep ?? storage.sleep });
   await q(
     `INSERT INTO networking.publish_state (id, last_hash, last_published_at)

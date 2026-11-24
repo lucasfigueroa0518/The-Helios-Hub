@@ -9,8 +9,12 @@ const FILES: Record<Vertical, string[]> = {
   explainers: ['lib/explainers/render/job.ts', 'lib/explainers/'],
   carousels: ['lib/social/pipeline/', 'lib/social/writer/prompt.ts'],
   stories: ['lib/stories/build/'],
+  ai_trivia: ['lib/stories/trivia/', 'lib/stories/build/'],
+  real_or_ai: ['lib/stories/roa/', 'lib/stories/build/'],
   last_few_days: ['lib/lfd/run.ts', 'lib/lfd/'],
+  reel_ai_drama: ['lib/reel-ai-drama/production/run.ts', 'lib/reel-ai-drama/hub.ts', 'lib/reel-ai-drama/'],
   ai_events: ['lib/ai-events/run.ts', 'lib/networking/pick/rank.ts', 'lib/networking/public-snapshot.ts', 'lib/ai-events/'],
+  field_notes: ['lib/field-notes/run.ts', 'lib/field-notes/write/', 'lib/field-notes/render/', 'lib/field-notes/'],
 };
 
 export function briefFor(p: Problem): string {

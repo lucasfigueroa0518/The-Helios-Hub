@@ -1,0 +1,5 @@
+{
+  "experiment": "render-path frame signing vs a Storage stub that answers after 5000 ms (perf/.local diag slow-sign)",
+  "before_blocked_ms": 5040,
+  "note": "baseline code: storage client timeout 60 s, so a slow Storage API holds the Social Hub page render up to a minute"
+}

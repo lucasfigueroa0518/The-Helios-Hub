@@ -1,5 +1,7 @@
 // lib/social-hub/slots/times.ts
+import { maxCapFor } from '@/lib/content-type/caps';
 import { SOCIAL_TIMEZONE, zoneOffsetMinutes } from '@/lib/instagram/clock';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import type { FeedMode, ResolvedSlot, StorySeries } from './types';
@@ -35,45 +37,66 @@ export const USUAL: Record<Vertical, ReadonlyArray<{ start: number; end: number;
   carousels: [],
   last_few_days: [{ start: 540, end: 600, name: 'Morning' }],
   stories: [{ start: 510, end: 600, name: 'Morning' }],
+  ai_trivia: [{ start: 510, end: 600, name: 'Morning' }],
+  real_or_ai: [{ start: 510, end: 600, name: 'Morning' }],
   ai_events: [
     { start: 1080, end: 1140, name: 'Evening' },
     { start: 1140, end: 1200, name: 'Night' },
   ],
+  field_notes: [{ start: 870, end: 930, name: 'Afternoon' }],
+  reel_ai_drama: [{ start: 1170, end: 1245, name: 'Evening' }],
 };
 
-/** Default slot times per type (the seed). LFD runs on its days (Tue/Fri), AI Events on Sunday at 6 and 7 PM (Miami, then Boston; AE-29), Stories series on theirs. */
+/** Default slot times per type (the seed). LFD runs on its days (Tue/Fri), AI Events on Sunday at 6 and 7 PM (Miami, then Boston; AE-29), Field Notes at 2:30 PM on Tuesday and Friday (1-2 a week), each Stories-format type (SS-1) at 8:30 AM on its days. */
 export const DEFAULT_TIMES: Record<Vertical, readonly number[]> = {
   reels: [525, 675, 1080],
   explainers: [780, 930],
   carousels: [],
   last_few_days: [540],
   stories: [510],
+  ai_trivia: [510],
+  real_or_ai: [510],
   ai_events: [1080, 1140],
+  field_notes: [870],
+  // AI Drama Reels at 8:00 PM (lib/reel-ai-drama/hub.ts DRAMA_WINDOWS). Not seeded: opt-in on the week board.
+  reel_ai_drama: [1200],
 };
 
-/** The hidden safety cap per day the overnight runs never exceed. Stories: per series. */
-export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2 };
+/**
+ * The most slots a day each type may have: its fixed maximum (lib/content-type/config.ts maxCap). The calendar's
+ * slots are the count the night makes (settings standard D20); this only bounds how many times the Calendar lets
+ * a person set, so there is no separate daily limit to set. Each Stories-format type has its own (SS-1).
+ */
+export const DEFAULT_CAPS: Record<Vertical, number> = {
+  reels: maxCapFor('reels'), explainers: maxCapFor('explainers'), carousels: maxCapFor('carousels'), last_few_days: maxCapFor('last_few_days'),
+  stories: maxCapFor('stories'), ai_trivia: maxCapFor('ai_trivia'), real_or_ai: maxCapFor('real_or_ai'), ai_events: maxCapFor('ai_events'),
+  field_notes: maxCapFor('field_notes'), reel_ai_drama: maxCapFor('reel_ai_drama'),
+};
 
-/** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08). */
-export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM' };
+/** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08; Field Notes at 2 AM on its days). */
+export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_trivia: '4 AM', real_or_ai: '4 AM', ai_events: '12 PM', field_notes: '2 AM', reel_ai_drama: '12 AM' };
 
 /** Default Trial / Main feed for a new slot of a type (reels Trial, Explainers Main, the rest none). */
-export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_events: null };
+export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_trivia: null, real_or_ai: null, ai_events: null, field_notes: null, reel_ai_drama: 'main' };
 
-/** Names for board copy ("{Day} has {n} {Type}s…", "At the daily limit for {Type}s ({cap})"). */
+/** Names for board copy ("{Day} has {n} {Type}s…", "{Type}s can post at most {cap} a day"). */
 export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
   reels: { one: 'Text on Screen', many: 'Text on Screen reels' },
   explainers: { one: 'Explainer', many: 'Explainers' },
   carousels: { one: 'Carousel', many: 'Carousels' },
   last_few_days: { one: 'Last Few Days', many: 'Last Few Days posts' },
   ai_events: { one: 'AI Events', many: 'AI Events posts' },
-  stories: { one: 'Stories', many: 'Stories' },
+  field_notes: { one: 'Field Notes', many: 'Field Notes posts' },
+  stories: { one: 'Morning Download', many: 'Morning Downloads' },
+  ai_trivia: { one: 'Are you smarter than AI?', many: 'Are you smarter than AI? sets' },
+  real_or_ai: { one: 'Real or AI?', many: 'Real or AI? sets' },
+  reel_ai_drama: { one: 'AI Drama reel', many: 'AI Drama reels' },
 };
 
 export const SERIES_NAME: Record<StorySeries, { one: string; many: string }> = {
   morning_download: { one: 'Morning Download', many: 'Morning Downloads' },
-  guess_the_number: { one: 'Guess the Number', many: 'Guess the Number sets' },
-  free_vs_paid: { one: 'Free vs. Paid', many: 'Free vs. Paid sets' },
+  ai_trivia: { one: 'Are you smarter than AI?', many: 'Are you smarter than AI? sets' },
+  real_or_ai: { one: 'Real or AI?', many: 'Real or AI? sets' },
 };
 
 /** "8:45 AM" for a minute of the day. */
@@ -119,9 +142,9 @@ export function nextOpenMinute(nowMinute: number): number {
   return (Math.floor(nowMinute / GRID) + 1) * GRID;
 }
 
-/** Feed posts keep 30 minutes apart: Main-feed reels, Carousels, LFD, AI Events. Stories and Trial reels are exempt. */
+/** Feed posts keep 30 minutes apart: Main-feed reels, Carousels, LFD, AI Events. Stories-format types (SS-1) and Trial reels are exempt. */
 export function isFeedSlot(s: Pick<ResolvedSlot, 'vertical' | 'feedMode'>): boolean {
-  if (s.vertical === 'stories') return false;
+  if (isStoryVertical(s.vertical)) return false;
   if (s.vertical === 'reels' || s.vertical === 'explainers') return s.feedMode === 'main';
   return true;
 }

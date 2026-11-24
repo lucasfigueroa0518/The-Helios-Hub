@@ -31,16 +31,16 @@ const story = (slug: string, origin: 'reels' | 'carousel' = 'reels'): StoryCandi
 
 const reads = (morning: StoryCandidate[]): PoolReads => ({
   morning: async () => ({ reels: morning.filter((c) => c.origin === 'reels'), carousel: morning.filter((c) => c.origin === 'carousel') }),
-  numbers: async () => ({ numbers: [], unbriefed: [] }),
   leads: async () => [{ origin: 'catalog', ref: 'gimp', name: 'GIMP', url: 'https://gimp.org', description: 'Free image editor' }],
 });
 
 async function poolRows(db: Awaited<ReturnType<typeof openLocalStoriesDb>>['db']) {
-  const { rows } = await db.query<{ series: string; key: string; used: boolean }>(`SELECT series, key, used_at IS NOT NULL AS used FROM stories.pool ORDER BY series, key`);
+  // Archived rows (Tommy, 2026-11-16: the refresh archives instead of deleting) are out of the pool.
+  const { rows } = await db.query<{ series: string; key: string; used: boolean }>(`SELECT series, key, used_at IS NOT NULL AS used FROM stories.pool WHERE archived_at IS NULL ORDER BY series, key`);
   return rows;
 }
 
-test('pool refresh: used keys stay used, an unused key the refresh did not return drops', async () => {
+test('pool refresh: Morning Download reopens what the refresh returns (the build decides repeats), an unused key the refresh did not return drops', async () => {
   const { db } = await openLocalStoriesDb();
   await refreshStoryPool(db, reads([story('a'), story('b'), story('c', 'carousel')]), NOW);
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b', 'news.test/c']);
@@ -55,27 +55,34 @@ test('pool refresh: used keys stay used, an unused key the refresh did not retur
   assert.equal(r.dropped, 1);
   const rows = await poolRows(db);
   assert.deepEqual(rows.filter((x) => x.series === 'morning_download'), [
-    { series: 'morning_download', key: 'news.test/a', used: true },
-    { series: 'morning_download', key: 'news.test/b', used: true },
+    { series: 'morning_download', key: 'news.test/a', used: false },
+    { series: 'morning_download', key: 'news.test/b', used: false },
   ]);
-  assert.deepEqual((await openPool(db, 'morning_download')).stories, [], 'used ideas never come back as open');
+  // c is archived, not deleted, and says why.
+  const c = (await db.query<{ archived_reason: string | null }>(`SELECT archived_reason FROM stories.pool WHERE series = 'morning_download' AND key = 'news.test/c'`)).rows;
+  assert.deepEqual(c, [{ archived_reason: 'not-returned' }]);
+  // Bald-Eagle D2: an intake story keeps its key while new articles join it, so a Morning Download story the
+  // refresh still returns is open again; md-development.ts decides whether it is news again.
+  assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b']);
 
   // A series whose source could not be read keeps its list (it ages out on its freshness window instead).
-  const broken: PoolReads = { ...reads([]), leads: async () => { throw new Error('reels.sources unreachable'); } };
+  const broken: PoolReads = { ...reads([]), morning: async () => { throw new Error('reels.sources unreachable'); } };
   const kept = await refreshStoryPool(db, broken, new Date(next.getTime() + 86_400_000));
-  assert.match(kept.errors.join(), /free_vs_paid/);
-  assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 1);
+  assert.match(kept.errors.join(), /morning_download/);
+  assert.equal((await openPool(db, 'morning_download')).stories.length, 2);
+  // Free vs. Paid is retired (SS-27): the refresh no longer reads its leads into the pool.
+  assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 0);
 });
 
-test('pool refresh runs once per pool day, which turns over at 4:00 AM New York', async () => {
+test('pool refresh runs once per pool day, which turns over at 3:00 AM New York', async () => {
   const { db } = await openLocalStoriesDb();
   let refreshes = 0;
   const counted = () => ({ ...reads([story('a')]), morning: async () => (refreshes++, { reels: [story('a')], carousel: [] }) });
   assert.ok(await refreshPoolIfDue(db, counted, NOW));
   assert.equal(await refreshPoolIfDue(db, counted, new Date(NOW.getTime() + 3_600_000)), null);
   assert.equal(refreshes, 1);
-  assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-09', '3:30 AM is still the previous pool day');
-  assert.equal(poolDay(new Date('2026-10-10T08:30:00Z')), '2026-10-10');
+  assert.equal(poolDay(new Date('2026-10-10T06:30:00Z')), '2026-10-09', '2:30 AM is still the previous pool day');
+  assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-10', '3:30 AM is the new pool day');
   assert.ok(await refreshPoolIfDue(db, counted, new Date('2026-10-10T08:30:00Z')));
   assert.equal(refreshes, 2);
 });
@@ -85,7 +92,7 @@ test('pool refresh runs again when a carousel run finishes after the day\'s refr
   let runAt: string | null = '2026-10-09T03:07:00Z';
   const withRun = (morning: StoryCandidate[]): PoolReads => ({ ...reads(morning), carouselRunAt: async () => runAt });
 
-  // The 4 AM refresh sees the 3 AM run, which brought no stories.
+  // The 3 AM refresh sees the 2:40 run, which brought no stories.
   assert.ok(await refreshPoolIfDue(db, () => withRun([story('a')]), NOW));
   assert.equal(await refreshPoolIfDue(db, () => withRun([story('a')]), new Date(NOW.getTime() + 60_000)), null, 'nothing new: no refresh');
 
@@ -124,15 +131,14 @@ function storiesModel(read: StoriesRead) {
   return typeHubModel(dataset, 'stories', NOW);
 }
 
-test('Stories bench: one list, every row tagged with its series, ranked within its series', () => {
+test('Morning Download bench: only its own series, ranked; Trivia and Real or AI? have pages of their own (SS-1)', () => {
   const model = storiesModel({
     sets: [], frames: [], insights: [],
-    pool: [...pool('morning_download', ['m1', 'm2', 'm3']), ...pool('guess_the_number', ['g1']), ...pool('free_vs_paid', ['f1', 'f2'])],
+    pool: [...pool('morning_download', ['m1', 'm2', 'm3']), ...pool('ai_trivia', ['t1']), ...pool('real_or_ai', ['f1', 'f2'])],
   });
-  assert.equal(model.bench.length, 6, 'one flat list holds every series');
+  assert.equal(model.bench.length, 3, 'the Morning Download page lists its own pool only');
   for (const row of model.bench) assert.ok(STORY_SERIES.includes(row.idea.group as never), `${row.idea.title} has a series tag`);
-  // Series take turns; ranks count within a series, never against another series' scores.
-  assert.deepEqual(model.bench.map((b) => `${b.idea.title}#${b.rank}`), ['m1#1', 'g1#1', 'f1#1', 'm2#2', 'f2#2', 'm3#3']);
+  assert.deepEqual(model.bench.map((b) => `${b.idea.title}#${b.rank}`), ['m1#1', 'm2#2', 'm3#3']);
 });
 
 test('a skipped set with no frames is not ready content: no chip, no row, not on the day strip', () => {
@@ -159,7 +165,7 @@ test('a skipped set with no frames is not ready content: no chip, no row, not on
 });
 
 test('a ready set whose frames never rendered gets no made chip either', () => {
-  const empty = set({ set_id: '00000000-0000-4000-8000-000000000021', series: 'guess_the_number', status: 'ready', ny_date: '2026-10-07' });
+  const empty = set({ set_id: '00000000-0000-4000-8000-000000000021', series: 'free_vs_paid', status: 'ready', ny_date: '2026-10-07' });
   const model = storiesModel({
     sets: [empty],
     frames: [{ frame_id: 'f', set_id: empty.set_id, seq: 1, role: 'intro', template: null, backdrop: 'black', storage_path: null, flagged: false, ig_media_id: null, published_at: null }],

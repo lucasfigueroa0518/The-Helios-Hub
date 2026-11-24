@@ -11,8 +11,8 @@ const copy = (o: Partial<StoryCopy> & { key: string }): StoryCopy => ({ setup: '
 
 test('checkSubmission rejects missing keys, over-long fields and a setup without a colon', () => {
   assert.throws(
-    () => checkSubmission({ stories: [copy({ key: 'a', headline: 'x'.repeat(71), setup: 'No colon here' })] }, ['a', 'b']),
-    (err: Error) => /missing story b/.test(err.message) && /headline is 71/.test(err.message) && /setup must end with ":"/.test(err.message),
+    () => checkSubmission({ stories: [copy({ key: 'a', headline: 'x'.repeat(56), setup: 'No colon here' })] }, ['a', 'b']),
+    (err: Error) => /missing story b/.test(err.message) && /headline is 56/.test(err.message) && /setup must end with ":"/.test(err.message),
   );
 });
 
@@ -50,7 +50,7 @@ test('the tool and system prompt are static (cacheable) and the tool is strict-s
 });
 
 test('writeStories sends the cached system prompt and returns normalized copy', async () => {
-  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' } satisfies Pick;
+  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' } satisfies Pick;
   let sent: Anthropic.MessageCreateParamsNonStreaming | null = null;
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
     sent = p;
@@ -80,7 +80,7 @@ test('checkSubmission flags a story missing names or with a malformed photo inst
 });
 
 test('writeStories retries once when the first submission omits names, and returns the valid retry', async () => {
-  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' } satisfies Pick;
+  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' } satisfies Pick;
   const usage = { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   const reply = (input: unknown) => ({
     id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage,
@@ -98,7 +98,7 @@ test('writeStories retries once when the first submission omits names, and retur
 
 const longPick = (i: number): Pick => ({
   key: `news.google.com/rss/articles/${'CBMi'.repeat(45)}${i}`, refs: [`r${i}`], origin: 'feed', headline: `H${i}`, sourceName: 'Verge',
-  url: `https://v.com/${i}`, body: 'b', publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown',
+  url: `https://v.com/${i}`, body: 'b', publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown',
 });
 
 test('writeStories sends short ordinal keys and maps the copy back to the real pick keys', async () => {
@@ -126,6 +126,6 @@ test('writeStories sends short ordinal keys and maps the copy back to the real p
 test('checkSubmission measures lengths after normalize trims a final period, a dash and spaces', () => {
   const body = `${'x'.repeat(190)}.`;
   assert.equal(body.length, 191);
-  assert.doesNotThrow(() => checkSubmission({ stories: [copy({ key: 'a', body, headline: ` – ${'H'.repeat(70)} `, setup: ` ${'S'.repeat(89)}: ` })] }, ['a']));
+  assert.doesNotThrow(() => checkSubmission({ stories: [copy({ key: 'a', body, headline: ` – ${'H'.repeat(55)} `, setup: ` ${'S'.repeat(89)}: ` })] }, ['a']));
   assert.throws(() => checkSubmission({ stories: [copy({ key: 'a', body: `${'x'.repeat(191)}.` })] }, ['a']), /body is 191/);
 });

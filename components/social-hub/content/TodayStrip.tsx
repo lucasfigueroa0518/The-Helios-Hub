@@ -6,21 +6,30 @@ import { stageLabel } from '@/lib/content-type/run-status';
 import { CardMedia } from '@/components/social-hub/content/CardMedia';
 import { MakeItButton } from '@/components/social-hub/content/MakeItButton';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
+import { PostCard } from '@/components/social-hub/nav/PostCard';
 import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { StateBadge, TYPE_ICON, TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import type { HubPost } from '@/lib/social-hub/types';
 import { ideaRef } from '@/lib/social-hub/run-today';
 import { cardTimeLine } from '@/lib/social-hub/views/card-time';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
-import { displayName } from '@/lib/social-hub/views/format';
+import { dayWord, displayName } from '@/lib/social-hub/views/format';
+import { leadDaysFor } from '@/lib/social-hub/lead';
+import type { StorySeries } from '@/lib/social-hub/slots/types';
+import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import type { Offerer } from '@/lib/social-hub/views/offer';
 import { canMakeCard, runForCandidate, runOnMadeCard } from '@/lib/social-hub/views/run-for';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 /**
  * Today's Content (spec 2026-10-13 §2): the day's cards in one row, in posting
  * order. A made card shows the content itself (hover to play or step through)
  * and its buttons; a card not made yet shows its idea and Make it, and says
  * why when today's run for it didn't finish (Phase B, B6).
+ *
+ * `day` (the look-ahead tabs): a later day's cards. Make it, run chips and run
+ * misses are today's, so a later day shows none of them; an empty slot says
+ * which night makes it (lib/social-hub/lead.ts).
  */
 
 function RunChip({ run }: { run: ProgressItem | null }) {
@@ -33,14 +42,17 @@ function RunChip({ run }: { run: ProgressItem | null }) {
   );
 }
 
-export function TodayStrip({ candidates, o, runs, now, misses = NO_MISSES, controls = true }: { candidates: QuotaCandidate[]; o: Offerer; now: Date; runs: AllProgress; misses?: RunMisses; /** False on the preview page: buttons show but can't be clicked, and Make it is hidden. */ controls?: boolean }) {
+export function TodayStrip({ candidates, o, runs, now, misses = NO_MISSES, controls = true, day, label = 'Today’s content' }: { candidates: QuotaCandidate[]; o: Offerer; now: Date; runs: AllProgress; misses?: RunMisses; /** False on the preview page: buttons show but can't be clicked, and Make it is hidden. */ controls?: boolean; /** A later New York day (the look-ahead tabs); omitted for today. */ day?: string; label?: string }) {
+  const ahead = Boolean(day && day > nyDateOf(now)!);
   return (
-    <ul className="sh-strip sh-gallery" aria-label="Today’s content">
+    <ul className="sh-strip sh-gallery" aria-label={label}>
       {candidates.map((c, i) => {
-        const run = runForCandidate(c, runs);
+        const run = ahead ? null : runForCandidate(c, runs);
         return c.post
-          ? <Made key={c.post.id} post={c.post} o={o} now={now} run={runOnMadeCard(c.post, run)} controls={controls} />
-          : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={run} miss={missFor(c, misses, run)} controls={controls} />;
+          ? <Made key={c.post.id} post={c.post} o={o} now={now} run={ahead ? null : runOnMadeCard(c.post, run)} controls={controls} />
+          : ahead
+            ? <Ahead key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} day={day!} now={now} />
+            : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={run} miss={missFor(c, misses, run)} controls={controls} />;
       })}
     </ul>
   );
@@ -50,7 +62,7 @@ function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now:
   const offer = o.offer(post);
   const { primary, grid } = offer.card;
   return (
-    <li className="sh-panel sh-strip__card sh-gallery__card" style={{ listStyle: 'none' }}>
+    <PostCard id={post.id} className="sh-panel sh-strip__card sh-gallery__card" style={{ listStyle: 'none' }}>
       <CardMedia post={post} />
       <div className="sh-gallery__meta">
         <TypeMark vertical={post.vertical} />
@@ -64,14 +76,14 @@ function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now:
       {!run && (primary || grid.length) ? (
         <ActionBar menu={{ primary, secondary: grid, more: [], links: [], offNote: null }} variant="card" showOffNote={false} readOnly={!controls} />
       ) : null}
-    </li>
+    </PostCard>
   );
 }
 
 function Pending({ c, run, miss, controls }: { c: QuotaCandidate; run: ProgressItem | null; miss: RunMiss | null; controls: boolean }) {
   const Icon = TYPE_ICON[c.vertical];
   const tag = c.rank == null ? null : `#${c.rank} in the queue${c.tag ? ` · ${c.tag.text}` : ''}`;
-  const target = c.vertical === 'stories' ? c.seriesId : c.idea ? ideaRef(c.idea.id) : undefined;
+  const target = isStoryVertical(c.vertical) ? c.seriesId : c.idea ? ideaRef(c.idea.id) : undefined;
   return (
     <li className="sh-panel sh-strip__card sh-gallery__card is-pending" style={{ listStyle: 'none' }}>
       <span className={`sh-strip__art sh-gallery__art${c.vertical === 'carousels' ? '' : ' is-tall'}`}>
@@ -90,4 +102,46 @@ function Pending({ c, run, miss, controls }: { c: QuotaCandidate; run: ProgressI
       {run ? <RunChip run={run} /> : !controls ? <span className="sh-muted sh-gallery__hint">Make it builds this card.</span> : canMakeCard(c) ? <MakeItButton vertical={c.vertical} target={target} /> : <span className="sh-muted sh-gallery__hint">Run now makes it.</span>}
     </li>
   );
+}
+
+/** The night (New York date) whose run makes this slot's post: the day minus the type's lead days. */
+export function nightFor(c: QuotaCandidate, day: string): string {
+  const series = isStoryVertical(c.vertical) ? ((c.seriesId?.split(':').pop() ?? null) as StorySeries | null) : null;
+  return addDays(day, -leadDaysFor(c.vertical, series));
+}
+
+/** A later day's empty slot: nothing to make from here; say which night makes it, or that its night has passed. */
+function Ahead({ c, day, now }: { c: QuotaCandidate; day: string; now: Date }) {
+  const Icon = TYPE_ICON[c.vertical];
+  const night = nightFor(c, day);
+  const today = nyDateOf(now)!;
+  const passed = night <= today;
+  const line = passed ? `${ranOn(night, now)} made nothing for this slot.` : `${runsOn(night, now)} makes it.`;
+  return (
+    <li className="sh-panel sh-strip__card sh-gallery__card is-pending" style={{ listStyle: 'none' }}>
+      <span className={`sh-strip__art sh-gallery__art${c.vertical === 'carousels' ? '' : ' is-tall'}`}>
+        <span className="sh-gallery__frame" style={typeStyle(c.vertical)} aria-hidden="true">
+          <span className="sh-gallery__empty">{passed ? <TriangleAlert size={22} /> : <Icon size={22} />}{passed ? 'Not made' : 'Not made yet'}</span>
+        </span>
+      </span>
+      <div className="sh-gallery__meta">
+        <TypeMark vertical={c.vertical} />
+        <span>{c.series ?? 'Open slot'}</span>
+      </div>
+      <span className="sh-strip__name">{c.series ? `${c.series}: that day’s set` : 'Open slot'}</span>
+      <span className="sh-muted sh-gallery__hint">{line}</span>
+    </li>
+  );
+}
+
+/** A night run that already ran (runs start just after midnight on their date): "This morning’s run", "Yesterday’s run", "The Fri Nov 13 run". */
+function ranOn(night: string, now: Date): string {
+  const word = dayWord(night, now);
+  return word === 'Today' ? 'This morning’s run' : word === 'Yesterday' ? 'Yesterday’s run' : `The ${word} run`;
+}
+
+/** A night run still ahead: "Tonight’s run" (just after midnight), else "The run early on Tue Nov 17". */
+function runsOn(night: string, now: Date): string {
+  const word = dayWord(night, now);
+  return word === 'Tomorrow' ? 'Tonight’s run' : `The run early on ${word}`;
 }

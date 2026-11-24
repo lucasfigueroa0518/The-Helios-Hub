@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>News kit gallery</title>
+<style>html,body{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;background:#111}
+.gl-label{position:absolute;left:40px;top:28px;z-index:80;font:700 22px 'Pragmatica Extended';letter-spacing:0.02em;text-transform:uppercase;color:#FBF6EC;text-shadow:0 1px 8px rgba(0,0,0,0.9)}
+.gl-name{position:absolute;z-index:79;font:700 15px Roboto;color:#fff;background:rgba(0,0,0,0.62);padding:3px 8px;border-radius:4px;white-space:nowrap}</style>
+</head><body>
+<script type="module">
+// The news kit gallery: ?scene=board|whiteboard|newspaper &sheet=paper|things|marks &u=0..1 (mark progress).
+// Fictional content only (Harbor City Transit); assets are the banks this repo already has.
+import * as nk from './components/index.js';
+
+const q = new URLSearchParams(location.search);
+const sceneName = q.get('scene') || 'board', sheet = q.get('sheet') || 'paper', U = Number(q.get('u') ?? 1);
+const R = '../../../';
+const A = {
+  cutout: R + 'explainers/real-case/bank/cutouts/sam-altman.png',
+  logo: R + 'lib/social/render/assets/logos/openai.png',
+  obj: (p) => R + '.explainers-local/previews/ai-news-directions/objects/' + p,
+};
+nk.installKit(document, { textures: './textures/', fonts: {
+  pragmatica: R + 'explainers/design/fonts/PragmaticaExtended-Bold.otf',
+  roboto400: R + 'explainers/design/fonts/Roboto-400.woff2',
+  roboto700: R + 'explainers/design/fonts/Roboto-700.woff2',
+  gochi: R + 'explainers/real-case/design/fonts/GochiHand-Regular.ttf',
+  playfair: R + 'explainers/real-case/design/fonts/PlayfairDisplay.ttf',
+  courier: R + 'explainers/real-case/design/fonts/CourierPrime-Regular.ttf',
+  tinos400: R + 'explainers/real-case/design/fonts/Tinos-Regular.ttf',
+  tinos700: R + 'explainers/real-case/design/fonts/Tinos-Bold.ttf',
+  tinosItalic: R + 'explainers/real-case/design/fonts/Tinos-Italic.ttf',
+} });
+
+const S = sceneName === 'whiteboard' ? nk.whiteboard(document, { framing: q.get('framing') || 'wide' })
+  : sceneName === 'newspaper' ? nk.newspaper(document, { masthead: 'The Harbor City Ledger', date: 'Sunday, September 14, 2026' })
+  : nk.board(document);
+document.body.append(S.el);
+const stage = S.stage;
+// Stage-local offsets: the whiteboard stage is the board surface; the newspaper stage starts inside the page.
+const off = sceneName === 'whiteboard' ? [S.framing.x, S.framing.y] : sceneName === 'newspaper' ? [40, 440] : [0, 0];
+const at = (x, y) => [x - off[0], y - off[1]];
+const add = (el, name) => { stage.append(el); if (name) labels.push([el, name]); return el; };
+const labels = [];
+
+/** Fasten an item the way its scene does: pin on the board, magnet on the whiteboard, tape on newsprint. */
+function fasten(el, dx = 0.5, dy = 0.04, color) {
+  const x = el.offsetLeft + el.offsetWidth * dx, y = el.offsetTop + el.offsetHeight * dy;
+  if (sceneName === 'board') stage.append(nk.pushPin(document, { x, y, color: color || 'red' }));
+  else if (sceneName === 'whiteboard') stage.append(nk.magnet(document, { x, y: el.offsetTop - 4, shape: 'bar', color: color || 'orange' }));
+  else stage.append(nk.tape(document, { x: x - 75, y: y - 22, rot: -12 }));
+}
+
+const P = (x, y) => { const [a, b] = at(x, y); return { x: a, y: b }; };
+const marks = [];
+if (sheet === 'paper') {
+  const c = add(nk.clipping(document, { ...P(70, 330), w: 940, rot: -2, masthead: 'The Harbor City Ledger', kicker: 'Metro',
+    headline: 'Trip assistant sent [[2,300]] riders to a closed station', deck: 'The city’s new AI planner pointed weekend riders to Pier Street',
+    body: ['About 2,300 riders went to the closed station on the first weekend.', 'The assistant told riders to use Pier Street station, which had closed in March.'] }), 'clipping');
+  const n = add(nk.notice(document, { ...P(80, 1120), w: 470, rot: -3, lines: ['Pier Street station', 'is [[closed]].'], foot: 'March 2026' }), 'notice');
+  n.style.font = "400 30px/1.4 var(--type)"; n.style.padding = '44px 36px';
+  n.firstElementChild.style.fontSize = '64px';
+  const i = add(nk.indexCard(document, { ...P(580, 1130), w: 440, rot: 3, label: 'EXHIBIT 1 — DATE', lines: ['Sept. 14, 2026', 'Harbor City'] }), 'indexCard');
+  i.querySelectorAll('div').forEach((d, k) => { if (k === 1) d.style.fontSize = '46px'; });
+  const p = add(nk.printout(document, { ...P(140, 1530), w: 820, rot: 1.5, kind: 'post', speaker: 'Harbor City Transit', date: 'Sep 16, 2026',
+    text: 'We are [[pausing the trip assistant]] while we fix its station list.' }), 'printout · post');
+  requestAnimationFrame(() => {
+    fasten(c); fasten(n); fasten(i, 0.5, 0.06, 'yellow'); fasten(p, 0.92, 0.08, 'white');
+    const ink = nk.inkLayer(document, stage);
+    marks.push(nk.markerCircle(document, ink, nk.markOf(c, 0)), nk.markerCircle(document, ink, nk.markOf(n, 0), { seed: 4 }),
+      nk.markerUnderline(document, ink, nk.markOf(p, 0)));
+    finish();
+  });
+} else if (sheet === 'things') {
+  const pol = add(nk.polaroid(document, { ...P(70, 300), w: 440, h: 480, rot: -4, cutout: A.cutout, caption: 'Sam Altman · CEO' }), 'polaroid (banked cutout)');
+  const logo = add(nk.logoPrint(document, { ...P(640, 340), w: 340, h: 220, rot: 5, logo: A.logo }), 'logoPrint (banked logo)');
+  const sil = add(nk.silhouette(document, { ...P(700, 640), w: 260, rot: -3, pose: 'front' }), 'silhouette');
+  const cut = add(nk.cutout(document, { ...P(40, 900), w: 470, rot: 10, src: A.obj('padlock/3.png') }), 'cutout (stock object)');
+  const tag = add(nk.evidenceTag(document, { ...P(560, 1000), rot: -3, text: 'OpenAI · CEO since 2019' }), 'evidenceTag');
+  const dict = add(nk.dictionaryClipping(document, { ...P(90, 1290), w: 900, rot: -1.8, guide: 'KNOW · KNOX', term: 'knowl·edge cut·off', meaning: 'The point after which an AI model knows nothing: it learned only from data collected up to that day.' }), 'dictionaryClipping');
+  const st = add(nk.stamp(document, { ...P(560, 1140), rot: -6, size: 58, text: 'AI NEWS\nEXPLAINED' }), 'stamp');
+  add(nk.tape(document, { ...P(60, 950), rot: -24 }), null);
+  // RC-49: on the whiteboard only the artifact and printed logos are paper; everything else is marker.
+  if (sceneName === 'whiteboard') for (const el of [pol, sil, cut, tag, dict, st]) { el.remove(); labels.splice(labels.findIndex(([e]) => e === el), 1); }
+  stage.querySelectorAll('.nk-tape').forEach((t) => sceneName === 'whiteboard' && t.remove());
+  requestAnimationFrame(() => {
+    if (sceneName === 'whiteboard') { fasten(logo, 0.5, 0.06, 'black'); finish(); return; }
+    fasten(pol, 0.5, 11 / pol.offsetHeight); fasten(logo, 0.5, 0.06, 'white'); fasten(sil, 0.5, 0.05, 'blue'); fasten(dict, 0.2, 0.04); fasten(dict, 0.8, 0.04, 'blue');
+    if (sceneName === 'board') {
+      const [a, b] = [[pol.offsetLeft + pol.offsetWidth / 2, pol.offsetTop + 18], [logo.offsetLeft + logo.offsetWidth / 2, logo.offsetTop + 13]];
+      const c = nk.cord(document, [a, [590, 250], b]); stage.append(c.el); c.progress(U);
+      stage.append(nk.pushPin(document, { x: 590, y: 250 }));
+    }
+    finish();
+  });
+} else {
+  // marks: every mark on text the scene would carry, plus the fasteners side by side.
+  const card = add(sceneName === 'newspaper'
+    ? nk.article(document, { ...P(70, 460), w: 940, headSize: 76, headline: 'Transit agency adds an [[AI trip assistant]] to its app',
+      body: ['Harbor City Transit launched an AI trip assistant in its app on September 14, 2026. The agency launched the assistant [[to cut calls to its help line]].'], fillerLines: 4 })
+    : nk.notice(document, { ...P(110, 380), w: 860, rot: -1, title: 'EXHIBIT', lines: ['Riders sent: [[2,300]]', 'Station: Pier Street', 'Closed in [[March]]'] }), sceneName === 'newspaper' ? 'article' : 'notice');
+  const quote = add(nk.pullQuote(document, { ...P(120, 1190), w: 840, text: 'We are pausing the trip assistant while we fix its station list.', speaker: 'Harbor City Transit' }), 'pullQuote');
+  requestAnimationFrame(() => {
+    const ink = nk.inkLayer(document, stage);
+    const m0 = nk.markOf(card, 0), m1 = nk.markOf(card, 1);
+    marks.push(nk.markerCircle(document, ink, m0), nk.markerUnderline(document, ink, m1), nk.markerArrow(document, ink, m0, m1, { bend: sceneName === 'newspaper' ? -120 : 140 }),
+      nk.highlight(document, ink, quote));
+    const note = nk.markerNote(document, ink, sceneName === 'newspaper' ? 'closed!' : 'learned: Feb.', { ...P(150, 1480), size: 76, rot: -4,
+      color: sceneName === 'whiteboard' ? nk.COLORS.dry.blue : undefined });
+    const note2 = nk.markerNote(document, ink, 'never saw it', { ...P(380, 1600), size: 58, rot: -6, color: sceneName === 'whiteboard' ? nk.COLORS.dry.red : undefined });
+    marks.push(note, note2, nk.markerCross(document, ink, note2.el));
+    labels.push([note.el, 'markerNote'], [quote, 'highlight'], [note2.el, 'markerCross']);
+    // Fasteners row
+    const [fx, fy] = at(150, 1020);
+    if (sceneName === 'board') {
+      ['red', 'yellow', 'white', 'blue'].forEach((c, k) => stage.append(nk.pushPin(document, { x: fx + k * 90, y: fy, color: c })));
+      const c = nk.cord(document, [[fx + 420, fy - 20], [fx + 820, fy + 30]]); stage.append(c.el); c.progress(U);
+    } else if (sceneName === 'whiteboard') {
+      [['disc', 'orange'], ['disc', 'blue'], ['bar', 'teal'], ['bar', 'yellow'], ['disc', 'black']].forEach(([s, c], k) => stage.append(nk.magnet(document, { x: fx + k * 160, y: fy, shape: s, color: c })));
+    }
+    finish();
+  });
+}
+
+function finish() {
+  for (const m of marks) m.progress(U);
+  document.body.insertAdjacentHTML('beforeend', `<div class="gl-label">News kit · ${sceneName} · ${sheet}${U < 1 ? ` · marks at ${Math.round(U * 100)}%` : ''}</div>`);
+  if (q.get('names') !== '0') for (const [el, name] of labels) {
+    const r = el.getBoundingClientRect();
+    document.body.insertAdjacentHTML('beforeend', `<div class="gl-name" style="left:${Math.max(8, r.left + 8)}px;top:${Math.max(70, r.top - 26)}px">${name}</div>`);
+  }
+  document.fonts.ready.then(() => { window.__ready = true; });
+}
+</script>
+</body></html>

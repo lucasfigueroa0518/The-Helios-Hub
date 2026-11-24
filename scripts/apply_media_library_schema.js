@@ -30,16 +30,20 @@ if (!url) {
 const windowsPsql = 'C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe';
 const psql = process.env.PSQL_BIN
   || (process.platform === 'win32' && fs.existsSync(windowsPsql) ? windowsPsql : 'psql');
-const schema = path.join(root, 'db', 'media_library_schema.sql');
-const result = spawnSync(psql, ['-d', url, '-v', 'ON_ERROR_STOP=1', '-f', schema], {
-  cwd: root,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    PGSSLMODE: process.platform === 'win32' ? 'disable' : (process.env.PGSSLMODE || 'require'),
-  },
-  shell: false,
-});
-if (result.status !== 0) process.exit(result.status ?? 1);
+// The base schema, then the Stories split (licence `generated`, truth/gen_model/gen_prompt, run kinds ai_trivia and
+// real_or_ai). Both re-apply cleanly.
+for (const file of ['media_library_schema.sql', 'media_library_stories_split.sql']) {
+  const schema = path.join(root, 'db', file);
+  const result = spawnSync(psql, ['-d', url, '-v', 'ON_ERROR_STOP=1', '-f', schema], {
+    cwd: root,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      PGSSLMODE: process.platform === 'win32' ? 'disable' : (process.env.PGSSLMODE || 'require'),
+    },
+    shell: false,
+  });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
 
 console.log('media_library schema applied (capture and finder_source are OFF until flipped)');

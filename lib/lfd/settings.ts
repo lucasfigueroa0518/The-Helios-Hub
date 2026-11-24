@@ -4,6 +4,7 @@
  * lib/content-type/posting.ts.
  */
 import { DEFAULT_LFD_DAYS, DEFAULT_LFD_MEMES_CAP_USD, DEFAULT_LFD_RUN_CAP_USD } from './config';
+import { refillCapUsd } from '@/lib/content-type/state';
 
 /** Any handle that runs SQL (HubQuery, SpineQuery, the social store's Query). */
 export type LfdQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
@@ -11,8 +12,10 @@ export type LfdQuery = (text: string, params?: unknown[]) => Promise<{ rows: any
 export type LfdSettings = {
   autoRun: boolean;
   publishingLive: boolean;
-  /** On unless set to false (docs/social-overnight.md, Approval). */
+  /** Always true: every post needs a person's approval (settings standard D16); a stored false is ignored. */
   requireApproval: boolean;
+  /** The spend cap of one pool refill (D14): pool_refill_cap_usd, else the type's default. */
+  refillCapUsd: number;
   /** Weekdays it posts (0 = Sunday), sorted. */
   days: number[];
   /** The run cap, or null when the stored value is not a positive number: a run then refuses to start. */
@@ -36,7 +39,8 @@ export function parseLfdSettings(rows: ReadonlyArray<{ key: string; value: unkno
   return {
     autoRun: get('auto_run') === true,
     publishingLive: get('publishing_live') === true,
-    requireApproval: get('require_approval') !== false,
+    requireApproval: true,
+    refillCapUsd: refillCapUsd('last_few_days', get('pool_refill_cap_usd')),
     days,
     runCapUsd: typeof rawCap !== 'boolean' && rawCap !== null && Number.isFinite(cap) && cap > 0 ? cap : null,
     runCapRaw: rawCap,

@@ -30,6 +30,16 @@ export async function fillStories(
       WHERE canonical_url = ANY($1::text[]) ORDER BY canonical_url, publish_time DESC NULLS LAST`,
     [urls],
   );
+  // Central intake (Phase 2): once Reels reads the intake it writes no reels.sources rows, so a story from after the
+  // switch is an intake item (its key is its canonical URL). A bounded lookup by key: at most FILL_MAX URLs.
+  const notLegacy = urls.filter((u) => !rows.some((r) => r.url === u));
+  if (notLegacy.length) {
+    const intake = await d.hub<{ url: string; headline: string; body: string; source: string | null }>(
+      `SELECT key AS url, headline, body, source_name AS source FROM intake.items WHERE key = ANY($1::text[])`,
+      [notLegacy],
+    ).catch(() => ({ rows: [] as Array<{ url: string; headline: string; body: string; source: string | null }> }));
+    rows.push(...intake.rows);
+  }
   // A carousel-only story has no reels source: read it from the daily runs' shortlists.
   const notReels = urls.filter((u) => !rows.some((r) => r.url === u));
   if (notReels.length) {

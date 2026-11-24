@@ -353,6 +353,8 @@ test('spotlights start at #2 and span the gated list (AE-33)', () => {
   assert.deepEqual(spotlightRanks(5), [2, 4, 5]);
   assert.deepEqual(spotlightRanks(8), [2, 4, 6, 8]);
   assert.deepEqual(spotlightRanks(14), [2, 6, 10, 14]);
+  assert.equal(MAX_RANKED, 10, 'teasers come only from the top 10 (AE-38)');
+  assert.deepEqual(spotlightRanks(10), [2, 5, 7, 10]);
   for (let n = 2; n <= MAX_RANKED; n++) {
     const r = spotlightRanks(n);
     assert.equal(r[0], 2);

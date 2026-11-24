@@ -91,6 +91,7 @@ export type ShadowPlan = {
 
 /** What a live tick would do, read only. */
 export async function shadowPlan(query: SpineQuery, drivers: readonly PublishDriver[]): Promise<ShadowPlan> {
+  // Only Live types post (D16): each driver's live() is stateOf(Generate, publishing_live) === 'live'.
   const live: PublishDriver[] = [];
   for (const d of drivers) if (await d.live()) live.push(d);
   const verticals = live.map((d) => d.vertical);
@@ -108,12 +109,12 @@ export async function shadowPlan(query: SpineQuery, drivers: readonly PublishDri
     );
     for (const row of rows) {
       const driver = live.find((d) => d.vertical === row.vertical)!;
-      const needs = await driver.requireApproval();
+      // Every post needs a person's approval (settings standard D16): only an approved slot is released.
       // Each type's own outcome for content it may not post: every driver cancels the slot (Explainers' releaseDueSchedules cancels it too).
       const refuse = driver.refusesAtRelease;
       if (row.decision === 'rejected') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'rejected' });
-      else if (needs && row.decision !== 'approved') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'not approved' });
-      else due.push({ vertical: row.vertical, scheduleId: row.id, action: 'release', why: row.decision === 'approved' ? 'approved' : 'approval not required' });
+      else if (row.decision !== 'approved') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'not approved' });
+      else due.push({ vertical: row.vertical, scheduleId: row.id, action: 'release', why: 'approved' });
     }
   }
   const { rows: next } = await query(

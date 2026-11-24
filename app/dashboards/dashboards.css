@@ -1,11 +1,7 @@
 /* Helios Dashboards — self-contained tokens + utilities (no Tailwind) */
-@font-face {
-  font-family: "Pragmatica Extended";
-  src: url("/dashboards/fonts/PragmaticaExtended-Bold.otf") format("opentype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+/* Pragmatica Extended comes from next/font in app/layout.tsx (--font-pragmatica): one
+   hashed, immutable-cached copy. A second @font-face here downloaded the same 244 KB
+   file again from /public on every dashboards page. */
 
 .dashboards-root {
   --helios-orange: #FF5E1A;
@@ -32,7 +28,7 @@
   --accent: var(--helios-orange);
   --accent-hover: #E54E0F;
   --accent-2: var(--helios-green);
-  --font-heading: "Pragmatica Extended", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-heading: var(--font-pragmatica), "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-body: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --text-body: 18px;
   --text-body-sm: 16px;
