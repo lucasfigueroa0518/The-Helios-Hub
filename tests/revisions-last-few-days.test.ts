@@ -79,9 +79,9 @@ type Opts = {
 function setup(o: Opts = {}) {
   const calls = {
     rendered: [] as Array<{ post: RenderPost; slides: Array<{ slide: number; key: string }> }>,
-    grounded: [] as Array<{ headline: string; setup: string; body: string }>,
+    grounded: [] as Array<{ headline: string; setup: string; body: string; names: string[] }>,
     rewrites: [] as Array<{ note: string }>,
-    photos: [] as Array<{ exclude: ReadonlySet<string>; query: string }>,
+    photos: [] as Array<{ exclude: ReadonlySet<string>; query: string; pick: Parameters<LastFewDaysDeps['findPhoto']>[0]['pick']; ledger: Parameters<LastFewDaysDeps['findPhoto']>[0]['ledger'] }>,
     vision: [] as Array<{ headline: string }>,
     unschedule: [] as string[],
   };
@@ -95,20 +95,21 @@ function setup(o: Opts = {}) {
     async sourceText() {
       return o.source === undefined ? 'The full article text. '.repeat(40) : o.source;
     },
-    async grounded(copy, _source, m) {
-      calls.grounded.push({ headline: copy.headline, setup: copy.setup, body: copy.body });
+    async factCheck(copy, _source, m) {
+      calls.grounded.push({ headline: copy.headline, setup: copy.setup, body: copy.body, names: copy.names });
       m.spend(0.001);
-      return answers.length > 1 ? answers.shift()! : answers[0]!;
+      const ok = answers.length > 1 ? answers.shift()! : answers[0]!;
+      return { ok, why: ok ? '' : '"a claim": not in the source' };
     },
     async rewrite(input, m) {
-      calls.rewrites.push({ note: input.note });
+      calls.rewrites.push({ note: input.instruction });
       m.spend(0.05);
-      if (o.rewrite === null) return null;
+      if (o.rewrite === null) return { dropped: 'unsupported after rewrite' };
       const s = stories().find((x) => x.key === input.pick.key)!;
       return { key: s.key, setup: s.setup, headline: s.headline, highlight: s.highlight, names: s.names, body: s.body, photo: ASK, ...(o.rewrite ?? {}) } as never;
     },
     async findPhoto(input, m) {
-      calls.photos.push({ exclude: input.exclude, query: input.copy.photo.query });
+      calls.photos.push({ exclude: input.exclude, query: input.hint ?? '', pick: input.pick, ledger: input.ledger });
       m.spend(0.02);
       const photo = o.photo === undefined ? { src: 'https://img.test/new.jpg', credit: 'Reuters / CC BY 4.0', kind: 'scene' as const } : o.photo;
       return { photo, trace: ['finder: stub'] };
@@ -165,6 +166,8 @@ test('wording fix re-runs grounding, re-renders only that story slide, and rebui
   if (!res.ok) return;
   assert.equal(calls.grounded.length, 1);
   assert.equal(calls.grounded[0]!.headline, 'Nvidia posts a record quarter');
+  // Names come from code (the news writer's namesFor), as the run's copy does.
+  assert.ok(calls.grounded[0]!.names.includes('Nvidia'), JSON.stringify(calls.grounded[0]!.names));
   assert.equal(calls.rewrites.length, 0);
   assert.ok(m.spent > 0);
   assert.equal(calls.rendered.length, 1);
@@ -196,7 +199,7 @@ test('wording fix: a grounding miss gets ONE rewrite; a second miss returns bloc
   }
   assert.equal(calls.grounded.length, 2);
   assert.equal(calls.rewrites.length, 1);
-  assert.match(calls.rewrites[0]!.note, /Nvidia triples its revenue/);
+  assert.match(calls.rewrites[0]!.note, /asked for this change to the story's headline: "Nvidia triples its revenue"/);
   assert.equal(calls.rendered.length, 0);
   const after = await row(q, p.id);
   assert.deepEqual(after.stories, p.stories);
@@ -250,6 +253,11 @@ test('photo fix runs findPhotos and the vision check, excluding the post\'s othe
   const ex = calls.photos[0]!.exclude;
   for (const u of ['https://img.test/one.jpg', 'https://img.test/logo.png', 'https://img.test/three.jpg', 'https://img.test/recent.jpg', 'https://img.test/last-post.jpg']) assert.ok(ex.has(u), u);
   assert.equal(calls.photos[0]!.query, 'a GPU factory');
+  // The run's photo rung gets the story with its article text and the CI-32 ledger.
+  assert.equal(calls.photos[0]!.pick.key, 'k3');
+  assert.equal(calls.photos[0]!.pick.url, 'https://a.test/3');
+  assert.match(calls.photos[0]!.pick.body, /full article text/);
+  assert.ok(calls.photos[0]!.ledger.urls.has('https://img.test/recent.jpg'));
   assert.equal(calls.vision.length, 1);
   assert.equal(calls.vision[0]!.headline, 'Nvidia posts record revenue');
   // The story slide and the cover mosaic (which shows the story's photo) are drawn again, to new keys.
@@ -424,10 +432,10 @@ test('after the ceiling exactly one paid call happens, even when the pipeline co
   let jevPaid = 0;
   const w = setup({
     deps: {
-      async grounded(_c, _s, m) {
+      async factCheck(_c, _s, m) {
         const jev = meteredJev(async (_request: never) => { jevPaid++; return { usage: { input_tokens: 1, output_tokens: 0 } }; }, m, () => 0.5);
         await swallow(() => jev(undefined as never));
-        return false;
+        return { ok: false, why: '' };
       },
     },
   });

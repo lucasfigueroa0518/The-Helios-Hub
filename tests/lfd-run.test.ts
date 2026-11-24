@@ -128,7 +128,6 @@ async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
     query,
     jev,
     create: createStub().create,
-    photos: { usd: 0, find: async () => null },
     news: newsStub().news,
     fetchFeeds: async () => [],
     fetchBody: async () => null,

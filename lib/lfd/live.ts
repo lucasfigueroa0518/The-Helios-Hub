@@ -7,57 +7,41 @@
  * by the same figure. Network modules load only when this is called; tests
  * never call it (CLAUDE.md Rule 1).
  *
- * The photo bank (DECISIONS_LOG D49), as carousels and Stories have it: a
- * finder source while media_library's finder_source switch is on, and the
- * photos the run picks plus identity-verified candidates offered (runKind
- * 'story', runRef `lfd:<run id>`) while capture is on. It fails open: no
- * database, a bank that can't be reached or built, or the switches off, and
- * the finder works exactly as without it.
- *
  * Story photos come from the news photo finder (lib/news-photos findStoryPhoto, wiring contract 2026-11-24): its
- * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The Stories finder
- * above is still built for the type only; the run no longer calls it.
+ * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The old Stories finder
+ * and the photo bank it carried (lfdPhotoFinder) are gone: the run had stopped calling them.
  *
  * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and fal (FAL_API_KEY) for the image.
  */
-import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
-import type { createLivePhotoFinder, PhotoFinder } from '@/lib/stories/photos';
 
+import type { BuilderHarvest } from './photos';
 import type { LfdRunDeps } from './run';
 
-type FinderOpts = Pick<NonNullable<Parameters<typeof createLivePhotoFinder>[0]>, 'jev' | 'create'> & { runRef: string };
-
-/** The run's photo finder with the photo bank on both sides; built without the bank if the bank can't be built. `make` is for tests. */
-export async function lfdPhotoFinder(
-  query: HubQuery,
-  o: FinderOpts & { log?: (line: string) => void },
-  make?: { createPhotoBank: typeof createPhotoBank; createLivePhotoFinder: typeof createLivePhotoFinder },
-): Promise<{ photos: PhotoFinder; bank: PhotoBank | undefined }> {
-  const newBank = make?.createPhotoBank ?? (await import('@/lib/media-library/bank')).createPhotoBank;
-  const newFinder = make?.createLivePhotoFinder ?? (await import('@/lib/stories/photos')).createLivePhotoFinder;
-  const log = o.log ?? ((line: string) => console.log(`photo bank: ${line}`));
-  let bank: PhotoBank | undefined;
-  try {
-    bank = newBank({ query: (text, params) => query(text, params), log });
-  } catch (err) {
-    log(`not built: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  // CI-32: the finder checks each pick's picture against the used-photo ledger (read once per run). Bald-Eagle D3: the
-  // day's earlier post still waiting in review is what "Make Last Few Days now" replaces, so its photos don't count.
-  const used = async () => {
-    const [{ readUsedLedger }, { waitingItemsOn }, { nyDateKey }] = await Promise.all([import('@/lib/photos/used'), import('@/lib/photos/pending'), import('@/lib/reels/scoring/decide')]);
-    const q = (text: string, params?: unknown[]) => query(text, params);
-    const now = new Date();
-    return readUsedLedger(q, now, undefined, { excludeItem: await waitingItemsOn(q, 'lfd', nyDateKey(now)) });
+/** Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, as the run and the Social Hub's photo swap use it. */
+export async function liveBuilderHarvest(): Promise<BuilderHarvest> {
+  const [{ newAnthropic }, { streamingCreate }, { loadPrompt }, { liveHarvestPhotoBank }] = await Promise.all([
+    import('@/lib/anthropic-client'),
+    import('@/lib/reel-ai-drama/reporting/llm'),
+    import('@/lib/reel-ai-drama/prompts'),
+    import('@/lib/reel-ai-drama/harvest/photo-bank-live'),
+  ]);
+  return {
+    deps: {
+      http: fetch,
+      create: streamingCreate(newAnthropic()),
+      loadPrompt: (name) => loadPrompt(name),
+      serperKey: process.env.SERPER_API_KEY ?? null,
+      photoBank: liveHarvestPhotoBank(process.env).bank,
+      cutouts: [],
+    },
   };
-  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used, ...(bank ? { bank } : {}) }), bank };
 }
 
 export async function liveLfdDeps(
   query: HubQuery,
   o: { capUsd: number; trigger: 'scheduled' | 'manual'; runId?: string; now?: Date },
-): Promise<{ deps: LfdRunDeps; spentUsd: () => number; drainBank: (ms: number) => Promise<void> }> {
+): Promise<{ deps: LfdRunDeps; spentUsd: () => number }> {
   // A NaN or Infinity cap would silently switch off both the run budget and the Jev cap: refuse it before anything is built.
   if (!Number.isFinite(o.capUsd) || o.capUsd <= 0) throw new Error(`Last Few Days run cap must be a positive number (got ${String(o.capUsd)})`);
   const { mediaBucket } = await import('@/lib/media-bucket');
@@ -81,7 +65,6 @@ export async function liveLfdDeps(
   const anthropic = newAnthropic();
   const create = budget.guard(liveMessagesCreate(anthropic));
   const bucket = mediaBucket(SLIDE_BUCKET);
-  const { photos, bank } = await lfdPhotoFinder(query, { jev, create, runRef: `lfd:${o.runId ?? now.toISOString()}` });
   const { readLfdSettings } = await import('./settings');
   const settings = await readLfdSettings(query).catch(() => null);
   let memes: import('./run').LfdRunDeps['memes'];
@@ -137,20 +120,8 @@ export async function liveLfdDeps(
   } catch (err) {
     console.log(`lfd: video off (${err instanceof Error ? err.message : String(err)}); photos and memes only`);
   }
-  // Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, capped at $0.15 a post inside the run.
-  const { streamingCreate } = await import('@/lib/reel-ai-drama/reporting/llm');
-  const { loadPrompt } = await import('@/lib/reel-ai-drama/prompts');
-  const { liveHarvestPhotoBank } = await import('@/lib/reel-ai-drama/harvest/photo-bank-live');
-  const harvest: import('./photos').BuilderHarvest = {
-    deps: {
-      http: fetch,
-      create: streamingCreate(newAnthropic()),
-      loadPrompt: (name) => loadPrompt(name),
-      serperKey: process.env.SERPER_API_KEY ?? null,
-      photoBank: liveHarvestPhotoBank(process.env).bank,
-      cutouts: [],
-    },
-  };
+  // Builder slides' photos: AI Drama's harvest engine, capped at $0.15 a post inside the run.
+  const harvest = await liveBuilderHarvest();
   // The AI cover (PLAN.md C7): GPT Image 2.6 edit on fal, wired only when FAL_API_KEY is set (else it falls back).
   const falKey = process.env.FAL_API_KEY?.trim();
   const aiCover: LfdRunDeps['aiCover'] = {
@@ -163,7 +134,6 @@ export async function liveLfdDeps(
       jev,
       create,
       aiCover,
-      photos,
       harvest,
       // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
       usedPhotos: { http: fetch },
@@ -184,9 +154,5 @@ export async function liveLfdDeps(
       ...(video ? { video } : {}),
     },
     spentUsd: () => budget.spent(),
-    // Waits (at most `ms`) for the bank's queued writes and ingest; a one-shot CLI run calls it before exiting.
-    drainBank: async (ms) => {
-      await bank?.drain(ms).catch(() => undefined);
-    },
   };
 }

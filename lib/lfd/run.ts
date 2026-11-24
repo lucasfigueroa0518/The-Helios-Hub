@@ -27,9 +27,8 @@ import type { PageRead } from '@/lib/social/reporter/read-page';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { AddIntakeSeed, IntakeJev, IntakeQuery, ListStories } from '@/lib/intake/types';
 import { intakeLanes, type IntakeLaneDeps } from '@/lib/intake/pool-lfd';
-import type { PhotoFinder } from '@/lib/stories/photos';
 import type { WriterCreate } from '@/lib/stories/writer';
-import type { FindOptions, FoundPhotos, PhotoBudget, PhotoDeps, PhotoNeed, PhotoProfile } from '@/lib/photos/types';
+import type { UsedLedger } from '@/lib/photos/used';
 import { lfdMedia } from '@/lib/news-ranker/media-ladder';
 import { findSpinOffs } from '@/lib/news-ranker/repeats';
 import { cleanup, type MediaVerdict } from '@/lib/news-ranker/posts';
@@ -78,11 +77,6 @@ export type LfdRunDeps = {
   queue?: LfdQueue & { readAt?: Date };
   jev: JevAsk;
   create: MessagesCreate;
-  /**
-   * Not called by the run since the news chain (findStoryPhoto replaced the Stories finder). Still required because
-   * the LFD lab's progress wrapper (lib/memes/lfd-sim/report.ts) wraps it; drop it once that file stops.
-   */
-  photos: PhotoFinder;
   fetchFeeds: () => Promise<FetchedArticle[]>;
   fetchBody: FetchBody;
   /** Reads a story's article page for its lead image (live: readPage). */
@@ -166,33 +160,56 @@ export type LfdNewsChain = {
   findPhoto?: (s: PhotoStory, o: { extra: Candidate[]; usedReason: (src: string) => Promise<string | null> }) => Promise<PhotoResult>;
 };
 
-/** The shared finder's wiring (the revisions screen's LFD photo swap; the run itself uses findStoryPhoto). `find` / `need` default to lib/photos/find.ts and lib/photos/needs.ts (tests inject them). */
-export type LfdSharedPhotos = {
-  profile: PhotoProfile;
-  deps: PhotoDeps;
-  find?: (needs: PhotoNeed[], profile: PhotoProfile, deps: PhotoDeps, opts: FindOptions) => Promise<FoundPhotos>;
-  need?: (pick: Pick, copy: StoryCopy, id: string) => PhotoNeed;
-};
-
 /**
- * The shared finder over a set of stories, one photo (or null) and one trace per story, same order, under the
- * post's `budget`. Never throws: an error leaves every story to today's chain, with the reason in its trace.
+ * The photo rung for one story, shared by the run and the Social Hub's photo swap: findStoryPhoto with the article's
+ * lead image and (builder stories, when a harvest is wired) AI Drama's harvest as extra candidates, under the ledger
+ * check (CI-32) and never a photo in `taken`. `result` is null when the finder threw (the reason is in `trace`);
+ * `photo` and `source` are set when it picked one. `harvestFound` is set when the harvest ran.
  */
-export async function findSharedLfdPhotos(
-  s: LfdSharedPhotos,
-  items: Array<{ pick: Pick; copy: StoryCopy }>,
-  exclude: ReadonlySet<string>,
-  budget: PhotoBudget,
-): Promise<{ photos: Array<Ready['photo'] | null>; traces: string[][] }> {
-  if (items.length === 0) return { photos: [], traces: [] };
-  try {
-    const find = s.find ?? (await import('@/lib/photos/find')).findPhotos;
-    const need = s.need ?? (await import('@/lib/photos/needs')).needForLfd;
-    const out = await find(items.map((it) => need(it.pick, it.copy, it.pick.key)), s.profile, s.deps, { exclude, budget });
-    return { photos: items.map((_, i) => out.photos[i] ?? null), traces: items.map((_, i) => out.traces[i] ?? []) };
-  } catch (err) {
-    return { photos: items.map(() => null), traces: items.map(() => [`shared: failed: ${err instanceof Error ? err.message : String(err)}`]) };
+export async function lfdPhotoRung(pick: Pick, o: {
+  readPage: (url: string) => Promise<PageRead>;
+  findPhoto: NonNullable<LfdNewsChain['findPhoto']>;
+  taken: ReadonlySet<string>;
+  ledger: UsedLedger;
+  usedPhotos?: GuardDeps;
+  harvest?: { deps: BuilderHarvest; budget: HarvestBudget; now: Date };
+  duplicateUrls?: string[];
+  /** More candidates (a revision's hint search), after the lead image and the harvest. */
+  extra?: Candidate[];
+}): Promise<{ result: PhotoResult | null; trace: string[]; photo?: Ready['photo']; source?: 'lead' | 'harvest' | 'finder'; harvestFound?: boolean }> {
+  const trace: string[] = [];
+  const taken = new Set(o.taken);
+  const extra: Candidate[] = [];
+  const lead = await leadImage(o.readPage, pick, taken);
+  if (lead) {
+    extra.push({ src: lead.photo.src, source: 'extra', credit: lead.photo.credit });
+    trace.push(lead.note);
   }
+  let harvested: string | null = null;
+  let harvestFound: boolean | undefined;
+  if (o.harvest && pick.lane === 'builder') {
+    const got = await harvestBuilderPhoto(o.harvest.deps, pick, articleCopy(pick), taken, o.harvest.budget, o.harvest.now, o.ledger);
+    harvestFound = got.photo !== null;
+    trace.push(...got.trace);
+    if (got.photo) {
+      harvested = got.photo.src;
+      extra.push({ src: got.photo.src, source: 'extra', credit: got.photo.credit });
+    }
+  }
+  extra.push(...(o.extra ?? []));
+  const story: PhotoStory = { id: pick.key, headline: pick.headline, text: pick.body, url: pick.url, duplicateUrls: o.duplicateUrls ?? [] };
+  const check = async (src: string) => (taken.has(src) ? 'already on this post or published recently' : usedReason(o.ledger, { url: src, kind: 'scene' }, o.usedPhotos ?? {}));
+  const withHarvest = harvestFound === undefined ? {} : { harvestFound };
+  let res: PhotoResult;
+  try {
+    res = await o.findPhoto(story, { extra, usedReason: check });
+  } catch (err) {
+    return { result: null, trace: [...trace, `photo: failed: ${err instanceof Error ? err.message : String(err)}`], ...withHarvest };
+  }
+  trace.push(...res.log.map((l) => `photo: ${l}`));
+  if (!res.pick || res.tier === 'none') return { result: res, trace, ...withHarvest };
+  const source = res.pick.src === lead?.photo.src ? 'lead' : res.pick.src === harvested ? 'harvest' : 'finder';
+  return { result: res, trace, photo: { src: res.pick.src, credit: res.pick.credit, kind: 'scene' }, source, ...withHarvest };
 }
 
 export type IntakeMode = 'intake' | 'legacy' | 'stale-fallback';
@@ -471,10 +488,10 @@ const toChainStory = (c: LfdCandidate): ChainStory => ({
 });
 
 /** Source text the writer sees per story (as the old writer's SOURCE_CHARS). */
-const WRITER_SOURCE_CHARS = 9000;
+export const WRITER_SOURCE_CHARS = 9000;
 
 /** The writer's story as slide copy: no setup (WC10), names from code, no writer photo request; normalize trims as before. */
-function copyOf(key: string, w: Written): StoryCopy {
+export function copyOf(key: string, w: Written): StoryCopy {
   return normalize([{ key, setup: '', headline: w.headline, highlight: w.highlight, names: w.names, body: w.body, photo: NO_PHOTO_REQUEST }], [key])[0]!;
 }
 
@@ -725,41 +742,24 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       return p;
     };
     const photoFor = (pick: Pick, why: string[] = []): Promise<{ photo: Ready['photo']; tier: MediaVerdict; source: 'lead' | 'harvest' | 'finder'; trace: string[] } | { photo: null; trace: string[] }> => oneAtATime(async () => {
-      const trace = [...why];
-      if (!findPhoto) return { photo: null, trace: [...trace, 'photo: no photo finder wired'] };
-      const taken = new Set([...exclude, ...postPhotos]);
-      const extra: Candidate[] = [];
-      const lead = await leadImage(readPage, pick, taken);
-      if (lead) {
-        extra.push({ src: lead.photo.src, source: 'extra', credit: lead.photo.credit });
-        trace.push(lead.note);
-      }
-      let harvested: string | null = null;
-      if (d.harvest && pick.lane === 'builder') {
-        const got = await harvestBuilderPhoto(d.harvest, pick, articleCopy(pick), taken, harvestBudget, d.now, ledger);
-        harvestRecord.slides.push({ key: pick.key, found: got.photo !== null });
+      if (!findPhoto) return { photo: null, trace: [...why, 'photo: no photo finder wired'] };
+      const rung = await lfdPhotoRung(pick, {
+        readPage, findPhoto, taken: new Set([...exclude, ...postPhotos]), ledger, ...(d.usedPhotos ? { usedPhotos: d.usedPhotos } : {}),
+        ...(d.harvest ? { harvest: { deps: d.harvest, budget: harvestBudget, now: d.now } } : {}),
+        duplicateUrls: (merged.get(pick.key) ?? []).map((x) => x.url),
+      });
+      if (rung.harvestFound !== undefined) {
+        harvestRecord.slides.push({ key: pick.key, found: rung.harvestFound });
         harvestRecord.usd = harvestBudget.usd;
-        trace.push(...got.trace);
-        if (got.photo) {
-          harvested = got.photo.src;
-          extra.push({ src: got.photo.src, source: 'extra', credit: got.photo.credit });
-        }
       }
-      const story: PhotoStory = { id: pick.key, headline: pick.headline, text: pick.body, url: pick.url, duplicateUrls: (merged.get(pick.key) ?? []).map((x) => x.url) };
-      const check = async (src: string) => (taken.has(src) ? 'already on this post or published recently' : usedReason(ledger, { url: src, kind: 'scene' }, d.usedPhotos ?? {}));
-      let res: PhotoResult;
-      try {
-        res = await findPhoto(story, { extra, usedReason: check });
-      } catch (err) {
-        return { photo: null, trace: [...trace, `photo: failed: ${err instanceof Error ? err.message : String(err)}`] };
-      }
+      const trace = [...why, ...rung.trace];
+      const res = rung.result;
+      if (!res) return { photo: null, trace };
       photoRecord.usd += res.costUsd;
       photoRecord.stories.push({ key: pick.key, tier: res.tier, source: res.pick?.source ?? null });
-      trace.push(...res.log.map((l) => `photo: ${l}`));
-      if (!res.pick || res.tier === 'none') return { photo: null, trace };
+      if (!res.pick || res.tier === 'none' || !rung.photo) return { photo: null, trace };
       postPhotos.add(res.pick.src);
-      const source = res.pick.src === lead?.photo.src ? 'lead' : res.pick.src === harvested ? 'harvest' : 'finder';
-      return { photo: { src: res.pick.src, credit: res.pick.credit, kind: 'scene' }, tier: res.tier, source, trace };
+      return { photo: rung.photo, tier: res.tier, source: rung.source!, trace };
     });
 
     /** Media found for a walked story before it is written (the ladder's rung, and what it found). */

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
 
-import { CHECK_MODEL, material, namesFor, WRITER_MODEL, writeStories, type WriterStory } from '@/lib/news-writer';
+import { CHECK_MODEL, checkFacts, material, namesFor, WRITER_MODEL, writeStories, type WriterStory } from '@/lib/news-writer';
 import { FORMATS, WRITER_CORE } from '@/lib/news-writer/prompts';
 
 const msg = (name: string, input: unknown, id = `tu_${name}`): Anthropic.Message => ({
@@ -154,4 +154,33 @@ test('lfd: highlight kept when in the headline, write tool has highlight; names 
 
 test('namesFor drops stop words and keeps only words in the copy', () => {
   assert.deepEqual(namesFor('The AI lab Anthropic hires', 'New Claude model'), ['Anthropic', 'Claude']);
+});
+
+test('a revision instruction is one added block after the locked reveal text; the builds send none', async () => {
+  const s = stub([() => msg('propose_angles', angles), () => msg('write_stories', { stories: good }), () => msg('check_facts', okAll)]);
+  await writeStories('md', STORIES, {}, { create: s.create }, { instruction: 'A person asked for it to say: "x".' });
+  const t1 = s.calls[0]!;
+  assert.doesNotMatch(JSON.stringify(t1.messages), /A person asked/); // the blind turn is unchanged
+  assert.equal(t1.system[0].text, WRITER_CORE + FORMATS.md.block);
+  const blocks = s.calls[1]!.messages[2].content as Array<{ type: string; text?: string }>;
+  assert.deepEqual(blocks.map((b) => b.type), ['tool_result', 'text', 'text']);
+  assert.match(blocks[1]!.text!, /^Here are the editor's angles/);
+  assert.equal(blocks[2]!.text, 'A person asked for it to say: "x".');
+
+  const b = stub([() => msg('propose_angles', angles), () => msg('write_stories', { stories: good }), () => msg('check_facts', okAll)]);
+  await writeStories('md', STORIES, {}, { create: b.create });
+  assert.equal((b.calls[1]!.messages[2].content as unknown[]).length, 2);
+});
+
+test('checkFacts sends the writer\'s own fact-check request and returns the failing claims', async () => {
+  const s = stub([() => msg('check_facts', { claims: [ok('a1', 'robot can fold laundry in 2 minutes'), { key: 'a1', claim: 'sold out', supported: false, evidence: 'not stated' }] })]);
+  const r = await checkFacts([STORIES[0]!], [{ key: 'a1', headline: 'OpenAI robot folds laundry and sold out', body: '' }], { create: s.create });
+  const ck = s.calls[0]!;
+  assert.equal(ck.model, CHECK_MODEL);
+  assert.equal(ck.max_tokens, 8000);
+  assert.ok(ck.system[0].cache_control, 'cached system');
+  assert.ok(ck.tools.at(-1).cache_control, 'cached tool');
+  assert.match(ck.messages[0].content, /<written>/);
+  assert.deepEqual(r.failed.map((c) => c.claim), ['sold out']);
+  assert.ok(r.costUsd > 0);
 });
