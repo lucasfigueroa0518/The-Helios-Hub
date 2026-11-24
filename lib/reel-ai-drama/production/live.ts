@@ -18,7 +18,7 @@ import { nextForProduction, tendPool } from '@/lib/reel-ai-drama/development/poo
 import { anthropicCreate } from '@/lib/reel-ai-drama/development/producer';
 import { newsTouching } from '@/lib/reel-ai-drama/development/ledger';
 import { liveStoriesDb } from '@/lib/stories/db';
-import { runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
+import { runDevelopmentSession, type DevelopmentDeps } from '@/lib/reel-ai-drama/development/session';
 import { liveVisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
 // B2 reporting + harvest
 import { harvestVisuals } from '@/lib/reel-ai-drama/harvest/harvest';
@@ -190,19 +190,27 @@ export async function runLiveDevelopment(
 ): Promise<unknown> {
   // `overrides` is for a one-off run Lucas asks for (e.g. a bigger round past the weekly cap); never saved.
   const settings = { ...(await loadSettings(db)), ...overrides };
-  return runDevelopmentSession(
-    {
-      db,
-      settings,
-      producer: { create: anthropicCreate(anthropic, 'producer'), loadPrompt },
-      jevTransport: liveJevTransport,
-      visuals: liveVisualsCheckDeps({ client: anthropic, visionModel: settings.vision_model, lookPrompt: loadPrompt('visuals-look'), serperApiKey: process.env.SERPER_API_KEY ?? null }),
-      // The Hub news pool lives on the shared stories database, not the explainers one. A failed read
-      // (no shared DB locally) means no news reopens this session, never a failed session.
-      news: (now, days) => newsTouching(liveStoriesDb, now, days).catch(() => []),
-    },
-    { trigger, ...(refillCapUsd != null ? { refillCapUsd } : {}) },
-  );
+  return runDevelopmentSession(liveDevelopmentDeps(db, settings), { trigger, ...(refillCapUsd != null ? { refillCapUsd } : {}) });
+}
+
+/** What a Develop click runs with, live; a one-box AI Drama seed uses the same (lib/seed/one-box/workers/drama.ts). */
+export function liveDevelopmentDeps(db: Queryable, settings: ReelAiDramaSettings): DevelopmentDeps {
+  return {
+    db,
+    settings,
+    producer: { create: anthropicCreate(anthropic, 'producer'), loadPrompt },
+    jevTransport: liveJevTransport,
+    visuals: liveVisualsCheckDeps({ client: anthropic, visionModel: settings.vision_model, lookPrompt: loadPrompt('visuals-look'), serperApiKey: process.env.SERPER_API_KEY ?? null }),
+    // The Hub news pool lives on the shared stories database, not the explainers one. A failed read
+    // (no shared DB locally) means no news reopens this session, never a failed session.
+    news: (now, days) => newsTouching(liveStoriesDb, now, days).catch(() => []),
+  };
+}
+
+/** A one-box AI Drama seed's deps, built only for a claimed request: tonight's settings and the Develop click's deps. */
+export async function liveDramaSeedDeps(db: Queryable): Promise<{ db: Queryable; settings: ReelAiDramaSettings; deps: DevelopmentDeps }> {
+  const settings = await loadSettings(db);
+  return { db, settings, deps: liveDevelopmentDeps(db, settings) };
 }
 
 /** Calibration (B1, MD-52): Jev scores only, logged and priced as development. */

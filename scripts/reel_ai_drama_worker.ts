@@ -1,6 +1,7 @@
 /**
  * Reel AI Drama worker (planning/AI Mini Docs/HUB-WIRING-CONTRACT.md §7.1 item 4). Every poll: run a person's queued
- * Develop / Calibrate click; the refill in every state (settings standard D16): once per New York day, tend the pool,
+ * Develop / Calibrate click; then at most one queued one-box AI Drama seed (one-box seeding v2: producer-seed@1, checked at
+ * once, lib/seed/one-box/workers/drama.ts); the refill in every state (settings standard D16): once per New York day, tend the pool,
  * and once a week the development session on its refill cap; while the type makes posts (Approval or Live), the
  * nightly fill from DRAMA_NIGHT_HOUR_NY (lib/reel-ai-drama/night.ts); in Approval or Live (holdsSlots, contract §4.3),
  * book approved reels; then the next production job, one at a time. A night job that finishes ok books today's next
@@ -21,6 +22,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+
+import type { Query } from '@/lib/social/store/pg';
 
 for (const line of fs.existsSync(path.join(process.cwd(), '.env.local')) ? fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf8').split(/\r?\n/) : []) {
   const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -96,6 +99,8 @@ async function main(): Promise<void> {
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const { tendPool } = await import('@/lib/reel-ai-drama/development/pool');
   const { readDramaGate } = await import('@/lib/reel-ai-drama/gate');
+  const { liveDramaSeedDeps } = await import('@/lib/reel-ai-drama/production/live');
+  const { dramaPollSteps, runPollPass } = await import('@/lib/reel-ai-drama/worker-poll');
 
   const storage = process.env.EXPLAINERS_STORAGE?.trim() === 'bucket' ? 'bucket' : 'local';
   log('storage', { storage, localDir: dramaLocalDir(), jobsDir: dramaJobsDir() });
@@ -184,77 +189,82 @@ async function main(): Promise<void> {
   const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never, 'reel_ai_drama');
   const nextInsights = () => nextRunAt(new Date(), DRAMA_INSIGHTS_HOUR_NY, DRAMA_INSIGHTS_MINUTE_NY);
   let insightsAt = nextInsights();
-  const step = async (name: string, fn: () => Promise<void>) => {
-    try {
-      await fn();
-    } catch (error) {
-      log('step_failed', { step: name, error: errorText(error) });
-    }
-  };
+  // One-box AI Drama seeds (one-box seeding v2): the q is this database (social_hub lives beside reel_ai_drama).
+  const seedQuery: Query = (text, params) => db.query(text, params as unknown[]) as never;
   while (!stopping) {
     const now = new Date();
-    // A person's Develop / Calibrate click, queued by the app.
-    await step('requests', async () => {
-      if (!anthropicApiKey) return;
-      const done = await runNextDramaRequest(db, { develop: (d) => runLiveDevelopment(d, 'click'), calibrate: (d) => runLiveCalibration(d) });
-      if (done) log('request_done', { id: done.id, kind: done.kind, status: done.status, error: done.error });
-    });
-    // Once a New York day, whatever Generate says: re-rank and retire stale news (no model call).
-    await step('tend_pool', async () => {
-      const tended = await tendPoolOncePerDay(db, async () => tendPool(db, await loadSettings(db), now), now);
-      if (tended) log('pool_tended', tended);
-    });
-    // The make step follows the state (D16): the night fill runs only in Approval or Live.
-    const gate = await readDramaGate(db).catch(() => null);
-    if (gate && nyHour(now) >= DRAMA_NIGHT_HOUR_NY && Date.now() - nightCheckedAt >= NIGHT_EVERY_MS) {
-      nightCheckedAt = Date.now();
-      // Once a New York day, so the log names it without repeating every check.
-      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
-      if (gate.mismatch && mismatchDay !== day) {
-        mismatchDay = day;
-        log('state_mismatch', { vertical: 'reel_ai_drama', state: gate.state });
-      }
-      if (gate.makes) {
-        await step('night', async () => {
+    await runPollPass(
+      dramaPollSteps({
+        // A person's Develop / Calibrate click, queued by the app.
+        requests: async () => {
+          if (!anthropicApiKey) return;
+          const done = await runNextDramaRequest(db, { develop: (d) => runLiveDevelopment(d, 'click'), calibrate: (d) => runLiveCalibration(d) });
+          if (done) log('request_done', { id: done.id, kind: done.kind, status: done.status, error: done.error });
+        },
+        // A person's one-box seed: at most one a poll, claimed and checked at once (its own ledger and tonight's cap).
+        seeds: async () => {
+          if (!anthropicApiKey) return;
+          // Loaded here, so a module that fails to load fails only this step, never the worker.
+          const { runClaimedSeed } = await import('@/lib/seed/one-box/workers');
+          const seeded = await runClaimedSeed({ q: seedQuery, runner: 'drama', deps: { drama: () => liveDramaSeedDeps(db) } });
+          if (seeded) log('seed_done', { id: seeded.id });
+        },
+        // Once a New York day, whatever Generate says: re-rank and retire stale news (no model call).
+        tendPool: async () => {
+          const tended = await tendPoolOncePerDay(db, async () => tendPool(db, await loadSettings(db), now), now);
+          if (tended) log('pool_tended', tended);
+        },
+        // The make step follows the state (D16): the night fill runs only in Approval or Live.
+        night: async () => {
+          const gate = await readDramaGate(db).catch(() => null);
+          if (!gate || nyHour(now) < DRAMA_NIGHT_HOUR_NY || Date.now() - nightCheckedAt < NIGHT_EVERY_MS) return;
+          nightCheckedAt = Date.now();
+          // Once a New York day, so the log names it without repeating every check.
+          const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
+          if (gate.mismatch && mismatchDay !== day) {
+            mismatchDay = day;
+            log('state_mismatch', { vertical: 'reel_ai_drama', state: gate.state });
+          }
+          if (!gate.makes) return;
           const night = await runDramaNight({ db, now, gate, log: (event, fields) => log(event, fields) });
           const key = JSON.stringify(night.status === 'skipped' ? night : { status: night.status });
           if (key !== lastNight || night.status !== 'skipped') log('night', night as unknown as Record<string, unknown>);
           lastNight = key;
-        });
-      }
-    }
-    await step('refill', async () => {
-      // The nightly development session is the refill: every state, on its refill cap (D14, D16; MD-156).
-      const tick = await nightlyTick(schedule, now);
-      // One line a night: the run, or why tonight's refill was skipped (repeat polls in the window stay quiet).
-      if (tick.development === 'not_yet' || tick.development === 'already_ran') return;
-      const key = `${tick.nightStart}:${tick.development}`;
-      if (key !== lastRefill) log('refill_tick', tick as unknown as Record<string, unknown>);
-      lastRefill = key;
-    });
-    // Approved reels onto the clock in Approval and Live (holdsSlots, contract §4.3; never one sent back to Made, D18);
-    // then, unless the shared publisher drives AI Drama, due slots into attempts and one attempt to Instagram, only while
-    // Live (D16; Generate off with Live on reads as paused).
-    await step('publish', async () => {
-      if (!(await dramaHoldsSlots(db))) return;
-      const booked = await scheduleApprovedDrama(db, now);
-      if (booked) log('approved_booked', { count: booked });
-      if (!(await dramaPublishingLive(db))) return;
-      if (await standDown()) return;
-      const released = await dramaReleaseDue(db);
-      if (released) log('schedule_due', { released });
-      if (!metaConfigured()) return;
-      const posted = await claimAndCarryDrama({ db, meta: createLiveReelClient(), signVideo: signArtifact });
-      if (posted) log('publish_complete', { ...posted });
-    });
-    if (now >= insightsAt) {
-      insightsAt = nextInsights();
-      await step('insights', async () => {
-        if (!metaConfigured() || (await standDown())) return;
-        const result = await pollDramaInsights(db, createExplainerInsightsClient({ token: process.env.META_USER_ACCESS_TOKEN! }));
-        if (result.considered > 0) log('insights_complete', { ...result });
-      });
-    }
+        },
+        refill: async () => {
+          // The nightly development session is the refill: every state, on its refill cap (D14, D16; MD-156).
+          const tick = await nightlyTick(schedule, now);
+          // One line a night: the run, or why tonight's refill was skipped (repeat polls in the window stay quiet).
+          if (tick.development === 'not_yet' || tick.development === 'already_ran') return;
+          const key = `${tick.nightStart}:${tick.development}`;
+          if (key !== lastRefill) log('refill_tick', tick as unknown as Record<string, unknown>);
+          lastRefill = key;
+        },
+        // Approved reels onto the clock in Approval and Live (holdsSlots, contract §4.3; never one sent back to Made, D18);
+        // then, unless the shared publisher drives AI Drama, due slots into attempts and one attempt to Instagram, only while
+        // Live (D16; Generate off with Live on reads as paused).
+        publish: async () => {
+          if (!(await dramaHoldsSlots(db))) return;
+          const booked = await scheduleApprovedDrama(db, now);
+          if (booked) log('approved_booked', { count: booked });
+          if (!(await dramaPublishingLive(db))) return;
+          if (await standDown()) return;
+          const released = await dramaReleaseDue(db);
+          if (released) log('schedule_due', { released });
+          if (!metaConfigured()) return;
+          const posted = await claimAndCarryDrama({ db, meta: createLiveReelClient(), signVideo: signArtifact });
+          if (posted) log('publish_complete', { ...posted });
+        },
+        insights: async () => {
+          if (now < insightsAt) return;
+          insightsAt = nextInsights();
+          if (!metaConfigured() || (await standDown())) return;
+          const result = await pollDramaInsights(db, createExplainerInsightsClient({ token: process.env.META_USER_ACCESS_TOKEN! }));
+          if (result.considered > 0) log('insights_complete', { ...result });
+        },
+      }),
+      (name, error) => log('step_failed', { step: name, error: errorText(error) }),
+    );
     try {
       if (await runNext()) continue;
     } catch (error) {

@@ -73,7 +73,7 @@ import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import { runTriviaDaily, type TriviaDailyDeps } from '@/lib/stories/trivia/daily';
 import { runRoaDaily, type RoaDailyDeps } from '@/lib/stories/roa/daily';
-import type { SeedDepsFactories } from '@/lib/seed/one-box/workers';
+import type { StoriesSeedDepsFactories } from '@/lib/seed/one-box/workers';
 import { buildGameDay, dayToBuild, lockDue, readLaunch } from '@/lib/stories/trivia/game-days';
 import { createBankReader } from '@/lib/media-library/reader';
 import type { IntakeJevHandle } from '@/lib/intake/jev';
@@ -407,7 +407,7 @@ export function roaDailyDeps(b: SetBuilderDeps, settings: StoriesSettings, now: 
  * The deps for one claimed one-box seed (Trivia, Real or AI?), built the daily runs' way and only for a claimed request.
  * No refill budget: a seed is held by its own per-seed ledger, not the nightly refill total.
  */
-export function seedDepsFactories(deps: WorkerDeps): SeedDepsFactories {
+export function seedDepsFactories(deps: WorkerDeps): StoriesSeedDepsFactories {
   const make = async <T>(f: (b: SetBuilderDeps, s: StoriesSettings, now: Date) => T): Promise<T> => {
     const now = deps.now?.() ?? new Date();
     return f(await deps.builder(), await loadSettings(deps.db), now);

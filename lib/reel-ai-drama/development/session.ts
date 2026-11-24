@@ -111,11 +111,14 @@ async function setStatus(
 }
 
 /** `held`: the refill cap was reached before the visuals check; the pitch stays `new` for the next session. */
-type Outcome = 'duplicate' | 'rejected' | 'pooled' | 'held';
+export type Outcome = 'duplicate' | 'rejected' | 'pooled' | 'held';
 
-/** Dedupe → drama → material → visuals → pool, for one pitch already saved as `new`. */
-async function checkPitch(
-  ctx: { db: Queryable; jev: DramaJevRunner; deps: DevelopmentDeps; settings: ReelAiDramaSettings; sessionId: string; now: Date; capped?: () => Promise<boolean> },
+/**
+ * Dedupe → drama → material → visuals → pool, for one pitch already saved as `new`. Also run by a one-box seed
+ * (lib/seed/one-box/workers/drama.ts) at once, outside any session: its `sessionId` is null.
+ */
+export async function checkPitch(
+  ctx: { db: Queryable; jev: DramaJevRunner; deps: DevelopmentDeps; settings: ReelAiDramaSettings; sessionId: string | null; now: Date; capped?: () => Promise<boolean> },
   id: string,
   p: Pitch,
 ): Promise<Outcome> {
