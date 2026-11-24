@@ -113,6 +113,14 @@ COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
   --exclude='./scripts/gcp/worker.env' \
   --exclude='./.cursor' \
   --exclude='./helios_text_engine/.venv' \
+  --exclude='./runs' \
+  --exclude='./Claude outputs' \
+  --exclude='./Content Review 2026-11-08' \
+  --exclude='./.explainers-local' \
+  --exclude='./.stories-local' \
+  --exclude='./.memes-local' \
+  --exclude='./explainers/smoke/.out' \
+  --exclude='./explainers/design/sfx/dropins' \
   .
 
 DEPLOY_ID="$(date +%s)-$$"
