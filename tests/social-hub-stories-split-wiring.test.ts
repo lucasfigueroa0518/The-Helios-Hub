@@ -64,7 +64,7 @@ test('every per-type record and calendar list has both new keys', () => {
     assert.ok(VERTICAL_LABELS[v], v);
     assert.deepEqual(CAPS[v], CAPS.stories, `${v} keeps the Stories revision caps`);
     assert.equal(descriptionFor(v)?.vertical, v);
-    assert.equal(isSeedable(v), false, `${v} has no seed path`);
+    assert.equal(isSeedable(v), true, `${v} is seedable through the one box`);
     assert.equal(isFeedSlot({ vertical: v, feedMode: null }), false);
     assert.deepEqual(SCHEDULE_ENTRIES.filter((e) => e.vertical === v).map((e) => e.series), [v]);
     assert.deepEqual(PLAN[v].map((w) => w.id), [v]);

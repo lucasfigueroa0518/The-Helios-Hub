@@ -49,7 +49,7 @@ export function SeedRequestCards({ cards, reload }: { cards: Card[]; reload: () 
     <div className="rh rh--scope" aria-live="polite">
       {cards.map((c) => (
         <div key={c.id} className={c.status === 'failed' ? 'rh-note rh-note--bad' : 'rh-note'} role="status">
-          <p><strong>{c.status === 'failed' ? 'Not added' : c.status === 'done' ? 'Added' : STAGE_TEXT[c.stage] ?? 'Working…'}</strong> “{c.blurb.length > 120 ? `${c.blurb.slice(0, 120)}…` : c.blurb}”</p>
+          <p><strong>{c.status === 'failed' ? 'Not added' : c.status === 'done' ? 'Added' : c.cancellable ? 'Queued' : STAGE_TEXT[c.stage] ?? 'Working…'}</strong> “{c.blurb.length > 120 ? `${c.blurb.slice(0, 120)}…` : c.blurb}”</p>
           {c.message ? <p>{c.message}</p> : null}
           {c.status !== 'working' ? <button type="button" className="rh-btn" onClick={() => void remove(c.id)}>Dismiss</button> : null}
           {c.cancellable ? <button type="button" className="rh-btn" onClick={() => void remove(c.id)}>Cancel</button> : null}
