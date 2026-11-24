@@ -6,7 +6,7 @@ alwaysApply: true
 # GCP orchestration worker sync (permanent)
 
 Production queue/drafting execution does **not** run on Vercel. It runs on the
-always-on GCP VM `helios-orch-worker` (`us-west1-a`, project
+always-on GCP VM `helios-orch-worker` (`northamerica-northeast1-a`, project
 `helios-influencer-network`, systemd unit `helios-worker`).
 
 Social workers do **not** run on that VM. Trial Reels (`helios-reels`), and
@@ -49,7 +49,7 @@ runs `npm ci` on the VM, and restarts `helios-worker`.
 Verify:
 
 ```bash
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
+gcloud compute ssh helios-orch-worker --zone=northamerica-northeast1-a \
   --command='sudo systemctl status helios-worker --no-pager'
 npm run worker:status
 ```
