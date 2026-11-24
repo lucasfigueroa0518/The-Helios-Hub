@@ -43,7 +43,9 @@ import { nyDate, releaseBuildsAtStartup, requestSet } from '@/lib/stories/reposi
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
 import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
-import { tick } from '@/lib/stories/worker';
+import { seedDepsFactories, tick } from '@/lib/stories/worker';
+import { runClaimedSeed } from '@/lib/seed/one-box/workers';
+import { dbQuery } from '@/lib/db';
 import { liveWriterCreate } from '@/lib/stories/writer';
 
 import { newAnthropic } from '@/lib/anthropic-client';
@@ -126,6 +128,14 @@ async function main() {
         if (r.built || r.published) await bank.drain(15_000);
       } catch (err) {
         log(`pass failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+      }
+      // One-box seeds (Trivia, Real or AI?): at most one claimed per poll, after the tick, never inside it. social_hub.seed_requests is
+      // in the shared database (the hub's own connection); a failure here is logged and the loop goes on.
+      try {
+        const seeded = await runClaimedSeed({ q: (text, params) => dbQuery(text, params as never) as never, runner: 'stories', deps: seedDepsFactories(deps) });
+        if (seeded) log(`seed request ${seeded.id} ran`);
+      } catch (err) {
+        log(`seed request failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
       }
       if (once || stopping) break;
       await new Promise((r) => setTimeout(r, POLL_MS));

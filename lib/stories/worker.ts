@@ -71,8 +71,9 @@ import { isBrandAsset } from '@/lib/photos/used';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
-import { runTriviaDaily } from '@/lib/stories/trivia/daily';
-import { runRoaDaily } from '@/lib/stories/roa/daily';
+import { runTriviaDaily, type TriviaDailyDeps } from '@/lib/stories/trivia/daily';
+import { runRoaDaily, type RoaDailyDeps } from '@/lib/stories/roa/daily';
+import type { SeedDepsFactories } from '@/lib/seed/one-box/workers';
 import { buildGameDay, dayToBuild, lockDue, readLaunch } from '@/lib/stories/trivia/game-days';
 import { createBankReader } from '@/lib/media-library/reader';
 import type { IntakeJevHandle } from '@/lib/intake/jev';
@@ -303,7 +304,7 @@ async function triviaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now
     if (!refill) return; // tonight's refill total is used up (logged once); tomorrow's pool day tries again
     const run = deps.triviaDaily ?? (async (at: Date, s: StoriesSettings, r?: RefillBudget) => {
       const b = await deps.builder();
-      return runTriviaDaily({ db: b.db, write: b.write, jev: createStoriesJev(b.jevTransport, b.db), settings: s, now: at, ...(r ? { refill: r } : {}) });
+      return runTriviaDaily(triviaDailyDeps(b, s, at, r));
     });
     let result: unknown;
     try {
@@ -371,11 +372,7 @@ async function roaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: D
     if (!refill) return; // tonight's refill total is used up (logged once); tomorrow's pool day tries again
     const run = deps.roaDaily ?? (async (at: Date, s: StoriesSettings, r?: RefillBudget) => {
       const b = await deps.builder();
-      // Real photos: the photo bank in the shared database first (read only; off while its switch is off), then
-      // Commons and NASA. Jev vision, gpt-image-2 and those reads are runRoaDaily's own live defaults.
-      const bank = createBankReader({ query: (text, params) => b.sourceDb.query(text, params) as never });
-      // The photo_finders switch, the used-photo ledger and the bank live in the shared database (SS-28).
-      return runRoaDaily({ db: b.db, sourceDb: b.sourceDb, write: b.write, storage: b.storage, bank, settings: s, now: at, ...(r ? { refill: r } : {}) });
+      return runRoaDaily(roaDailyDeps(b, s, at, r));
     });
     let result: unknown;
     try {
@@ -388,6 +385,34 @@ async function roaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: D
   } catch (err) {
     log(`roa: daily candidates failed: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/** The deps of AI Trivia's daily writer from a builder's live clients. The one-box seed uses the same (no refill). */
+export function triviaDailyDeps(b: SetBuilderDeps, settings: StoriesSettings, now: Date, refill?: RefillBudget): TriviaDailyDeps {
+  return { db: b.db, write: b.write, jev: createStoriesJev(b.jevTransport, b.db), settings, now, ...(refill ? { refill } : {}) };
+}
+
+/**
+ * The deps of Real or AI?'s daily candidate run from a builder's live clients. Real photos: the photo bank in the shared
+ * database first (read only; off while its switch is off), then Commons and NASA. Jev vision, gpt-image-2 and those reads
+ * are runRoaDaily's own live defaults. The photo_finders switch, the used-photo ledger and the bank live in the shared
+ * database (SS-28).
+ */
+export function roaDailyDeps(b: SetBuilderDeps, settings: StoriesSettings, now: Date, refill?: RefillBudget): RoaDailyDeps {
+  const bank = createBankReader({ query: (text, params) => b.sourceDb.query(text, params) as never });
+  return { db: b.db, sourceDb: b.sourceDb, write: b.write, storage: b.storage, bank, settings, now, ...(refill ? { refill } : {}) };
+}
+
+/**
+ * The deps for one claimed one-box seed (Trivia, Real or AI?), built the daily runs' way and only for a claimed request.
+ * No refill budget: a seed is held by its own per-seed ledger, not the nightly refill total.
+ */
+export function seedDepsFactories(deps: WorkerDeps): SeedDepsFactories {
+  const make = async <T>(f: (b: SetBuilderDeps, s: StoriesSettings, now: Date) => T): Promise<T> => {
+    const now = deps.now?.() ?? new Date();
+    return f(await deps.builder(), await loadSettings(deps.db), now);
+  };
+  return { trivia: () => make(triviaDailyDeps), roa: () => make(roaDailyDeps) };
 }
 
 /**
