@@ -1,6 +1,6 @@
 import type { Query } from '@/lib/social/store/pg';
 
-import { classifyLeafWant } from './classify';
+import { classifyLeafWant, NOT_A_KIND } from './classify';
 import { Ledger, limitReason, limitText } from './budget';
 import { fileFieldNote, fileIdea, type FileDeps, type FileResult } from './file';
 import { entryTitle, entryUrl, missingFields, shapeOf } from './shape';
@@ -53,6 +53,10 @@ export async function runOneBox(i: {
 
     const shape = shapeOf(i.input);
     const primary = finding.entries.find((e) => missingFields(shape, e).length === 0);
+    // Field Notes: an official page with no valid kind (leaf and want) cannot be filed, so it is not read or verified.
+    if (!primary && i.input.vertical === 'field_notes' && finding.entries.some((e) => missingFields(shape, e).every((f) => f === 'leaf' || f === 'want'))) {
+      return await fail(NOT_A_KIND);
+    }
     if (primary) {
       const existing = await i.fileDeps.existing(i.input.vertical, entryUrl(shape, primary), entryTitle(primary)).catch(() => null);
       if (existing) return await fail(`That story is already in the queue: “${existing}”. Nothing was added.`);

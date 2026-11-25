@@ -121,3 +121,25 @@ test('the classify request puts cache_control on the system block and not on the
   assert.ok((p.system as Anthropic.TextBlockParam[])[0]!.text.includes('repo_free_alternative'));
   assert.ok((p.system as Anthropic.TextBlockParam[])[0]!.text.includes('stay_current'));
 });
+
+// Final fixes 5: without a link, leaf and want are required in the report, and an entry without a valid pair never reaches the
+// verifier (no page read, no verifier call) and fails with the kind text.
+test('the field_notes report tool requires leaf and want', async () => {
+  const { reportFindingToolFor } = await import('@/lib/seed/one-box/prompts');
+  const items = (reportFindingToolFor('field_notes').input_schema.properties.entries as { items: { required: string[] } }).items;
+  assert.deepEqual([...items.required].sort(), ['leaf', 'url', 'want']);
+});
+test('a finding missing leaf (or with an unknown want) is never verified and fails with the kind text', async () => {
+  for (const entry of [{ url: 'https://github.com/owner/repo', want: 'faster' }, { url: 'https://github.com/owner/repo', leaf: 'skill', want: 'cheaper-ish' }]) {
+    const q = await db();
+    const { c, log } = client({ finding: { found: true, entries: [entry] }, verdict: true });
+    const { d, filed } = deps();
+    let reads = 0;
+    const row = await go({ vertical: 'field_notes', blurb: 'a repo for x' }, c, d, q, async (u) => (reads++, PAGE(u)));
+    assert.equal(reads, 0, 'no readPage');
+    assert.deepEqual(log, ['search'], 'no verifier call');
+    assert.equal(row.status, 'failed');
+    assert.equal(row.message, "That didn't match a Field Notes kind; nothing was added.");
+    assert.equal(filed.length, 0);
+  }
+});

@@ -1,3 +1,5 @@
+import { CONTENT_LEAVES, WANTS } from '@/lib/field-notes/types';
+
 import type { Entry, EntryField, OneBoxInput } from './types';
 
 /**
@@ -14,7 +16,7 @@ export const SHAPES = {
   last_few_days: { label: 'Last Few Days', required: ['url', 'headline'], optional: [], urlField: 'url' },
   stories: { label: 'Stories, Morning Download', required: ['headline', 'url'], optional: [], urlField: 'url' },
   explainers: { label: 'Explainers', required: ['title', 'sourceUrl'], optional: [], urlField: 'sourceUrl' },
-  field_notes: { label: 'Field Notes', required: ['url'], optional: ['leaf', 'want'], urlField: 'url' },
+  field_notes: { label: 'Field Notes', required: ['url', 'leaf', 'want'], optional: [], urlField: 'url' },
 } as const satisfies Record<string, Shape>;
 
 export type ShapeKey = keyof typeof SHAPES;
@@ -27,9 +29,13 @@ export function shapeKey(input: Pick<OneBoxInput, 'vertical'>): ShapeKey {
 
 export const shapeOf = (input: Pick<OneBoxInput, 'vertical'>): Shape => SHAPES[shapeKey(input)];
 
-/** The fields that are missing or blank (empty when the entry is complete). */
+/** Field Notes' leaf and want count only when they are on its lists. */
+const valid = (f: EntryField, v: string | undefined): boolean =>
+  f === 'leaf' ? CONTENT_LEAVES.some((x) => x === v) : f === 'want' ? WANTS.some((x) => x === v) : !!v?.trim();
+
+/** The fields that are missing, blank or (leaf, want) not on the lists: empty when the entry is complete. */
 export function missingFields(shape: Shape, entry: Entry): EntryField[] {
-  return shape.required.filter((f) => !entry[f]?.trim());
+  return shape.required.filter((f) => !valid(f, entry[f]));
 }
 
 /** The page this entry stands on: its url / sourceUrl. */
