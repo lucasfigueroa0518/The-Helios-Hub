@@ -132,7 +132,10 @@ async function main() {
       // One-box seeds (Trivia, Real or AI?): at most one claimed per poll, after the tick, never inside it. social_hub.seed_requests is
       // in the shared database (the hub's own connection); a failure here is logged and the loop goes on.
       try {
-        const seeded = await runClaimedSeed({ q: (text, params) => dbQuery(text, params as never) as never, runner: 'stories', deps: seedDepsFactories(deps) });
+        const seeded = await runClaimedSeed({
+          q: (text, params) => dbQuery(text, params as never) as never, runner: 'stories', deps: seedDepsFactories(deps),
+          log: (message, err) => log(`${message}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`),
+        });
         if (seeded) log(`seed request ${seeded.id} ran`);
       } catch (err) {
         log(`seed request failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);

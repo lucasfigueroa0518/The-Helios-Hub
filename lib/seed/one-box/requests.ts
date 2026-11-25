@@ -12,10 +12,14 @@ export const STALE_MINUTES = 6;
 export const MAX_WORKING = 3;
 export const SAME_BLURB_SECONDS = 60;
 export const QUEUED_MAX_MINUTES = 120;
+/** Real or AI? (photo search, screens, up to two images) and AI Drama (a producer turn can outlast 6 minutes) wait longer. */
 export const STALE_MINUTES_ROA = 10;
+export const STALE_MINUTES_DRAMA = 10;
 const WAITING_BUSY_MINUTES = 1;
 
-const staleMinutesFor = (vertical: string) => (vertical === 'real_or_ai' ? STALE_MINUTES_ROA : STALE_MINUTES);
+export const staleMinutesFor = (vertical: string) =>
+  vertical === 'real_or_ai' ? STALE_MINUTES_ROA : vertical === 'reel_ai_drama' ? STALE_MINUTES_DRAMA : STALE_MINUTES;
+const LONGEST_STALE_MINUTES = Math.max(STALE_MINUTES, STALE_MINUTES_ROA, STALE_MINUTES_DRAMA);
 
 export type Card = {
   id: string;
@@ -29,16 +33,19 @@ export type Card = {
   cancellable: boolean;
 };
 
-const staleBefore = (now: Date) => new Date(now.getTime() - STALE_MINUTES * 60_000).toISOString();
+const minutesBefore = (now: Date, minutes: number) => new Date(now.getTime() - minutes * 60_000);
 
-/** How many requests are genuinely still running (stale ones do not count; a request waiting in a worker's queue does not either). */
+/**
+ * How many requests are genuinely still running: each row against its own type's cutoff (staleMinutesFor), so a stale one
+ * does not count; a request waiting in a worker's queue does not either.
+ */
 export async function workingCount(q: Query, now = new Date()): Promise<number> {
   const { rows } = await q(
-    `SELECT count(*)::int AS n FROM social_hub.seed_requests
+    `SELECT vertical, updated_at FROM social_hub.seed_requests
       WHERE status = 'working' AND updated_at > $1::timestamptz AND (runner = 'vercel' OR stage <> 'queued')`,
-    [staleBefore(now)],
+    [minutesBefore(now, LONGEST_STALE_MINUTES).toISOString()],
   );
-  return Number(rows[0]?.n ?? 0);
+  return rows.filter((r) => new Date(r.updated_at as string | Date).getTime() > minutesBefore(now, staleMinutesFor(r.vertical as string)).getTime()).length;
 }
 
 /** Open a request. The same blurb in the same pool inside a minute is the first click (`reused`); a fourth running request is refused. */

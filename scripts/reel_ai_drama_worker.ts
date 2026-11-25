@@ -206,7 +206,10 @@ async function main(): Promise<void> {
           if (!anthropicApiKey) return;
           // Loaded here, so a module that fails to load fails only this step, never the worker.
           const { runClaimedSeed } = await import('@/lib/seed/one-box/workers');
-          const seeded = await runClaimedSeed({ q: seedQuery, runner: 'drama', deps: { drama: () => liveDramaSeedDeps(db) } });
+          const seeded = await runClaimedSeed({
+            q: seedQuery, runner: 'drama', deps: { drama: () => liveDramaSeedDeps(db) },
+            log: (message, err) => log('seed_error', { message, error: err instanceof Error ? err.stack ?? err.message : String(err) }),
+          });
           if (seeded) log('seed_done', { id: seeded.id });
         },
         // Once a New York day, whatever Generate says: re-rank and retire stale news (no model call).

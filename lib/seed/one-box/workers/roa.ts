@@ -11,6 +11,8 @@
  *            cost goes in the ledger. Both pooled payloads carry `seed: true` (Yours, never cut by a cap).
  *   reserve  the reveal and the Jev screens inside intake are not gated: the type's reserve covers them. The reveal's cost is
  *            still added to what the card shows.
+ *   stage    'writing' before the writer, 'making' before the photo search and again before each image; each refresh writes
+ *            the real time (the runner's clock), so a long seed's card does not read as timed out.
  *   cap      the Real or AI? pool cap runs as usual afterwards (seeded rows are exempt).
  *   end      done with the real photo's key (and "The real photo was added; the AI twin didn't pass." when only it pooled), or
  *            failed with the reason. Never throws.
@@ -74,8 +76,17 @@ const MAX_MESSAGE = 600;
 const clip = (s: string) => (s.length > MAX_MESSAGE ? `${s.slice(0, MAX_MESSAGE - 1)}…` : s);
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-export async function runRoaSeed(i: { q: Query; id: string; input: OneBoxInput; deps: RoaDailyDeps; ledger: Ledger }): Promise<void> {
+export async function runRoaSeed(i: {
+  q: Query;
+  id: string;
+  input: OneBoxInput;
+  deps: RoaDailyDeps;
+  ledger: Ledger;
+  /** The time each stage refresh writes (the card's stale clock); tests advance it. Never `deps.now`, the run's start. */
+  clock?: () => Date;
+}): Promise<void> {
   const { q, id, input, deps, ledger } = i;
+  const clock = i.clock ?? (() => new Date());
   const model = deps.settings.models.copy;
   // The seed writer: each call priced from the exact request first, its actual cost into the ledger.
   const write: WriterCreate = async (params) => {
@@ -96,7 +107,7 @@ export async function runRoaSeed(i: { q: Query; id: string; input: OneBoxInput; 
   let failed = 'The writer failed';
   try {
     const day = poolDay(deps.now);
-    await setStage(q, id, 'writing', cost(), deps.now);
+    await setStage(q, id, 'writing', cost(), clock());
     const { ctx, known, photoBank } = await openRoaRun({ ...deps, write: intakeWrite }, rec, day);
     const mat: RoaSeedMaterial = { subject: input.blurb, today: day, recent: known.recent };
     const out = (await writeStructured<RoaWriteOut>({
@@ -116,10 +127,15 @@ export async function runRoaSeed(i: { q: Query; id: string; input: OneBoxInput; 
     }
 
     failed = 'Making the images failed';
-    await setStage(q, id, 'making', cost(), deps.now);
+    await setStage(q, id, 'making', cost(), clock());
     const res = await runRoaSpec(ctx, spec, {
       seed: true,
-      beforeImage: () => ledger.canAfford(ROA_IMAGE_WORST_USD),
+      beforeImage: async () => {
+        if (!ledger.canAfford(ROA_IMAGE_WORST_USD)) return false;
+        // Each image refreshes the card, so the photo search, screens and images never read as timed out.
+        await setStage(q, id, 'making', cost(), clock());
+        return true;
+      },
       onImageUsd: (usd) => ledger.add(usd),
     });
     if (res.pooled.length) await capRoaPool(deps.db, deps.now).catch(() => undefined);

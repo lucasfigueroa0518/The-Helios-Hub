@@ -43,6 +43,8 @@ export async function runClaimedSeed(i: {
   /** Tests stub the runners. */
   run?: Partial<SeedRunners>;
   now?: Date;
+  /** The worker's logger: told the cause when a runner throws, and when failing the request fails too. */
+  log?: (message: string, err: unknown) => void;
 }): Promise<{ id: string } | null> {
   const claimed = await claimRequest(i.q, i.runner, i.now);
   if (!claimed) return null;
@@ -62,8 +64,10 @@ export async function runClaimedSeed(i: {
     const route = routes[input.vertical];
     if (!route) throw new Error(`no ${i.runner} runner for ${input.vertical}`);
     await route();
-  } catch {
-    await failRequest(i.q, id, WORKER_ERROR, ledger.spent).catch(() => {});
+  } catch (err) {
+    // The card keeps the plain message; the cause goes to the worker's log.
+    i.log?.(`seed request ${id} (${input.vertical}) threw`, err);
+    await failRequest(i.q, id, WORKER_ERROR, ledger.spent).catch((failErr: unknown) => i.log?.(`seed request ${id}: could not mark it failed`, failErr));
   }
   return { id };
 }

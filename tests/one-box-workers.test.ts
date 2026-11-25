@@ -74,6 +74,29 @@ test('a runner that throws leaves the request failed and returns', async () => {
   assert.match(r.message, /nothing was added/);
 });
 
+// Final fixes 6: the cause is logged, and so is a failure of failRequest itself; the stored message stays the same.
+test('a runner that throws: log receives the error; a failRequest that fails is logged too', async () => {
+  const q = await db();
+  const a = await createRequest(q, input('ai_trivia', 'moon facts'));
+  const s = stubs();
+  const boom = new Error('boom');
+  const run = { ...s.run, trivia: (async () => { throw boom; }) as never };
+  const logged: Array<{ msg: string; err: unknown }> = [];
+  const log = (msg: string, err: unknown) => void logged.push({ msg, err });
+  await runClaimedSeed({ q, runner: 'stories', deps: s.deps, run, log });
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0]!.err, boom);
+  assert.match(logged[0]!.msg, new RegExp(a.id));
+  assert.equal((await row(q, a.id)).message, "The worker hit an error; nothing was added.");
+
+  const b = await createRequest(q, input('ai_trivia', 'sun facts'));
+  const down = new Error('db down');
+  const failing: Query = async (text, params) => { if (/SET status = 'failed'/.test(text)) throw down; return q(text, params); };
+  logged.length = 0;
+  assert.deepEqual(await runClaimedSeed({ q: failing, runner: 'stories', deps: s.deps, run, log }), { id: b.id });
+  assert.deepEqual(logged.map((l) => l.err), [boom, down]);
+});
+
 test('deps that cannot be built fail the request too', async () => {
   const q = await db();
   const a = await createRequest(q, input('real_or_ai', 'a goat'));

@@ -137,8 +137,8 @@ export type RoaSpecCtx = {
 export type RoaSpecOpts = {
   /** Mark each pooled image's payload `seed: true` (a one-box seed: Yours, never cut by a cap). */
   seed?: boolean;
-  /** Asked before each AI image call; false skips the call (the spec ends there). */
-  beforeImage?: () => boolean;
+  /** Asked (and awaited) before each AI image call; false skips the call (the spec ends there). */
+  beforeImage?: () => boolean | Promise<boolean>;
   /** Told each AI image's actual cost right after it is made. */
   onImageUsd?: (usd: number) => void;
 };
@@ -218,7 +218,7 @@ export async function runRoaSpec(ctx: RoaSpecCtx, s: RoaSpec, opts: RoaSpecOpts 
     return { ...best.photo, screened: best.screened };
   };
   const ai = async () => {
-    if (opts.beforeImage && !opts.beforeImage()) return null;
+    if (opts.beforeImage && !(await opts.beforeImage())) return null;
     const made = await generateAiImage({ db, image: ctx.image, now }, s.aiPrompt);
     rec.imageUsd = Number((rec.imageUsd + made.usd).toFixed(4));
     opts.onImageUsd?.(made.usd);

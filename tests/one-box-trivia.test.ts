@@ -341,3 +341,21 @@ test('at the cap, with every active theme full of maximum-length questions, the 
   assert.ok(worst < ledger.usable, `${worst} < ${ledger.usable}`);
   assert.equal((await requestRow(q, id)).status, 'done');
 });
+
+// Final fixes 2: every stage refresh writes the real time (the runner's clock), not the run's start, so updated_at moves on.
+test('a trivia seed\'s stage refresh moves updated_at forward', async () => {
+  const { db, q, id, input } = await setup();
+  const stages: Array<{ stage: string; at: string }> = [];
+  const spy: Query = async (text, params) => {
+    if (/SET stage = \$2/.test(text)) stages.push({ stage: String(params![1]), at: String(params![3]) });
+    return q(text, params);
+  };
+  let tick = 0;
+  const clock = () => new Date(NOW.getTime() + ++tick * 60_000);
+  const write = stubWriter({ submit_trivia: () => ({ questions: [item('t08a12')], spent_cells: [] }) });
+  await runTriviaSeed({ q: spy, id, input, deps: deps(db, write), ledger: new Ledger('ai_trivia'), clock });
+  assert.deepEqual(stages.map((s) => s.stage), ['writing', 'writing', 'filing']);
+  assert.ok(stages.every((s) => s.at !== NOW.toISOString()), 'never the run\'s start time');
+  for (let n = 1; n < stages.length; n++) assert.ok(stages[n]!.at > stages[n - 1]!.at, 'each refresh is later');
+  assert.equal((await requestRow(q, id)).status, 'done');
+});

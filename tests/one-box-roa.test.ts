@@ -281,6 +281,23 @@ test('a writer failure fails the card and never throws', async () => {
   assert.match(row.message!, /API down/);
 });
 
+// Final fixes 2: every stage refresh writes the real time, and the stage moves between the writer and each image.
+test('a Real or AI? seed\'s stage refresh moves updated_at forward: writing, making, then once before each image', async () => {
+  const { db, q, id, input } = await setup();
+  const stages: Array<{ stage: string; at: string }> = [];
+  const spy: Query = async (text, params) => {
+    if (/SET stage = \$2/.test(text)) stages.push({ stage: String(params![1]), at: String(params![3]) });
+    return q(text, params);
+  };
+  let tick = 0;
+  const clock = () => new Date(NOW.getTime() + ++tick * 60_000);
+  await runRoaSeed({ q: spy, id, input, deps: deps(db, { write: writer(), image: stubImages(0.04) }), ledger: new Ledger('real_or_ai'), clock });
+  assert.deepEqual(stages.map((s) => s.stage), ['writing', 'making', 'making']);
+  assert.ok(stages.every((s) => s.at !== NOW.toISOString()), 'never the run\'s start time');
+  for (let n = 1; n < stages.length; n++) assert.ok(stages[n]!.at > stages[n - 1]!.at, 'each refresh is later');
+  assert.equal((await requestRow(q, id)).status, 'done');
+});
+
 /* The daily run's behavior is unchanged: the same fixture (with a twin) pools the same rows as before the extraction. */
 
 const DAILY_SPECS = [

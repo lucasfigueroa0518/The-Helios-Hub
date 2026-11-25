@@ -14,6 +14,9 @@
  *              visuals check capped at min(setting, what the ledger has left), and held when tonight's cap is reached.
  *              Jev and visuals costs are recorded against the pitch and added to the ledger afterwards (reserve 0: Jev is
  *              about free and the visuals check stops at its cap).
+ *   low        under MIN_CHECK_USD left in the ledger before the checks: no check, held (below).
+ *   stage      'writing' before the producer and again before each producer turn, 'checking' before the checks; each
+ *              refresh writes the real time (the runner's clock), so a long seed's card does not read as timed out.
  *   end        pooled → done with the pitch id; duplicate or rejected → failed with the reason; held → failed, the pitch
  *              left `new` for the next development session. Never throws.
  *
@@ -54,6 +57,8 @@ import type { OneBoxInput } from '../types';
 export const CAP_REACHED_TEXT = "Tonight's development cap is reached; nothing was spent.";
 export const HELD_TEXT = 'Held at the development cap; it will be checked in the next session.';
 export const NONE_TEXT = 'The producer found no story there that passes the story test; nothing was added.';
+/** Under this much left in the seed's ledger, the checks are not started: the pitch stays `new` for the next session. */
+export const MIN_CHECK_USD = 0.02;
 
 /**
  * Assumptions, not measurements (retune from the first live seeds' reel_ai_drama.cost_events, component producer_seed):
@@ -128,8 +133,11 @@ export async function runDramaSeed(i: {
   now: Date;
   /** Tests stub the checks. */
   check?: typeof checkPitch;
+  /** The time each stage refresh writes (the card's stale clock); tests advance it. `now` stays the run's start (tonight's window). */
+  clock?: () => Date;
 }): Promise<void> {
   const { q, id, input, db, deps, settings, ledger, now } = i;
+  const clock = i.clock ?? (() => new Date());
   const model = settings.producer_model;
   const nightStart = refillNightStart(now);
   const story: SeedStory = { blurb: input.blurb, link: input.link ?? null, today: isoDate(now) };
@@ -151,11 +159,13 @@ export async function runDramaSeed(i: {
         limited = true;
         throw new SeedLimitError();
       }
+      // Each producer turn refreshes the card, so a long seed is not read as timed out.
+      await setStage(q, id, 'writing', ledger.spent, clock());
       const res = await deps.producer.create(params);
       ledger.add(Number(priceAnthropicMessages([res as unknown as MessageUsageLike], { modelId: res.model || String(params.model ?? model) }).costUsd));
       return res;
     };
-    await setStage(q, id, 'writing', ledger.spent);
+    await setStage(q, id, 'writing', ledger.spent, clock());
     let candidates: unknown[];
     try {
       candidates = (await produceSeedPitch({ db, create, loadPrompt: deps.producer.loadPrompt, model, sessionId: null }, story)).candidates;
@@ -178,7 +188,13 @@ export async function runDramaSeed(i: {
     }
 
     pitchId = await insertSeedPitch(db, ok.pitch);
-    await setStage(q, id, 'checking', ledger.spent);
+    // Too little left for the checks: held, the pitch left `new` for the next development session.
+    if (ledger.remaining() < MIN_CHECK_USD) {
+      checksAdded = true;
+      await failRequest(q, id, HELD_TEXT, ledger.spent);
+      return;
+    }
+    await setStage(q, id, 'checking', ledger.spent, clock());
     const jev = new RecordingDramaJevRunner(deps.jevTransport, db, { mode: 'development', sessionId: null });
     const outcome = await (i.check ?? checkPitch)(
       {

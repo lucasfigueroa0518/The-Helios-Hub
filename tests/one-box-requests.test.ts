@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import { cancelOrDismiss, cancelRequest, claimRequest, createRequest, dismissRequest, doneRequest, failRequest, listCards, setStage } from '@/lib/seed/one-box/requests';
+import { cancelOrDismiss, cancelRequest, claimRequest, createRequest, dismissRequest, doneRequest, failRequest, listCards, setStage, workingCount } from '@/lib/seed/one-box/requests';
 import type { OneBoxInput } from '@/lib/seed/one-box/types';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -208,4 +208,20 @@ test('only a queued worker card can be cancelled from the card', async () => {
   await claimRequest(q, 'stories', minutes(1));
   assert.equal((await listCards(q, 'ai_trivia', minutes(1)))[0]!.cancellable, false);
   void t; void r;
+});
+
+// Final fixes 2: AI Drama's producer turn can outlast 6 minutes, so a claimed drama request waits 10, like Real or AI?; and the
+// three-at-once count uses each row's own cutoff.
+test('a claimed reel_ai_drama request stays working at 8 minutes; workingCount uses each row\'s own cutoff', async () => {
+  const q = await db();
+  const d = await createRequest(q, { vertical: 'reel_ai_drama', blurb: 'drama' }, NOW);
+  await createRequest(q, input('a reel'), NOW);
+  assert.ok(await claimRequest(q, 'drama', NOW));
+  assert.equal((await listCards(q, 'reel_ai_drama', minutes(8)))[0]!.status, 'working');
+  assert.equal((await listCards(q, 'reels', minutes(8)))[0]!.status, 'failed', 'a reel still times out at 6');
+  assert.equal(await workingCount(q, minutes(8)), 1, 'the drama row counts at 8 minutes; the stale reel does not');
+  assert.equal(await workingCount(q, minutes(11)), 0);
+  assert.equal((await listCards(q, 'reel_ai_drama', minutes(11)))[0]!.status, 'failed');
+  await setStage(q, d.id, 'checking', 0.1, minutes(9));
+  assert.equal(await workingCount(q, minutes(18)), 1, 'a stage refresh restarts its clock');
 });

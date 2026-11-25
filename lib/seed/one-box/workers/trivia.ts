@@ -9,6 +9,8 @@
  *              material, every open active cell offered, at most SEED_ASKED_PER_THEME asked per theme, SEED_QUESTIONS questions. Then, as on the daily path: the validator,
  *              the repeat check, the shorten retry, numbering, Jev, the pool score and the deposit of cited pages. Each pooled
  *              payload carries `seed: true` (Yours, never cut by a cap).
+ *   stage      'writing' before the writer and again before each writer turn, 'filing' once a question pooled; each refresh
+ *              writes the real time (the runner's clock), so a long seed's card does not read as timed out.
  *   cap        the trivia pool cap runs as usual afterwards.
  *   end        doneRequest with the first pooled key (also when a later step throws), or failRequest with the reasons.
  *              Never throws.
@@ -95,8 +97,17 @@ function failureText(rec: TriviaDailyRecord): string {
   return clip(`No question passed the checks; nothing was added. ${reasons}`);
 }
 
-export async function runTriviaSeed(i: { q: Query; id: string; input: OneBoxInput; deps: TriviaDailyDeps; ledger: Ledger }): Promise<void> {
+export async function runTriviaSeed(i: {
+  q: Query;
+  id: string;
+  input: OneBoxInput;
+  deps: TriviaDailyDeps;
+  ledger: Ledger;
+  /** The time each stage refresh writes (the card's stale clock); tests advance it. Never `deps.now`, the run's start. */
+  clock?: () => Date;
+}): Promise<void> {
   const { q, id, input, deps, ledger } = i;
+  const clock = i.clock ?? (() => new Date());
   const model = deps.settings.models.copy;
   let size: SeedCallSize | null = null;
   let writerTurns = 0;
@@ -105,6 +116,8 @@ export async function runTriviaSeed(i: { q: Query; id: string; input: OneBoxInpu
   const write: WriterCreate = async (params) => {
     const searching = Array.isArray(params.tools) && (params.tools as Array<{ name?: string }>).some((t) => t?.name === 'web_search');
     if (searching && writerTurns++ > 0 && (!size || !ledger.canAfford(triviaSeedTurnWorstCaseUsd(size, model)))) throw new SeedLimitError();
+    // Each writer turn (and the shortening try) refreshes the card, so a long seed is not read as timed out.
+    await setStage(q, id, 'writing', ledger.spent, clock());
     const res = await deps.write(params);
     ledger.add(responseCostUsd(res, String(params.model ?? model)));
     return res;
@@ -121,7 +134,7 @@ export async function runTriviaSeed(i: { q: Query; id: string; input: OneBoxInpu
       await failRequest(q, id, 'Every trivia cell is retired; nothing was added.', ledger.spent);
       return;
     }
-    await setStage(q, id, 'writing', ledger.spent, deps.now);
+    await setStage(q, id, 'writing', ledger.spent, clock());
     rec = {
       day: poolDay(deps.now), at: deps.now.toISOString(), offered: cells.map((c) => c.cellId),
       pooled: [], rejected: [], shortened: [], dropped: [], spent: [], retired: [],
@@ -137,6 +150,8 @@ export async function runTriviaSeed(i: { q: Query; id: string; input: OneBoxInpu
       },
       canShorten: () => ledger.canAfford(triviaShortenWorstCaseUsd(model)),
     });
+    // Pooled rows exist from here on: a card that goes stale now reads "may have been added".
+    if (rec.pooled[0]) await setStage(q, id, 'filing', ledger.spent, clock());
     await finish(q, id, deps, ledger, rec);
   } catch (err) {
     // A question already pooled stays the seed's result.

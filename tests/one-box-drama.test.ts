@@ -25,7 +25,7 @@ import type { JevTransport } from '@/lib/reels/jev/runner';
 import { Ledger, limitText } from '@/lib/seed/one-box/budget';
 import { claimRequest, createRequest } from '@/lib/seed/one-box/requests';
 import { runClaimedSeed } from '@/lib/seed/one-box/workers';
-import { CAP_REACHED_TEXT, dramaSeedWorstCaseUsd, runDramaSeed } from '@/lib/seed/one-box/workers/drama';
+import { CAP_REACHED_TEXT, HELD_TEXT, dramaSeedWorstCaseUsd, runDramaSeed } from '@/lib/seed/one-box/workers/drama';
 import { dramaPollSteps, runPollPass } from '@/lib/reel-ai-drama/worker-poll';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -299,4 +299,47 @@ test('the seeds step runs while the night step would also run, and neither block
   await pass({ nightThrows: true });
   assert.deepEqual(seeded, ['first story', 'second story', 'third story']);
   assert.ok(order.includes('night') && order.includes('seeds'));
+});
+
+// Final fixes 2: every stage refresh writes the real time; the stage refreshes on each producer turn and moves to checking.
+test('a drama seed\'s stage refresh moves updated_at forward: writing on each producer turn, then checking', async () => {
+  const { db, q, id, input } = await setup();
+  const stages: Array<{ stage: string; at: string }> = [];
+  const spy: Query = async (text, params) => {
+    if (/SET stage = \$2/.test(text)) stages.push({ stage: String(params![1]), at: String(params![3]) });
+    return q(text, params);
+  };
+  let tick = 0;
+  const clock = () => new Date(NOW.getTime() + ++tick * 60_000);
+  const producer = stubProducer([{ ...pitch(), typicality: 0.3 }], { pause: { input_tokens: 2000 } });
+  await runDramaSeed({ q: spy, id, input, db, deps: devDeps(db, producer.create, stubJev(3.6)), settings: DEFAULT_SETTINGS, ledger: new Ledger('reel_ai_drama'), now: NOW, clock, check: async () => 'pooled' });
+  assert.equal(producer.params.length, 2);
+  assert.deepEqual(stages.map((s) => s.stage), ['writing', 'writing', 'writing', 'checking']);
+  assert.ok(stages.every((s) => s.at !== NOW.toISOString()), 'never the run\'s start time');
+  for (let n = 1; n < stages.length; n++) assert.ok(stages[n]!.at > stages[n - 1]!.at, 'each refresh is later');
+  assert.equal((await requestRow(q, id)).status, 'done');
+});
+
+// Final fixes 12: with under 2 cents left, the checks are not started; the pitch stays new for the next session.
+test('under 2 cents left before checkPitch: no check, the pitch stays new, the card reads held', async () => {
+  const { db, q, id, input } = await setup();
+  const producer = stubProducer([{ ...pitch(), typicality: 0.3 }]);
+  const ledger = new Ledger('reel_ai_drama');
+  // The producer's actual cost leaves less than 2 cents (its worst case is checked before the call, so spend from before).
+  const create: CreateMessage = async (p) => {
+    const res = await producer.create(p);
+    ledger.add(ledger.remaining() - 0.015 - 0.0001 > 0 ? ledger.remaining() - 0.015 : 0);
+    return res;
+  };
+  let checked = 0;
+  await runDramaSeed({ q, id, input, db, deps: devDeps(db, create, stubJev(3.6)), settings: DEFAULT_SETTINGS, ledger, now: NOW, check: async () => (checked++, 'pooled') });
+  assert.ok(ledger.remaining() < 0.02, `remaining ${ledger.remaining()}`);
+  assert.equal(checked, 0, 'checkPitch was not run');
+  const r = await requestRow(q, id);
+  assert.equal(r.status, 'failed');
+  assert.equal(r.message, HELD_TEXT);
+  const rows = await pitches(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.status, 'new');
+  assert.equal(rows[0]!.origin, 'seed');
 });
