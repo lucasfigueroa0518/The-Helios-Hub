@@ -213,7 +213,7 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
     const keys = refreshed.includes(series) ? items.filter((i) => i.series === series).map((i) => i.key) : null;
     const stale = `series = $1 AND used_at IS NULL
           AND key NOT LIKE 'seed:%' AND key NOT LIKE 'trivia:%' AND key NOT LIKE 'roa:%'
-          AND COALESCE((payload->>'seed')::boolean, false) = false
+          AND COALESCE(payload->>'seed', 'false') <> 'true'
           AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))`;
     const { rows } = archive
       ? await db.query<{ id: string }>(
@@ -251,7 +251,7 @@ export async function capTriviaPool(db: Queryable, now: Date = new Date()): Prom
   try {
     const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
-        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE((p.payload->>'seed')::boolean, false) = false
+        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE(p.payload->>'seed', 'false') <> 'true'
           AND p.id IN (${ranked(`AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = $3 AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)`)})
           AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
                            WHERE a.vertical = $3 AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
@@ -262,7 +262,9 @@ export async function capTriviaPool(db: Queryable, now: Date = new Date()): Prom
     dropped = rows;
   } catch {
     const { rows } = await db.query<Dropped>(
-      `DELETE FROM stories.pool p WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.id IN (${ranked('')}) RETURNING p.key, p.payload`,
+      `DELETE FROM stories.pool p
+        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE(p.payload->>'seed', 'false') <> 'true'
+          AND p.id IN (${ranked('')}) RETURNING p.key, p.payload`,
       [TRIVIA_POOL_CAP, TRIVIA_SERVED_CAP],
     );
     dropped = rows;
@@ -287,7 +289,7 @@ export async function capRoaPool(db: Queryable, now: Date = new Date()): Promise
   } catch {
     const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
-        WHERE p.series = $1 AND p.used_at IS NULL
+        WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE(p.payload->>'seed', 'false') <> 'true'
           AND p.id IN (SELECT r.id FROM (SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
                          FROM stories.pool p2 WHERE p2.series = $1 AND p2.used_at IS NULL) r WHERE r.n > $2)
         RETURNING p.key, p.payload`,
@@ -318,7 +320,7 @@ async function capDeleting(db: Queryable, series: Series, cap: number): Promise<
   const vertical = verticalOfSeries(series);
   const { rows } = await db.query<Dropped>(
     `DELETE FROM stories.pool p
-      WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE((p.payload->>'seed')::boolean, false) = false
+      WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE(p.payload->>'seed', 'false') <> 'true'
         AND p.id IN (
           SELECT r.id FROM (
             SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
@@ -360,7 +362,7 @@ async function capSeries(db: Queryable, series: Series, archiveAt: Date | null):
   const vertical = verticalOfSeries(series);
   const live = archiveAt ? 'AND p2.archived_at IS NULL' : '';
   const v = archiveAt ? '$4' : '$3';
-  const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE((p.payload->>'seed')::boolean, false) = false
+  const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE(p.payload->>'seed', 'false') <> 'true'
           AND p.id IN (
             SELECT r.id FROM (
               SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n

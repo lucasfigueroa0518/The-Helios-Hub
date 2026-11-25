@@ -22,6 +22,7 @@ import { ROA_SEED, ROA_WRITE } from '@/lib/stories/roa/prompts';
 import type { RoaVisionTransport } from '@/lib/stories/roa/screen';
 import { SUBJECTS } from '@/lib/stories/roa/types';
 import { openLocalStoriesDb } from '@/lib/stories/local-db';
+import { STORIES_PROMPTS } from '@/lib/stories/prompts';
 import { DEFAULT_SETTINGS } from '@/lib/stories/settings';
 
 import { harnessDb, stubWriter } from './stories-harness';
@@ -151,6 +152,12 @@ test('roa-seed@1: roa-write@3 rules verbatim plus the seed rule; the subject sta
   const item = (ROA_SEED.tool.input_schema as any).properties.specs.items.properties;
   assert.deepEqual(item.subject.enum, [...SUBJECTS, 'none']);
   assert.deepEqual(item.trap.enum, ['twin']);
+});
+
+// Final fixes 10: roa-seed@1 is listed with the other Stories prompts, as trivia-seed@1 is.
+test('STORIES_PROMPTS lists roa-seed@1', () => {
+  assert.ok(STORIES_PROMPTS.includes(ROA_SEED));
+  assert.ok(STORIES_PROMPTS.map((p) => p.id).includes('roa-seed@1'));
 });
 
 test('twin pooled: two keys, both payloads seed true, done', async () => {
