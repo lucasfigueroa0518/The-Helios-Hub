@@ -27,6 +27,8 @@ export type LfdPostRow = {
   fit_problems: unknown;
   render_problems: unknown;
   short: boolean;
+  /** Why the post kept today's cover instead of the AI cover (its run record's cover.fallback); null when it had one or never tried. */
+  cover_fallback?: string | null;
 };
 
 export type LfdAttemptRow = {
@@ -107,7 +109,8 @@ SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.slug, p.ny_date::text 
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
        p.slide_objects,
-       p.fit_problems, p.render_problems, p.short
+       p.fit_problems, p.render_problems, p.short,
+       (SELECT r.record->'cover'->>'fallback' FROM lfd.runs r WHERE r.id = p.run_id) AS cover_fallback
   FROM lfd.posts p
  ORDER BY p.created_at DESC`;
 

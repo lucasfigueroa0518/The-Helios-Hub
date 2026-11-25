@@ -121,49 +121,55 @@ function localFile(pathname: string): string {
  */
 const remotePhotoCache = new Map<string, { body: Buffer; headers: Record<string, string> }>();
 
+/** A page with the post's slides loaded: local files from the repo, remote photos once per process, fonts and images settled. */
+async function openSlidesPage(browser: import('playwright').Browser, post: Post): Promise<import('playwright').Page> {
+  const page = await browser.newPage({ viewport: { width: SLIDE_W, height: SLIDE_H } });
+  // tsx keeps function names with a __name helper; functions passed into the page need it defined.
+  await page.addInitScript(() => {
+    (window as unknown as { __name: (f: unknown) => unknown }).__name = (f) => f;
+  });
+  const html = await slideHtml(post);
+  await page.route(`${ORIGIN}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/__slides') return route.fulfill({ body: html, contentType: 'text/html' });
+    const file = localFile(url.pathname);
+    try {
+      await route.fulfill({ body: await fsp.readFile(file), contentType: MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream' });
+    } catch {
+      await route.fulfill({ status: 404, body: '' });
+    }
+  });
+  // Remote photos: add CORS so the face detector may read their pixels.
+  await page.route((u) => !u.href.startsWith(ORIGIN) && !/fonts\.(googleapis|gstatic)\.com/.test(u.hostname), async (route) => {
+    if (route.request().resourceType() !== 'image') return route.continue();
+    const url = route.request().url();
+    try {
+      let hit = remotePhotoCache.get(url);
+      if (!hit) {
+        const res = await route.fetch();
+        if (!res.ok()) return route.fulfill({ response: res, headers: { ...res.headers(), 'access-control-allow-origin': '*' } });
+        hit = { body: await res.body(), headers: res.headers() };
+        remotePhotoCache.set(url, hit);
+      }
+      await route.fulfill({ status: 200, body: hit.body, headers: { ...hit.headers, 'access-control-allow-origin': '*' } });
+    } catch {
+      await route.abort();
+    }
+  });
+
+  await page.goto(`${ORIGIN}/__slides`, { waitUntil: 'networkidle', timeout: 90_000 });
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }))));
+  });
+  return page;
+}
+
 export const checkRenderFit: FitCheck = async (post, opts = {}) => {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: SLIDE_W, height: SLIDE_H } });
-    // tsx keeps function names with a __name helper; functions passed into the page need it defined.
-    await page.addInitScript(() => {
-      (window as unknown as { __name: (f: unknown) => unknown }).__name = (f) => f;
-    });
-    const html = await slideHtml(post);
-    await page.route(`${ORIGIN}/**`, async (route) => {
-      const url = new URL(route.request().url());
-      if (url.pathname === '/__slides') return route.fulfill({ body: html, contentType: 'text/html' });
-      const file = localFile(url.pathname);
-      try {
-        await route.fulfill({ body: await fsp.readFile(file), contentType: MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream' });
-      } catch {
-        await route.fulfill({ status: 404, body: '' });
-      }
-    });
-    // Remote photos: add CORS so the face detector may read their pixels.
-    await page.route((u) => !u.href.startsWith(ORIGIN) && !/fonts\.(googleapis|gstatic)\.com/.test(u.hostname), async (route) => {
-      if (route.request().resourceType() !== 'image') return route.continue();
-      const url = route.request().url();
-      try {
-        let hit = remotePhotoCache.get(url);
-        if (!hit) {
-          const res = await route.fetch();
-          if (!res.ok()) return route.fulfill({ response: res, headers: { ...res.headers(), 'access-control-allow-origin': '*' } });
-          hit = { body: await res.body(), headers: res.headers() };
-          remotePhotoCache.set(url, hit);
-        }
-        await route.fulfill({ status: 200, body: hit.body, headers: { ...hit.headers, 'access-control-allow-origin': '*' } });
-      } catch {
-        await route.abort();
-      }
-    });
-
-    await page.goto(`${ORIGIN}/__slides`, { waitUntil: 'networkidle', timeout: 90_000 });
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-      await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }))));
-    });
+    const page = await openSlidesPage(browser, post);
 
     const problems: string[] = [];
 
@@ -374,4 +380,60 @@ async function screenshots(page: import('playwright').Page, dir: string, name: s
     .composite(tiles.map((input, i) => ({ input, left: gap + (i % cols) * (tw + gap), top: gap + Math.floor(i / cols) * (th + gap) })))
     .png()
     .toFile(path.join(dir, `${name}-contact-sheet.png`));
+}
+
+/** A video slide's three layers and where its photo area sits on the slide (MD-LFD D19). */
+export type SlideLayers = { under: Buffer; matte: Buffer; over: Buffer; box: { x: number; y: number; w: number; h: number } };
+
+/**
+ * Layer switches for a Last Few Days story slide (see lfdSlideLayers). Only active while a frame carries data-layer.
+ *   under  the slide with no text, no photo and no photo border: the canvas and the photo box's own fill and shadow
+ *   matte  white where the photo shows (the photo box with its rounded corners), black elsewhere
+ *   over   only what is drawn over the photo or beside it: the text, the arrow, the photo box's border, on transparent
+ */
+const LFD_LAYER_CSS = `
+html, body { background: transparent !important; }
+.fit-frame[data-layer="under"] .lfd-text, .fit-frame[data-layer="under"] .lfd-swipe, .fit-frame[data-layer="under"] .lfd-media > * { visibility: hidden !important; }
+.fit-frame[data-layer="under"] .lfd-media::after { content: none !important; }
+.fit-frame[data-layer="matte"] { background: #000 !important; }
+.fit-frame[data-layer="matte"] * { visibility: hidden !important; }
+.fit-frame[data-layer="matte"] .lfd-media { visibility: visible !important; background: #fff !important; box-shadow: none !important; }
+.fit-frame[data-layer="matte"] .lfd-media > * { visibility: hidden !important; }
+.fit-frame[data-layer="matte"] .lfd-media::after { content: none !important; }
+.fit-frame[data-layer="over"] { background: transparent !important; }
+.fit-frame[data-layer="over"] * { visibility: hidden !important; }
+.fit-frame[data-layer="over"] .lfd-text, .fit-frame[data-layer="over"] .lfd-text *, .fit-frame[data-layer="over"] .lfd-swipe, .fit-frame[data-layer="over"] .lfd-swipe * { visibility: visible !important; }
+.fit-frame[data-layer="over"] .lfd-media { visibility: visible !important; background: transparent !important; box-shadow: none !important; }
+.fit-frame[data-layer="over"] .lfd-media > * { visibility: hidden !important; }
+`;
+
+/**
+ * The three layers of one Last Few Days story slide (`position` indexes post.slides), laid out exactly as its JPEG
+ * (the same HTML, CSS and text fit): lib/video-finder/band.ts composeFrameVideo plays the clip between them.
+ */
+export async function lfdSlideLayers(post: Post, position: number): Promise<SlideLayers> {
+  const slide = post.slides[position];
+  if (!slide || slide.layoutVariant !== 'lfd_story') throw new Error(`slide ${position + 1} is not a Last Few Days story slide`);
+  const { chromium } = await import('playwright');
+  const browser = await chromium.launch();
+  try {
+    // One slide alone: a story slide's layout depends only on its own copy and canvas.
+    const page = await openSlidesPage(browser, { ...post, slides: [slide] });
+    await page.evaluate(`[...document.querySelectorAll('.fit-frame')].map((frame) => (${fitText.toString()})(frame))`);
+    await page.addStyleTag({ content: LFD_LAYER_CSS });
+    const frame = (await page.$('.fit-frame'))!;
+    const box = await page.evaluate(() => {
+      const f = document.querySelector('.fit-frame')!.getBoundingClientRect();
+      const m = document.querySelector('.fit-frame .lfd-media')?.getBoundingClientRect();
+      return m && m.width > 0 && m.height > 0 ? { x: Math.round(m.left - f.left), y: Math.round(m.top - f.top), w: Math.round(m.width), h: Math.round(m.height) } : null;
+    });
+    if (!box) throw new Error('the slide has no photo area to play a video in');
+    const shot = async (layer: 'under' | 'matte' | 'over') => {
+      await page.evaluate((l) => document.querySelector('.fit-frame')!.setAttribute('data-layer', l), layer);
+      return frame.screenshot({ type: 'png', omitBackground: layer === 'over' });
+    };
+    return { under: await shot('under'), matte: await shot('matte'), over: await shot('over'), box };
+  } finally {
+    await browser.close();
+  }
 }

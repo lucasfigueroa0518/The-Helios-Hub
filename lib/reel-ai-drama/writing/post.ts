@@ -1,4 +1,6 @@
 import { loadPrompt } from '@/lib/reel-ai-drama/prompts';
+import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
+import { readHeliosVoice } from '@/lib/social/voice/voice';
 import { DEFAULT_SETTINGS, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { FactSheet, PostText, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
 import { runSubmit, section } from '@/lib/reel-ai-drama/writing/llm';
@@ -29,19 +31,33 @@ export function creditsFor(inventory: VisualsInventory, usedAssetIds: string[]):
   return out;
 }
 
-export function validateCaption(raw: unknown): { value: string | null; problems: string[] } {
-  const caption = typeof (raw as { caption?: unknown })?.caption === 'string' ? (raw as { caption: string }).caption.trim() : '';
+/** One plain hashtag: `#` then letters, digits or underscores. */
+const HASHTAG = /^#[\p{L}\p{N}_]+$/u;
+
+export function validateCaption(raw: unknown): { value: { caption: string; hashtags: string[] } | null; problems: string[] } {
+  const r = (raw ?? {}) as { caption?: unknown; hashtags?: unknown };
+  const caption = typeof r.caption === 'string' ? r.caption.trim() : '';
+  const hashtags = (Array.isArray(r.hashtags) ? r.hashtags : [])
+    .filter((t): t is string => typeof t === 'string')
+    .map((t) => t.trim().replace(/^#?/, '#'))
+    .filter((t) => t !== '#');
   const problems: string[] = [];
   if (!caption) problems.push('the caption is empty');
   if (caption.length > CAPTION_MAX_CHARS) problems.push(`the caption runs ${caption.length} characters; keep it under ${CAPTION_MAX_CHARS}`);
-  const tags = caption.match(/#[\p{L}\p{N}_]+/gu) ?? [];
-  if (tags.length > MAX_HASHTAGS) problems.push(`the caption has ${tags.length} hashtags; at most ${MAX_HASHTAGS}`);
-  return { value: caption || null, problems };
+  if (/#[\p{L}\p{N}_]/u.test(caption)) problems.push('the caption has a hashtag; hashtags go in `hashtags` only');
+  if (/\?\s*$/.test(caption)) problems.push('the caption ends on a question; code adds the comment question');
+  if (HELIOS_NAME.test(caption)) problems.push('the caption names Helios; code adds the Helios line');
+  if (caption.includes('\u2014')) problems.push('the caption has an em dash');
+  if (hashtags.length === 0 || hashtags.length > MAX_HASHTAGS) problems.push(`give one to ${MAX_HASHTAGS} hashtags; you gave ${hashtags.length}`);
+  const bad = hashtags.find((t) => !HASHTAG.test(t));
+  if (bad) problems.push(`"${bad}" is not a plain hashtag`);
+  return { value: caption ? { caption, hashtags } : null, problems };
 }
 
 /**
- * P9 post text: the model writes the caption; code adds the credits and the comment question, which
- * is the question spoken over the close, so the viewer hears and reads the same one.
+ * P9 post text: the model writes the caption and its hashtags in the shared Helios voice; code adds the
+ * comment question (the one spoken over the close, so the viewer hears and reads the same one), the
+ * Helios line and the credits (publish.ts composeDramaCaption).
  */
 export async function writePost(
   deps: WritingDeps,
@@ -52,7 +68,7 @@ export async function writePost(
   const result = await runSubmit(deps.create, deps, {
     component: 'post_text',
     model: postModel(settings),
-    system: loadPrompt('post-text', deps.root),
+    system: `${readHeliosVoice(deps.root)}\n\n# This caption\n\n${loadPrompt('post-text', deps.root)}`,
     user: [section('Title', input.draft.title), section('Script', script), section('Fact sheet', input.facts)].join('\n\n'),
     tool: SUBMIT_CAPTION_TOOL,
     maxTokens: 4_000,
@@ -60,5 +76,5 @@ export async function writePost(
     parse: validateCaption,
   });
   deps.onSpend?.('post_text', result.usd);
-  return { caption: result.value, credits: creditsFor(input.inventory, input.usedAssetIds), question: input.draft.close_question };
+  return { caption: result.value.caption, hashtags: result.value.hashtags, credits: creditsFor(input.inventory, input.usedAssetIds), question: input.draft.close_question };
 }

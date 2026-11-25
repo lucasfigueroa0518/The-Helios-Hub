@@ -9,6 +9,10 @@ description: >-
 
 # Explainer caption
 
+> **Current rules live in `lib/explainers/caption.ts` (`explainer-caption-v15`).** This file predates
+> v9 to v15: there is no save ask and no model-written Helios line. The caption is a short explanation,
+> then a code-built "Want to learn more?" prompt for the viewer's own AI, then the Helios line and hashtags.
+
 The caption is the Instagram text under a 45-second Explainer Reel (AI Brain
 Break). Write it the way the best AI tips pages do: a hook that names a problem
 the viewer already has, a short why in the viewer's world, one clear ask (save

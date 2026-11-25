@@ -36,6 +36,7 @@ export function lfdReviewNotes(row: LfdPostRow): string[] {
     ...(row.short ? [`Short post: only ${n} ${n === 1 ? 'story' : 'stories'}.`] : []),
     ...listOf(row.fit_problems).map((p) => `Text fit: ${p}`),
     ...listOf(row.render_problems).map((p) => `Render: ${p}`),
+    ...(row.cover_fallback ? [`Cover: no AI image (${row.cover_fallback}); today's cover was used.`] : []),
   ];
 }
 
@@ -192,6 +193,7 @@ const DROP_REASON: Record<string, string> = {
   'image-failed': 'its photo failed to load',
   unfinished: 'still waiting when the rounds ran out',
   'vision-rejected': "the vision check said its photo doesn't show the story",
+  'video-boost': 'a story with real footage took its slot',
 };
 
 /**

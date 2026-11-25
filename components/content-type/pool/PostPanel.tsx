@@ -120,14 +120,14 @@ export function PostPanel({ card, versions, onVersion, state, meta, idea, run, n
   );
 }
 
-function pageList(post: HubPost): Array<{ src: string; label: string }> {
+function pageList(post: HubPost): Array<{ src: string; label: string; video?: string | null }> {
   if (post.media.kind === 'slides') {
     return post.media.slides.flatMap((s, i) => {
       const src = s.src ?? s.photo;
       return src ? [{ src, label: s.headline ?? `Slide ${i + 1}` }] : [];
     });
   }
-  if (post.media.kind === 'frames') return post.media.frames.flatMap((f) => (f.src ? [{ src: f.src, label: f.label }] : []));
+  if (post.media.kind === 'frames') return post.media.frames.flatMap((f) => (f.src || f.video ? [{ src: f.src ?? '', label: f.label, video: f.video ?? null }] : []));
   return [];
 }
 
@@ -144,7 +144,9 @@ function Media({ post }: { post: HubPost }) {
   return (
     <div className="pl-pager">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={current.src} alt={current.label} />
+      {current.video
+        ? <video key={current.video} src={current.video} poster={current.src || undefined} aria-label={current.label} muted loop playsInline controls autoPlay />
+        : <img src={current.src} alt={current.label} />}
       {pages.length > 1 ? (
         <div className="pl-pager__bar">
           <button type="button" className="pl-icon-btn" onClick={() => setPage((n) => (n - 1 + pages.length) % pages.length)} aria-label="Previous page"><ChevronLeft className="pl-i" /></button>

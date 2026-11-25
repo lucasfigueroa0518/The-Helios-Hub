@@ -19,7 +19,7 @@ export function MediaPreview({ media, title }: { media: HubMedia; title: string 
       <ol className="sh-media__strip sh-media__strip--frames" aria-label={`${title}, ${media.frames.length} frames`}>
         {media.frames.map((frame) => (
           <li key={frame.label} className="sh-media__frame">
-            {frame.src ? <img src={frame.src} alt={frame.label} loading="lazy" /> : <span className="sh-media__ph">{frame.label}</span>}
+            {frame.video ? <video src={frame.video} poster={frame.src ?? undefined} aria-label={frame.label} muted loop playsInline controls preload="metadata" /> : frame.src ? <img src={frame.src} alt={frame.label} loading="lazy" /> : <span className="sh-media__ph">{frame.label}</span>}
             <span className="sh-media__cap">{frame.label}</span>
           </li>
         ))}

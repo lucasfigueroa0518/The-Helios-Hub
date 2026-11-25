@@ -21,3 +21,6 @@ export const DEFAULT_LFD_MEMES_CAP_USD = 1;
 
 /** Unused majors then rundown to walk when the lineup still has no 92% meme story. */
 export const MEME_POOL_SCAN = 8;
+
+/** The video finder's spend cap for one post (MD-LFD D19): about $0.02 a story, the lineup plus the scan window. */
+export const DEFAULT_LFD_VIDEO_CAP_USD = 0.5;

@@ -18,10 +18,9 @@ export type DraftSlide = {
   tipId: string;
 };
 
-/** The Writer's output (and the Editor's): one slide per tip plus the caption's own text (code adds the how-to-try lines). */
+/** The Writer's output (and the Editor's): one slide per tip. The caption is all code's (caption.ts). */
 export type PostDraft = {
   slides: DraftSlide[];
-  caption: string;
 };
 
 export type GateName = 'fact_check' | 'repeat' | 'overrun';

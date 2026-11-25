@@ -14,10 +14,40 @@ export const SERIES_LABEL = {
   real_or_ai: 'Real or AI?',
 } as const;
 
+/**
+ * The cover's headline (the promise): three lines, the last in the accent. Sets rotate through them in order,
+ * never repeating the previous set's (Lucas, 2026-11-23, MC16). `oneMinute` lines promise a one-minute read and
+ * are skipped on a set that takes longer.
+ */
+export const OPENER_PROMISES: ReadonlyArray<{ lines: readonly [string, string, string]; oneMinute?: true }> = [
+  { lines: ['What you', 'need to know', 'in AI today'] },
+  { lines: ['The AI news', 'worth your', 'next minute'], oneMinute: true },
+  { lines: ['Today’s AI', 'news minus', 'the noise'] },
+  { lines: ['What changed', 'in AI', 'overnight'] },
+  { lines: ['Your 1-minute', 'AI edge', 'for today'], oneMinute: true },
+  { lines: ['Skip the feed.', 'Here’s what', 'matters in AI'] },
+];
+
+/** Minutes a set of n stories takes: about 15 seconds a story, rounded, at least one. */
+export const readMinutes = (n: number) => Math.max(1, Math.round((n * 15) / 60));
+
+/** The promise after `prev` (the last set's lines), skipping one-minute promises when the set runs longer. */
+export function nextOpenerPromise(prev: readonly string[] | null | undefined, storyCount: number): [string, string, string] {
+  const at = prev ? OPENER_PROMISES.findIndex((p) => p.lines.join('|') === prev.join('|')) : -1;
+  for (let k = 1; k <= OPENER_PROMISES.length; k++) {
+    const p = OPENER_PROMISES[(at + k) % OPENER_PROMISES.length]!;
+    if (!p.oneMinute || readMinutes(storyCount) === 1) return [...p.lines];
+  }
+  return [...OPENER_PROMISES[0]!.lines];
+}
+
+/** Morning Download cover (planning/MD-LFD Revisions/PLAN.md MC1–MC16, Lucas 2026-11-23). */
 export const OPENER = {
-  title: ['Morning', 'Download'] as const,
-  tagline: "Today's major AI news",
-  cue: (n: number) => `Tap for today's ${n} ${n === 1 ? 'story' : 'stories'}`,
+  series: ['Morning', 'Download'] as const,
+  quick: (n: number) => {
+    const min = readMinutes(n);
+    return `${n} ${n === 1 ? 'story' : 'stories'} · ${min} ${min === 1 ? 'minute' : 'minutes'}`;
+  },
 };
 
 export const CLOSER = {

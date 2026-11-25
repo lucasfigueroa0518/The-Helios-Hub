@@ -1,5 +1,7 @@
 import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import { spawnSync } from 'node:child_process';
+
+import { runSettled } from '@/lib/content-runs/render-settle';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -68,7 +70,7 @@ import {
 import { loadSettings, loadThemeBrief, type ExplainersSettings, type OpenerVoice } from '@/lib/explainers/settings';
 import type { ArtifactStore } from '@/lib/explainers/storage';
 import type { ArtifactKind, JobRow, LintViolation, Mode, TopicRow } from '@/lib/explainers/types';
-import { CaptionError, writeExplainerCaption, type CaptionDraft, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
+import { CaptionError, withHeliosLine, writeExplainerCaption, type CaptionDraft, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { briefOpenerVoice, critterLooks, eventsFromDir, lintStoryboard, section, wearKit, wearReady } from '../../../explainers/lint/lint-storyboard.mjs';
 import { mountFrames } from '../../../explainers/world-kit/mount.mjs';
@@ -148,7 +150,7 @@ export type RenderDeps = {
    * Swappable for tests. When session B stops without `renders/video.mp4` but
    * `index.html` is assembled, the worker renders it. No extra model call.
    */
-  renderVideo?: (projectDir: string) => void;
+  renderVideo?: (projectDir: string) => void | Promise<void>;
   /** Adds the reel's verified new drawings to the asset bank (EX3-114); tests stub it. */
   harvest?: (input: { projectDir: string; jobId: string; topic: string }) => HarvestResult;
   /** Swappable for tests. The real one calls Sonnet. A finished video always gets one. */
@@ -374,6 +376,18 @@ export function frameModulesWritten(projectDir: string): boolean {
 }
 
 /** Init writes a placeholder index.html. A reel is assembled only once all eight frames exist. */
+/**
+ * Where a resumed job picks up, from what is on disk (2026-11-24: a deploy restart killed a finished reel in its
+ * render step). 'plan': no plan on disk, start over. 'build': the plan is there, session B runs again with
+ * RESUME_PROMPT (keep what is built, do only what is missing). 'finish': session B already finished (its telemetry
+ * summary is written and every frame is assembled), so the job goes straight to the picture check (unless it has
+ * its file), the render (unless the MP4 is there) and the caption, with no build session.
+ */
+export function resumePoint(ws: { jobDir: string; projectDir: string }): 'plan' | 'build' | 'finish' {
+  if (!fs.existsSync(path.join(ws.projectDir, 'STORYBOARD.md')) || !fs.existsSync(path.join(ws.projectDir, 'SCRIPT.md'))) return 'plan';
+  return fs.existsSync(path.join(ws.jobDir, 'telemetry', 'session-b-summary.json')) && projectAssembled(ws.projectDir) ? 'finish' : 'build';
+}
+
 function projectAssembled(projectDir: string): boolean {
   return fileReady(path.join(projectDir, 'index.html')) && missingFrameNumbers(projectDir).length === 0;
 }
@@ -387,16 +401,15 @@ function projectAssembled(projectDir: string): boolean {
 /** Hang guard only; long renders are normal (CI decision 2026-11-10): the 12 h backstop, never a length limit. */
 export const RENDER_TIMEOUT_MS = RUN_HANG_BACKSTOP_MS;
 
-export function renderProjectVideo(projectDir: string): void {
+export async function renderProjectVideo(projectDir: string): Promise<void> {
   const out = path.join(projectDir, 'renders', 'video.mp4');
   if (fileReady(out)) return;
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  const res = spawnSync(
-    HYPERFRAMES_BIN,
-    ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'],
-    { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: RENDER_TIMEOUT_MS },
-  );
-  if (res.error) throw new Error(`hyperframes render failed to start: ${res.error.message}`);
+  // Returns when the video is finished even if the render's Chrome children linger (render-settle.ts, 2026-11-24).
+  const res = await runSettled(HYPERFRAMES_BIN, ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'], {
+    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, output: out, timeoutMs: RENDER_TIMEOUT_MS,
+  });
+  if (res.error && res.status == null && !res.signal) throw new Error(`hyperframes render failed to start: ${res.error}`);
   if (res.status !== 0 || !fileReady(out)) {
     const tail = (res.stderr || res.stdout || '').trim().slice(-800);
     throw new Error(`hyperframes render exited ${res.status ?? 'with no status'}${tail ? `: ${tail}` : ''}`);
@@ -1360,7 +1373,7 @@ export async function rebuildScene(
       if (repaired.length) deps.log?.('assembly_repaired', { jobId: job.id, steps: repaired });
       if (projectAssembled(ws.projectDir) && !fileReady(video)) {
         try {
-          (deps.renderVideo ?? renderProjectVideo)(ws.projectDir);
+          await (deps.renderVideo ?? renderProjectVideo)(ws.projectDir);
         } catch (error) {
           return { ok: false, capped: false, error: error instanceof Error ? error.message : String(error) };
         }
@@ -1468,10 +1481,13 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
 
     await stage('workspace');
     const existing = workspacePaths(deps.jobsRoot, job.id);
-    const resuming = Boolean(deps.resume) && fs.existsSync(path.join(existing.projectDir, 'STORYBOARD.md')) && fs.existsSync(path.join(existing.projectDir, 'SCRIPT.md'));
+    const point = deps.resume ? resumePoint(existing) : 'plan';
+    const resuming = point !== 'plan';
+    /** Session B already finished on disk: no build session runs again (resumePoint). */
+    const built = point === 'finish';
     if (resuming) {
       ws = existing;
-      log('resume', { jobId: job.id });
+      log('resume', { jobId: job.id, from: point });
     } else {
       ws = (deps.prepare ?? prepareWorkspace)({ jobsRoot: deps.jobsRoot, jobId: job.id, topic, sourceText, analogy, openerVoice: settings.opener_voice });
       await keepText('brief', read(path.join(ws.projectDir, 'BRIEF.md')));
@@ -1709,19 +1725,25 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     };
     const asSession = (o: BuildOutcome): SessionResult => ({ sessionId: null, subtype: 'success', isError: false, totalCostUsd: 0, modelUsage: {}, capped: o.capped, denials: [], errors: [], lastText: o.notes.join('\n') });
     let b: SessionResult;
-    if (codeRunner) {
-      const built = await runBuild(buildDeps());
-      log('build_notes', { jobId: job.id, notes: built.notes });
-      b = asSession(built);
+    if (built) {
+      log('build_skipped', { jobId: job.id, reason: 'resumed after session B finished' });
+      b = asSession({ capped: false, notes: ['Resumed after session B had finished: nothing rebuilt.'] } as BuildOutcome);
+    } else if (codeRunner) {
+      const done = await runBuild(buildDeps());
+      log('build_notes', { jobId: job.id, notes: done.notes });
+      b = asSession(done);
     } else {
       const seen = observeSafe('orchestrator', job.orchestrator_model);
       b = await session(resuming ? `${RESUME_PROMPT}${deps.resumeNote ? ` ${deps.resumeNote}` : ''}` : BUILD_PROMPT, undefined, undefined, seen.onMessage);
       seen.end(b);
     }
     await stage('session_b_done', { sessionBId: b.sessionId ?? undefined });
-    if (!codeRunner) await recordSessionCost(db, job, job.mode, 'session_b', b);
-    await finishSessionBTelemetry(telemetry, db);
-    log('injection_summary', { jobId: job.id, ...((await injection.finish()) ?? {}) });
+    if (!built) {
+      if (!codeRunner) await recordSessionCost(db, job, job.mode, 'session_b', b);
+      // A resumed finished build keeps the summary it wrote (an empty observer would overwrite it).
+      await finishSessionBTelemetry(telemetry, db);
+      log('injection_summary', { jobId: job.id, ...((await injection.finish()) ?? {}) });
+    }
     // A cap in session B (or its repair) keeps the reel when it is already rendered, or when the frames
     // are written and the voice exists: the worker assembles and renders them with no model (hx-4
     // pre-mortem: a capped job used to throw away every finished frame). The cap and the salvage are
@@ -1763,7 +1785,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
 
     // The picture check, run by code (Lucas, 2026-10-28: the orchestrator skipped it on 2 of 3 reels
     // to save spend near the cap): stills, the checker, one fix round, the file. Fails open.
-    if (!salvage && isExplainers41(ws.projectDir) && !fileReady(videoPath)) {
+    if (!salvage && isExplainers41(ws.projectDir) && !fileReady(videoPath) && !(built && fileReady(path.join(ws.projectDir, PICTURE_CHECK_FILE)))) {
       try {
         await stage('picture_check');
         await runPictureCheck({
@@ -1835,7 +1857,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       await stage('render');
       log('worker_render', { jobId: job.id });
       try {
-        (deps.renderVideo ?? renderProjectVideo)(ws.projectDir);
+        await (deps.renderVideo ?? renderProjectVideo)(ws.projectDir);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         throw new RenderFailure(`Session B ended without a video (${b.subtype}). ${detail}`);
@@ -1860,11 +1882,13 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     }
 
     await stage('caption');
+    const boardText = read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard;
     const facts: CaptionFacts = {
       title: topic.title,
+      term: topic.term?.trim() || (boardText ? storyboardTerm(boardText) : null),
       scope: topic.scope,
       analogy: analogy.name,
-      storyboard: read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard,
+      storyboard: boardText,
       script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
       source: topic.source_text,
     };
@@ -1887,7 +1911,8 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     }
     if (draft) {
       await recordCaptionCost(db, job.id, job.mode, draft);
-      await keepText('post_caption', draft.text);
+      // Code adds the Helios line before the hashtags, seeded by the job so a re-render keeps it (caption voice).
+      await keepText('post_caption', withHeliosLine(draft.text, job.id));
     } else {
       // Fail open (Explainers 4.2): the reel is made; it waits for a caption before it can post.
       const detail = captionError instanceof Error ? captionError.message : String(captionError);

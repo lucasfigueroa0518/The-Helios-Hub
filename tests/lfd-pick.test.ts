@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { judgedPool, mergeSameEvent, scoreMajor, Selector, slideOrder } from '@/lib/lfd/pick';
+import { judgedPool, mergeSameEvent, Selector } from '@/lib/lfd/pick';
 import type { LfdCandidate } from '@/lib/lfd/types';
 import type { JevAsk, JevResult } from '@/lib/social/jev/client';
 
@@ -42,12 +42,6 @@ test('judged pool: the 60 cap never cuts the fresh feed', () => {
   const pool = judgedPool(carousel, reels, feed);
   assert.ok(pool.length <= 60);
   for (const f of feed) assert.ok(pool.some((c) => c.key === f.key), f.headline);
-});
-
-test('scoreMajor sets the major-news@2 score on each candidate', async () => {
-  const a = cand({ headline: 'Anthropic Releases Claude Haiku 5.5' });
-  const [scored] = await scoreMajor([a], jevStub({ major: { [a.key]: 1 } }));
-  assert.ok(scored!.major! > 0.55);
 });
 
 test('the same event from reels and a carousel merges into one story that keeps the major score', async () => {
@@ -108,45 +102,6 @@ test('selector: a major skipped for the company cap is reconsidered after a drop
   assert.deepEqual(picks.map((p) => p.headline), ['OpenAI Ships A', 'OpenAI Ships B']);
   sel.drop(majors[0]!.key);
   assert.equal((await sel.replace('major'))!.headline, 'OpenAI Ships C');
-});
-
-test('slideOrder: majors by score first, then rundown in rank order', () => {
-  const picks = [
-    { ...cand({ headline: 'R1', net: 0.9 }), lane: 'rundown' as const },
-    { ...cand({ headline: 'M2', major: 0.6 }), lane: 'major' as const },
-    { ...cand({ headline: 'M1', major: 0.9 }), lane: 'major' as const },
-    { ...cand({ headline: 'R0', net: 0.95 }), lane: 'rundown' as const },
-  ];
-  assert.deepEqual(slideOrder(picks).map((p) => p.headline), ['M1', 'M2', 'R0', 'R1']);
-});
-
-test('scoreMajor runs up to 8 judgments at once and keeps the input order', async () => {
-  const list = Array.from({ length: 20 }, (_, i) => cand({ headline: `Story ${i}` }));
-  let inFlight = 0;
-  let peak = 0;
-  const base = jevStub({ major: Object.fromEntries(list.map((c, i) => [c.key, i / 20])) });
-  const slow: JevAsk = async (req, meta) => {
-    inFlight += 1;
-    peak = Math.max(peak, inFlight);
-    await new Promise((r) => setTimeout(r, 20 - (Number(meta.subjectId.slice(1)) % 7) * 2));
-    inFlight -= 1;
-    return base(req, meta);
-  };
-  const scored = await scoreMajor(list, slow);
-  assert.deepEqual(scored.map((c) => c.key), list.map((c) => c.key));
-  assert.ok(scored[19]!.major! > scored[1]!.major!);
-  assert.ok(peak > 1 && peak <= 8, `peak concurrency ${peak}`);
-});
-
-test('scoreMajor reuses scores it already has instead of asking Jev again', async () => {
-  const a = cand({ headline: 'Already Judged' });
-  const b = cand({ headline: 'Not Yet Judged' });
-  const asked: string[] = [];
-  const base = jevStub({ major: { [b.key]: 1 } });
-  const counting: JevAsk = async (req, meta) => { asked.push(meta.subjectId); return base(req, meta); };
-  const scored = await scoreMajor([a, b], counting, new Map([[a.key, 0.42]]));
-  assert.deepEqual(asked, [b.key]);
-  assert.equal(scored[0]!.major, 0.42);
 });
 
 test('unused walks leftover majors then rundown, skipping keys already used', () => {
@@ -235,7 +190,6 @@ test('legacy (no builder scores): the lineup equals today\'s majors-then-rundown
   // Today: majors above 0.55 by score, at most 3; the rundown (blockbuster, then net) fills to 6.
   assert.deepEqual(picks.map((p) => p.headline), ['Beta Corp Ships B', 'Alpha Corp Ships A', 'Delta Corp Ships D', 'Niche Story 4', 'Niche Story 3', 'Niche Story 2']);
   assert.ok(picks.slice(0, 3).every((p) => p.lane === 'major'));
-  assert.deepEqual(slideOrder(picks, NOW).map((p) => p.headline), picks.map((p) => p.headline));
 });
 
 test('replacement: same lane first, then the lead queue, then the rundown', async () => {

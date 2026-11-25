@@ -1,5 +1,5 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { matchAssigned, nextSyllabusTopics } from '@/lib/explainers/ideas/curriculum';
+import { matchAssigned, nextSyllabusTopics, refillCount } from '@/lib/explainers/ideas/curriculum';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
 import { getTopic } from '@/lib/explainers/repository';
 import { IDEAS_PER_CALL, ideaUsd, type IdeaModel, type IdeaResponse } from '@/lib/explainers/ideas/generator';
@@ -13,6 +13,7 @@ import {
   addTopics,
   listPool,
   listTopicTerms,
+  listUnscoredSyllabusIdeas,
   nyDate,
   spendForDay,
   recordCost,
@@ -312,18 +313,26 @@ async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: stri
   if (await budget.reached()) return { added: [], evaluations: [] };
   const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
   const pool = await listPool(db);
+  // Syllabus ideas an earlier refill wrote but its cap left unscored: scored first tonight, and they count as waiting.
+  const leftovers = await listUnscoredSyllabusIdeas(db);
+  // Top-up (Lucas, 2026-11-24): write what the pool is short of POOL_TARGET (10), IDEAS_PER_CALL per call, so a short
+  // pool is full again by morning and no idea is written only to be cut.
+  const want = refillCount(pool.length + leftovers.length);
   // Curriculum (2026-11-21): the syllabus assigns tonight's topics, the first untaken in teaching order; a term
   // that failed MAX_FAILED_TRIES times is passed over. The prompt carries them, the archived topics and the pool.
-  const next = nextSyllabusTopics(await listTopicTerms(db), IDEAS_PER_CALL);
+  const next = nextSyllabusTopics(await listTopicTerms(db), want);
   if (next.skipped.length) {
     console.info(`[explainers] syllabus: passed over after repeated failed tries: ${next.skipped.map((t) => t.term).join(', ')}`);
   }
   let ideas: IdeaResponse['ideas'] = [];
-  if (next.topics.length > 0) {
+  for (let at = 0; at < next.topics.length; at += IDEAS_PER_CALL) {
+    // Each call is held to the refill cap: once it is reached, the rest of the shortfall waits for the next night.
+    if (at > 0 && (await budget.reached())) break;
+    const topics = next.topics.slice(at, at + IDEAS_PER_CALL);
     const response = await deps.ideaModel.propose({
       model: settings.idea_model,
       themeBrief,
-      topics: next.topics,
+      topics,
       pool: pool.map(topicRef),
       archived: archived.map(topicRef),
     });
@@ -340,12 +349,15 @@ async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: stri
       usd: ideaUsd(response),
     });
     // Held to the assignment in code: an idea that names no assigned topic is dropped; its topic stays untaken.
-    const { kept, dropped } = matchAssigned(response.ideas, next.topics);
+    const { kept, dropped } = matchAssigned(response.ideas, topics);
     if (dropped.length) {
       console.info(`[explainers] idea generator: dropped ${dropped.length} idea(s) off the assigned terms (${dropped.map((d) => JSON.stringify(d.term)).join(', ')})`);
     }
-    ideas = kept;
-  } else {
+    ideas = [...ideas, ...kept];
+  }
+  if (next.topics.length === 0 && want === 0) {
+    console.info(`[explainers] pool: ${pool.length + leftovers.length} ideas waiting, the target or more; no new ideas tonight`);
+  } else if (next.topics.length === 0) {
     console.info('[explainers] syllabus: every topic is taken; no ideas tonight');
   }
 
@@ -373,7 +385,7 @@ async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: stri
     ideaCycleId: cycleId,
   });
   const evaluations: Evaluation[] = [];
-  for (const topic of added) {
+  for (const topic of [...leftovers, ...added]) {
     if (await budget.reached()) break;
     try {
       evaluations.push(
@@ -452,6 +464,19 @@ async function runRefillOnly(
     );
     return { status: 'failed', cycleId, error: message };
   }
+}
+
+/**
+ * Top the pool up to POOL_TARGET now, outside the nightly cycle (Lucas, 2026-11-24: "fill the pool with 10 ideas
+ * already"): the refill only, held to the refill cap, with no make step, so nothing is promoted or rendered. It is a
+ * cycle row of its own (status 'skipped', like a paused night's refill) for the spend ledger.
+ */
+export async function refillIdeaPoolNow(deps: IdeaCycleDeps): Promise<Omit<IdeaCycleRefill, 'reason'> | { status: 'failed'; cycleId: string; error: string }> {
+  const { db } = deps;
+  const settings = await loadSettings(db);
+  const gate = deps.gate ?? (await readExplainersGate(db, false));
+  const st: RunState = { movesQ: deps.moves ?? movesQuery(db), settings, gate, event: deps.event ?? consoleEvent, placedJobs: new Set(), pinsChecked: false, capped: false, refilled: false, refillCapped: false };
+  return runRefillOnly(deps, st, nyDate(deps.now));
 }
 
 /** One date's cycle: fill `day` once (lead > 0: a date made ahead; 0: today, a person's forced run). */

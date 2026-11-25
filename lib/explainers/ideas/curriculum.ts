@@ -100,6 +100,17 @@ export function levelOfRank(rank: number | null | undefined): number | null {
   return rank == null ? null : CURRICULUM[rank]?.level ?? null;
 }
 
+/**
+ * The ideas the pool keeps waiting (Lucas, 2026-11-24: always 10). Each night's refill writes what the pool is short
+ * of it, in as many calls as that takes, so the pool is back at 10 every morning and no idea is written only to be cut.
+ */
+export const POOL_TARGET = 10;
+
+/** How many ideas tonight's refill writes: what `waiting` is short of POOL_TARGET, at most `max`. */
+export function refillCount(waiting: number, max: number = POOL_TARGET): number {
+  return Math.max(0, Math.min(max, POOL_TARGET - waiting));
+}
+
 /** One existing explainers topic as the curriculum sees it. */
 export type TopicTermState = { term: string | null; status: string; duplicateOf?: string | null; syllabusRank?: number | null };
 

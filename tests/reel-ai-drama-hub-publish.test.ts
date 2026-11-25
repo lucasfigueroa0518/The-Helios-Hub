@@ -11,8 +11,9 @@ import {
   pollDramaInsights,
   setDramaVerdict,
 } from '@/lib/reel-ai-drama/hub';
-import { claimAndCarryDrama, composeDramaCaption } from '@/lib/reel-ai-drama/publish/publish';
+import { claimAndCarryDrama, composeDramaCaption, CREDITS_GAP, postedCredit } from '@/lib/reel-ai-drama/publish/publish';
 import { afterDramaJob } from '@/lib/reel-ai-drama/requests';
+import { heliosLine } from '@/lib/social/captions/helios-line';
 
 import { dramaHubDb, finishedJob, POST, setDrama } from './reel-ai-drama-hub-fixture';
 
@@ -45,19 +46,50 @@ const claim = (db: Awaited<ReturnType<typeof dramaHubDb>>, id: string) =>
 test('caption source: the newest post_caption, else composed from post_text; within 2200 characters', async () => {
   const db = await dramaHubDb();
   const { jobId } = await finishedJob(db);
-  assert.equal(await dramaCaption(db, jobId), `${POST.caption}\n\n${POST.question}\n\nPhoto: AP\nPhoto: Reuters`);
+  assert.equal(await dramaCaption(db, jobId), `${POST.caption}\n\n${POST.question}\n\n${heliosLine('ai_drama', jobId)}\n${CREDITS_GAP}\nPhoto: AP\nPhoto: Reuters`);
   await afterDramaJob(db, { id: jobId, trigger: 'click' });
   const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM reel_ai_drama.artifacts WHERE job_id = $1 AND kind = 'post_caption'`, [jobId]);
   assert.equal(rows[0].n, 1, 'a finished job writes its posting caption');
   await db.query(`INSERT INTO reel_ai_drama.artifacts (job_id, kind, content) VALUES ($1, 'post_caption', 'A revised caption')`, [jobId]);
   assert.equal(await dramaCaption(db, jobId), 'A revised caption');
 
-  const long = composeDramaCaption({ caption: 'x'.repeat(2100), question: 'q?', credits: ['c'.repeat(200), 'short'] })!;
-  assert.ok(long.length <= 2200);
-  assert.ok(!long.includes('short'), 'credits are trimmed first');
-  assert.equal(composeDramaCaption(null), null);
+  const base = { caption: 'x'.repeat(1900), question: 'q?' };
+  const head = composeDramaCaption(base, 'seed')!;
+  const first = 'c'.repeat(2200 - head.length - CREDITS_GAP.length - 2);
+  const long = composeDramaCaption({ ...base, credits: [first, 'short'] }, 'seed')!;
+  assert.equal(long, `${head}\n${CREDITS_GAP}\n${first}`, 'credits are trimmed from the end; the head stays whole');
+  assert.equal(long.length, 2200);
+  assert.equal(composeDramaCaption(null, 'seed'), null);
   const { jobId: none } = await finishedJob(db, { post: null });
   assert.equal(await dramaCaption(db, none), null);
+});
+
+test('composeDramaCaption order: caption, question, Helios line, hashtags, then the gap and one credit per line', () => {
+  const text = composeDramaCaption(
+    { caption: ' The deal. ', question: 'Would you sign?', hashtags: ['#ai', ' #deals ', ''], credits: ['Photo: AP', 'Illustration: Helios', 'Photo: AP', 'Photo: Reuters'] },
+    'job-7',
+  );
+  assert.equal(text, `The deal.\n\nWould you sign?\n\n${heliosLine('ai_drama', 'job-7')}\n\n#ai #deals\n${CREDITS_GAP}\nPhoto: AP\nPhoto: Reuters`);
+  assert.equal(CREDITS_GAP.split('\n').length, 6);
+  assert.ok(CREDITS_GAP.split('\n').every((l) => l === '\u2800'), 'six braille-blank lines');
+  assert.equal(composeDramaCaption({ caption: 'Only a caption.' }, 'job-7'), `Only a caption.\n\n${heliosLine('ai_drama', 'job-7')}`, 'no credits: no gap');
+  assert.equal(composeDramaCaption({ credits: ['Photo: AP'] }, 'job-7'), null, 'no caption and no question: nothing to post');
+  assert.equal(composeDramaCaption({ caption: 'A' }, 'job-7'), composeDramaCaption({ caption: 'A' }, 'job-7'), 'the seed keeps the line stable');
+});
+
+test('postedCredit: flattens Helios drawing chains, drops Helios illustration, credits supplied photos to Helios', () => {
+  assert.equal(postedCredit('Illustration by Helios, drawn from: Photo: AP'), 'Photo: AP');
+  assert.equal(postedCredit('Line sketch by Helios, traced from: Illustration by Helios, drawn from: Photo: Reuters / Jane Doe'), 'Photo: Reuters / Jane Doe');
+  assert.equal(postedCredit('  Photo: Getty  '), 'Photo: Getty');
+  assert.equal(postedCredit('Illustration: Helios'), null);
+  assert.equal(postedCredit('Illustration by Helios, drawn from: Illustration: Helios'), null);
+  assert.equal(postedCredit(''), null);
+  assert.equal(postedCredit('Photo supplied by the company'), 'Photo: Helios');
+  const text = composeDramaCaption(
+    { caption: 'C', credits: ['Illustration by Helios, drawn from: Photo: AP', 'Photo: AP', 'Photo supplied by OpenAI', 'Photo supplied by Meta'] },
+    's',
+  )!;
+  assert.ok(text.endsWith(`${CREDITS_GAP}\nPhoto: AP\nPhoto: Helios`), 'credits are de-duplicated after mapping');
 });
 
 test('queue readiness: finished, not rejected, approved (or force), video in the bucket, a caption; approval is always on (D16)', async () => {

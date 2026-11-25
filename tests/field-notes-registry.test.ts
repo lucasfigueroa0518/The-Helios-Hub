@@ -87,9 +87,9 @@ test('registry: the bundled vendor changelogs split one item per entry, through 
   assert.ok(items.every((i) => i.canonicalUrl.startsWith('https://code.claude.com/docs/en/changelog#3-0-0-november-5-2026-')));
 });
 
-test('registry: every entry was verified 2026-11-06 with a note, names leaves, and no vendor is over a third', () => {
+test('registry: every entry was verified (2026-11-06, or 2026-11-24 for the teaching sources) with a note, names leaves, and no vendor is over a third', () => {
   for (const e of SOURCE_REGISTRY) {
-    assert.equal(e.verifiedOn, '2026-11-06', e.id);
+    assert.ok(e.verifiedOn === '2026-11-06' || e.verifiedOn === '2026-11-24', `${e.id}: ${e.verifiedOn}`);
     assert.ok(e.note && e.note.length > 10, `${e.id} has a fetch note`);
     assert.ok(e.leaves && e.leaves.length > 0, `${e.id} has leaves`);
   }

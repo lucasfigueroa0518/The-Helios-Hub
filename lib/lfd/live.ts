@@ -7,65 +7,36 @@
  * by the same figure. Network modules load only when this is called; tests
  * never call it (CLAUDE.md Rule 1).
  *
- * The photo bank (DECISIONS_LOG D49), as carousels and Stories have it: a
- * finder source while media_library's finder_source switch is on, and the
- * photos the run picks plus identity-verified candidates offered (runKind
- * 'story', runRef `lfd:<run id>`) while capture is on. It fails open: no
- * database, a bank that can't be reached or built, or the switches off, and
- * the finder works exactly as without it.
+ * Story photos come from the news photo finder (lib/news-photos findStoryPhoto, wiring contract 2026-11-24): its
+ * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The old Stories finder
+ * and the photo bank it carried (lfdPhotoFinder) are gone: the run had stopped calling them. The run offers the news
+ * finder's photos to the bank itself (LfdRunDeps.bank, lib/news-photos/bank-offer.ts); drainBank waits for it.
  *
- * The shared photo finder (central intake Phase 3): the `photo_finders` switch is read once per run, here. 'shared'
- * adds `sharedPhotos` (every slide tries it first); 'legacy', a read error, or deps that can't be built leave it
- * out, and the run is today's.
+ * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and fal (FAL_API_KEY) for the image.
  */
-import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
-import type { createLivePhotoFinder, PhotoFinder } from '@/lib/stories/photos';
 
+import type { BuilderHarvest } from './photos';
 import type { LfdRunDeps } from './run';
 
-type FinderOpts = Pick<NonNullable<Parameters<typeof createLivePhotoFinder>[0]>, 'jev' | 'create'> & { runRef: string };
-
-/** The run's photo finder with the photo bank on both sides; built without the bank if the bank can't be built. `make` is for tests. */
-export async function lfdPhotoFinder(
-  query: HubQuery,
-  o: FinderOpts & { log?: (line: string) => void },
-  make?: { createPhotoBank: typeof createPhotoBank; createLivePhotoFinder: typeof createLivePhotoFinder },
-): Promise<{ photos: PhotoFinder; bank: PhotoBank | undefined }> {
-  const newBank = make?.createPhotoBank ?? (await import('@/lib/media-library/bank')).createPhotoBank;
-  const newFinder = make?.createLivePhotoFinder ?? (await import('@/lib/stories/photos')).createLivePhotoFinder;
-  const log = o.log ?? ((line: string) => console.log(`photo bank: ${line}`));
-  let bank: PhotoBank | undefined;
-  try {
-    bank = newBank({ query: (text, params) => query(text, params), log });
-  } catch (err) {
-    log(`not built: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  // CI-32: the finder checks each pick's picture against the used-photo ledger (read once per run). Bald-Eagle D3: the
-  // day's earlier post still waiting in review is what "Make Last Few Days now" replaces, so its photos don't count.
-  const used = async () => {
-    const [{ readUsedLedger }, { waitingItemsOn }, { nyDateKey }] = await Promise.all([import('@/lib/photos/used'), import('@/lib/photos/pending'), import('@/lib/reels/scoring/decide')]);
-    const q = (text: string, params?: unknown[]) => query(text, params);
-    const now = new Date();
-    return readUsedLedger(q, now, undefined, { excludeItem: await waitingItemsOn(q, 'lfd', nyDateKey(now)) });
+/** Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, as the run and the Social Hub's photo swap use it. */
+export async function liveBuilderHarvest(): Promise<BuilderHarvest> {
+  const [{ newAnthropic }, { streamingCreate }, { loadPrompt }, { liveHarvestPhotoBank }] = await Promise.all([
+    import('@/lib/anthropic-client'),
+    import('@/lib/reel-ai-drama/reporting/llm'),
+    import('@/lib/reel-ai-drama/prompts'),
+    import('@/lib/reel-ai-drama/harvest/photo-bank-live'),
+  ]);
+  return {
+    deps: {
+      http: fetch,
+      create: streamingCreate(newAnthropic()),
+      loadPrompt: (name) => loadPrompt(name),
+      serperKey: process.env.SERPER_API_KEY ?? null,
+      photoBank: liveHarvestPhotoBank(process.env).bank,
+      cutouts: [],
+    },
   };
-  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used, ...(bank ? { bank } : {}) }), bank };
-}
-
-/** The run's shared-finder wiring when the 'lfd' switch reads 'shared' (read once); undefined otherwise. Never throws. `make` is for tests. */
-export async function lfdSharedPhotos(
-  query: HubQuery,
-  make?: import('@/lib/stories/photos-shared').SharedMake,
-  log: (line: string) => void = (line) => console.log(`lfd: ${line}`),
-): Promise<LfdRunDeps['sharedPhotos']> {
-  try {
-    const { sharedPhotoSetup } = await import('@/lib/stories/photos-shared');
-    const setup = await sharedPhotoSetup({ query: (text, params) => query(text, params) }, 'lfd', make, log);
-    return setup ?? undefined;
-  } catch (err) {
-    log(`shared photo finder not wired (${err instanceof Error ? err.message : String(err)}); today's finder`);
-    return undefined;
-  }
 }
 
 export async function liveLfdDeps(
@@ -91,9 +62,10 @@ export async function liveLfdDeps(
   const tally = createJevTally();
   const jev = capped(tallied(createJevAsk(), tally), tally, o.capUsd);
   const budget = createRunBudget({ capUsd: o.capUsd, otherSpendUsd: () => tally.costUsd });
-  const create = budget.guard(liveMessagesCreate(newAnthropic()));
+  // One Anthropic client for the run: the writer and checks (through the run budget) and the video finder.
+  const anthropic = newAnthropic();
+  const create = budget.guard(liveMessagesCreate(anthropic));
   const bucket = mediaBucket(SLIDE_BUCKET);
-  const { photos, bank } = await lfdPhotoFinder(query, { jev, create, runRef: `lfd:${o.runId ?? now.toISOString()}` });
   const { readLfdSettings } = await import('./settings');
   const settings = await readLfdSettings(query).catch(() => null);
   let memes: import('./run').LfdRunDeps['memes'];
@@ -126,31 +98,57 @@ export async function liveLfdDeps(
   } catch (err) {
     console.log(`lfd: intake not wired (${err instanceof Error ? err.message : String(err)}); today's lanes`);
   }
-  const sharedPhotos = await lfdSharedPhotos(query);
-  // Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, capped at $0.15 a post inside the run.
-  const { streamingCreate } = await import('@/lib/reel-ai-drama/reporting/llm');
-  const { loadPrompt } = await import('@/lib/reel-ai-drama/prompts');
-  const { liveHarvestPhotoBank } = await import('@/lib/reel-ai-drama/harvest/photo-bank-live');
-  const harvest: import('./photos').BuilderHarvest = {
-    deps: {
-      http: fetch,
-      create: streamingCreate(newAnthropic()),
-      loadPrompt: (name) => loadPrompt(name),
-      serperKey: process.env.SERPER_API_KEY ?? null,
-      photoBank: liveHarvestPhotoBank(process.env).bank,
-      cutouts: [],
-    },
+  // The news photo finder (findStoryPhoto): its own Haiku create, so its whole spend (Haiku, Jev grades, Serper) is
+  // added to the run total once (lib/lfd/run.ts photoRecord), as the harvest's is.
+  const { TypeSafeClient } = await import('@typesafe-ai/sdk');
+  const { fetchImageLive, serperImages } = await import('@/lib/news-photos');
+  const serperKey = process.env.SERPER_API_KEY;
+  const photoCreate = liveMessagesCreate(anthropic);
+  const newsPhotos: LfdRunDeps['newsPhotos'] = {
+    jev: new TypeSafeClient({ defaultHeaders: { 'TypeSafe-Danger-Zone-Images': 'true' } }) as never,
+    serper: serperKey ? serperImages(serperKey) : null,
+    fetchImage: fetchImageLive(),
+    create: (p) => photoCreate(p as never),
+  };
+  // Real footage on story slides (MD-LFD D16–D19): on only where the finder can run (yt-dlp and ffmpeg on PATH,
+  // SERPER_API_KEY and TYPESAFE_API_KEY set); off, the run is photos and memes as before. Never fails the run.
+  let video: LfdRunDeps['video'];
+  try {
+    const [{ liveLfdVideo }, { DEFAULT_LFD_VIDEO_CAP_USD }] = await Promise.all([import('./video'), import('./config')]);
+    const got = await liveLfdVideo({ anthropic, capUsd: DEFAULT_LFD_VIDEO_CAP_USD });
+    if (got.video) video = got.video;
+    else console.log(`lfd: video off (${got.why}); photos and memes only`);
+  } catch (err) {
+    console.log(`lfd: video off (${err instanceof Error ? err.message : String(err)}); photos and memes only`);
+  }
+  // The photo bank (D49): the run offers its finder photos (lib/news-photos/bank-offer.ts); the bank lives in the hub's
+  // Supabase (this query). Built without it if it can't be built; a one-shot run drains it before exiting.
+  let bank: import('@/lib/media-library/bank').FullPhotoBank | null = null;
+  try {
+    const { createPhotoBank } = await import('@/lib/media-library/bank');
+    bank = createPhotoBank({ query: (text, params) => query(text, params), log: (line) => console.log(`photo bank: ${line}`) });
+  } catch (err) {
+    console.log(`lfd: photo bank not built (${err instanceof Error ? err.message : String(err)})`);
+  }
+  // Builder slides' photos: AI Drama's harvest engine, capped at $0.15 a post inside the run.
+  const harvest = await liveBuilderHarvest();
+  // The AI cover (PLAN.md C7): GPT Image 2.6 edit on fal, wired only when FAL_API_KEY is set (else it falls back).
+  const falKey = process.env.FAL_API_KEY?.trim();
+  const aiCover: LfdRunDeps['aiCover'] = {
+    fal: falKey ? { apiKey: falKey, fetch: (input, init) => fetch(input, init) } : null,
+    fetch: (input, init) => fetch(input, init),
   };
   return {
     deps: {
       query,
       jev,
       create,
-      photos,
+      aiCover,
       harvest,
       // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
       usedPhotos: { http: fetch },
-      ...(sharedPhotos ? { sharedPhotos } : {}),
+      newsPhotos,
+      ...(bank ? { bank } : {}),
       ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
       fetchBody: fetchBodyLive,
@@ -164,9 +162,10 @@ export async function liveLfdDeps(
       closings: closingsLog(query, 'lfd'),
       ...(o.runId ? { runId: o.runId } : {}),
       ...(memes ? { memes } : {}),
+      ...(video ? { video } : {}),
     },
     spentUsd: () => budget.spent(),
-    // Waits (at most `ms`) for the bank's queued writes and ingest; a one-shot CLI run calls it before exiting.
+    // Waits (at most `ms`) for the bank's queued writes; a one-shot CLI run calls it before exiting. Never throws.
     drainBank: async (ms) => {
       await bank?.drain(ms).catch(() => undefined);
     },

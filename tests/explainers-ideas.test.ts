@@ -34,6 +34,9 @@ import {
   ANALOGY_WRITER_VERSION,
   IDEAS_SCHEMA,
   IDEA_GENERATOR_INSTRUCTIONS,
+  PLAIN_WORDS_RULE,
+  WHAT_IT_DOES_RULE,
+  PAYLOAD_REWRITER_INSTRUCTIONS,
   IDEA_GENERATOR_VERSION,
   SCOPE_WRITER_VERSION,
   REEL_SHAPE,
@@ -188,6 +191,7 @@ function stubIdeas(
   batches: [string, string][][] = [],
 ): IdeaModel & { requests: unknown[]; scopeRequests: string[][]; analogyRequests: string[]; analogyCalls: AnalogyRequest[]; gapCalls: GapRequest[]; payloadCalls: PayloadRequest[] } {
   const requests: unknown[] = [];
+  const canned = batches.length > 0;
   const scopeRequests: string[][] = [];
   const analogyRequests: string[] = [];
   const analogyCalls: AnalogyRequest[] = [];
@@ -230,7 +234,9 @@ function stubIdeas(
     },
     async propose(request) {
       requests.push(request);
-      const next = batches.shift();
+      // A short pool takes several calls a night (top-up to 10): once its canned batches run out the stub writes
+      // nothing; a stub given none fails, as a failed generator call.
+      const next = batches.shift() ?? (canned ? [] : null);
       if (!next) throw new Error('no canned ideas left');
       return {
         // Each canned idea takes its assigned syllabus term, in order, as the generator is told to (curriculum).
@@ -321,7 +327,7 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   const idea = ideaGeneratorParams({
     model: 'claude-sonnet-5-5',
     themeBrief: 'BRIEF',
-    topics: [{ term: 'inference', kind: 'ai', angle: 'Why is answering cheaper than training?', level: 1, levelName: 'What AI is', unitName: 'What AI is', requires: ['model training'] }],
+    topics: [{ term: 'inference', kind: 'ai', angle: 'Why is answering cheaper than training?', takeaway: 'Answering runs the question through the model once.', level: 1, levelName: 'What AI is', unitName: 'What AI is', requires: ['model training'] }],
     pool: [{ topic_title: 'p', topic_scope: 'ps' }],
     archived: [{ topic_title: 'r', topic_scope: 'rs' }],
   });
@@ -342,7 +348,7 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   assert.ok(system[0].text.startsWith(IDEA_GENERATOR_INSTRUCTIONS));
   assert.ok(!system[0].text.includes('"p"'), 'pool is not in the cached prefix');
   assert.ok(!system[0].text.includes('"inference"'), "tonight's syllabus topics are not in the cached prefix");
-  assert.match(idea.messages[0].content as string, /1\. term: "inference" \(AI\)\n   Level 1 of \d+: What AI is\. Unit: What AI is\.\n   Builds on \(taught earlier\): \["model training"\]\n   Angle \(the question the reel answers\): "Why is answering cheaper than training\?"[\s\S]*"topic_title":"r"/);
+  assert.match(idea.messages[0].content as string, /1\. term: "inference" \(AI\)\n   Level 1 of \d+: What AI is\. Unit: What AI is\.\n   Comes after \(order only; the viewer may not have seen it\): \["model training"\]\n   Angle \(the question the reel answers\): "Why is answering cheaper than training\?"\n   Takeaway \(what the viewer leaves with\): "Answering runs the question through the model once\."[\s\S]*"topic_title":"r"/);
   assert.ok(!system[0].text.includes('Why is answering cheaper'), 'the angle is per-request, not in the cached prefix');
   assert.match(idea.messages[0].content as string, /Write one idea per topic, 1 in all, in this order\./);
   assert.ok((idea.messages[0].content as string).includes('"topic_title":"p"'));
@@ -512,7 +518,7 @@ test('while paused (auto_render off) the daily cycle still refills the pool, onc
   assert.equal(result.status, 'refilled');
   if (result.status !== 'refilled') return;
   assert.equal(result.reason, 'paused');
-  assert.equal(ideas.requests.length, 1, 'the refill generates ideas');
+  assert.ok(ideas.requests.length >= 1, 'the refill generates ideas');
   assert.ok(result.evaluations.some((e) => e.outcome === 'entered_pool'), 'the pool gains an idea');
   assert.deepEqual((await listPool(db)).map((t) => t.status), (await listPool(db)).map(() => 'pool'), 'nothing is promoted');
   assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0, 'nothing is rendered');
@@ -617,7 +623,7 @@ test('lead time (Bald-Eagle D4, D8): the cutover night fills day+1 and day+2, ea
   if (cutover.status !== 'ok') return;
   assert.deepEqual(cutover.dates?.map((d) => [d.nyDate, d.status]), DATES.map((d) => [d, 'ok']));
   // One refill a night (D3): it runs in the first date the night fills, not once per date.
-  assert.equal(ideas.requests.length, 1, 'one idea call a night');
+  assert.ok(ideas.requests.length >= 1, 'the night writes ideas');
   const cycles = async () => (await db.query<{ d: string; status: string }>(`SELECT ny_date::text AS d, status FROM explainers.idea_cycles ORDER BY ny_date`)).rows;
   assert.deepEqual(await cycles(), DATES.map((d) => ({ d, status: 'ok' })));
   // Every night render carries one of the dates filled.
@@ -763,7 +769,7 @@ test('the worker retries a failed or thrown night after the delay, at most twice
 const registerText = () => fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
 
 test('analogy writer v8 is the golden-set prompt, with the no-real-names line and JSON output (EX3-123)', () => {
-  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v9');
+  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v11');
   assert.equal(ANALOGY_CALLS, 2);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI 101" reel/);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend\./);
@@ -892,7 +898,7 @@ test("a topic that makes the pool gets its named analogy from two Opus calls and
   const webhooks = (await getTopic(db, results[0].topicId))!;
   const note = await noteOf(db, results[0].topicId);
   assert.ok('pick' in note);
-  assert.equal(note.version, 'analogy-writer-v9');
+  assert.equal(note.version, 'analogy-writer-v11');
   assert.deepEqual(note.golden_hidden, ['webhook']);
   assert.equal(note.candidates.length, 2);
   assert.equal(note.pick, 1);
@@ -1047,12 +1053,19 @@ test('a writer call that fails is a failed candidate; a failed pass is recorded 
 });
 
 test('the idea generator writes one idea per assigned syllabus topic (curriculum); both write the term (EX3-86)', () => {
-  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v8');
+  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v10');
   assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v6');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) assert.ok(prompt.includes(TERM_RULE));
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /exactly one idea for each syllabus topic in the user message, in the same order/);
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /The term is the assigned topic's term, copied exactly/);
-  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Deliver the angle: the scope and the payload answer it/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Deliver the angle and the takeaway: the scope and the payload answer the angle, the payload says the takeaway/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Every reel stands alone/);
+  assert.ok(!/already met/.test(IDEA_GENERATOR_INSTRUCTIONS), 'the generator never assumes the viewer saw earlier reels');
+  assert.ok(IDEA_GENERATOR_INSTRUCTIONS.includes(PLAIN_WORDS_RULE) && ANALOGY_WRITER_INSTRUCTIONS.includes(PLAIN_WORDS_RULE), 'plain words bind the idea and the analogy');
+  assert.ok(IDEA_GENERATOR_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE) && PAYLOAD_REWRITER_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE), 'the payload says what the concept does, never what it is not');
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /the payload delivers that mechanism at any altitude/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /never set the concept against a different thing or a rival method/);
+  assert.ok(!/often holds a contrast/.test(ANALOGY_WRITER_INSTRUCTIONS), 'no nudge toward a two-thing contrast');
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /never a restatement of the term's own words/);
   assert.doesNotMatch(IDEA_GENERATOR_INSTRUCTIONS, /tonight's buckets|Skew toward AI|Exactly 2 of the 3/, 'no bucket pick or per-call AI skew left');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) {
@@ -1077,7 +1090,7 @@ const gapScores = (v: number, overrides: Partial<GapScores> = {}): GapScores => 
 const pickedAnalogy = candidate(2);
 
 test('gap writer v2 writes for the most pull, with ways in, and keeps only the hard rules (EX3-120, EX3-123)', () => {
-  assert.equal(GAP_WRITER_VERSION, 'gap-writer-v2');
+  assert.equal(GAP_WRITER_VERSION, 'gap-writer-v5');
   assert.match(GAP_WRITER_INSTRUCTIONS, /Nothing from the analogy appears in the line: not its name, and none of its parts, characters, places or actions\./);
   assert.doesNotMatch(GAP_WRITER_INSTRUCTIONS, /analogy's scene|analogy's process/);
   assert.match(GAP_WRITER_INSTRUCTIONS, /Your goal is engagement\. Write the opening question with the most pull for this topic/);

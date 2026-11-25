@@ -11,7 +11,8 @@ import { readFileSync } from 'node:fs';
 import test, { after, before } from 'node:test';
 
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from '@/lib/field-notes/budget';
-import { buildFieldNotesCaption, CAPTION_MAX_CHARS, FIELD_NOTES_FOLLOW_LINE, parseHowToTry } from '@/lib/field-notes/caption';
+import { CAPTION_MAX_CHARS, FIELD_NOTES_HASHTAGS, HOW_TO_TRY_HEADING, parseHowToTry, SOURCE_LINK_LABEL } from '@/lib/field-notes/caption';
+import { heliosLine } from '@/lib/social/captions/helios-line';
 import { fieldNotesTarget, firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue } from '@/lib/field-notes/clock';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { FIELD_NOTES_SLIDE_PREFIX } from '@/lib/field-notes/config';
@@ -25,6 +26,7 @@ import { approveFieldNotesPost, hardPublishFieldNotesPost, rejectFieldNotesPost 
 import { parseFieldNotesSettings, readFieldNotesSettings } from '@/lib/field-notes/settings';
 import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, scheduledRunToday, setTipContent, fieldNotesFilledDates } from '@/lib/field-notes/store';
+import { POOL_TRIM_REASON } from '@/lib/field-notes/tip-pool';
 import type { TipTags } from '@/lib/field-notes/sources/score';
 import { tipToCandidate } from '@/lib/field-notes/run';
 import type { Want } from '@/lib/field-notes/types';
@@ -34,7 +36,7 @@ import { carryOutFieldNotesRun, type CarryOutDeps } from '@/lib/field-notes/work
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { FieldNotesEngineDeps } from '@/lib/field-notes/run';
 
-import { addPool, CANNED_CAPTION, CANNED_SLIDES, FACELESS_PHOTOS, freshDb, masterPathOf, NOW, photoBytes, setKind, setSetting, stubClaude, stubEngine, stubJev, supportedClaimsFor, type StubEngine } from './fixtures/field-notes/run/seed';
+import { addPool, CANNED_SLIDES, FACELESS_PHOTOS, freshDb, masterPathOf, NOW, photoBytes, setKind, setSetting, stubClaude, stubEngine, stubJev, supportedClaimsFor, type StubEngine } from './fixtures/field-notes/run/seed';
 
 // Rule 1: no network of any kind. The injected clients are the only transports.
 const realFetch = globalThis.fetch;
@@ -144,7 +146,11 @@ test('a seeded run is one post: a cover, one tip slide per tip, Follow; every ti
   // Storage, caption.
   assert.equal(post.slide_objects.length, 5);
   assert.ok(post.slide_objects.every((p) => p.startsWith(`${FIELD_NOTES_SLIDE_PREFIX}/`) && engine.uploaded.has(p)));
-  assert.ok(post.caption.includes(CANNED_CAPTION) && post.caption.includes(FIELD_NOTES_FOLLOW_LINE) && post.caption.length <= CAPTION_MAX_CHARS);
+  // The caption is all code's: how-to-try lines, the Helios line seeded by the post's slug, hashtags.
+  const slug = (await query<{ slug: string }>(`SELECT slug FROM field_notes.posts WHERE id = $1`, [post.id])).rows[0]!.slug;
+  assert.ok(post.caption.startsWith(`${HOW_TO_TRY_HEADING}\n1. `), post.caption);
+  assert.ok(post.caption.endsWith(`\n\n${heliosLine('field_notes', slug)}\n\n${FIELD_NOTES_HASHTAGS.join(' ')}`), post.caption);
+  assert.ok(post.caption.length <= CAPTION_MAX_CHARS);
   // The photos rest, the tips are drafted, the post is on the spine, nothing is approved or booked.
   const pool = (await query<{ photo_id: string; status: string; last_used_post_seq: number | null }>(`SELECT photo_id::text AS photo_id, status, last_used_post_seq FROM field_notes.pool`)).rows;
   for (const id of post.photo_ids) assert.deepEqual({ s: pool.find((p) => p.photo_id === id)!.status, q: pool.find((p) => p.photo_id === id)!.last_used_post_seq }, { s: 'resting', q: post.seq });
@@ -628,7 +634,7 @@ test('a failed paid write (no draft) stores nothing; its tips count an attempt e
 test('a paid write that throws (a 529 in the fact check) or returns an invalid draft: every tip, seeds included, counts an attempt', async () => {
   for (const [name, over] of [
     ['throws', { factCheck: async () => { throw Object.assign(new Error('529 overloaded_error'), { status: 529 }); } }],
-    ['invalid draft', { claudeStub: stubClaude({ draft: () => ({ slides: 'not a list', caption: 7 }) }) }],
+    ['invalid draft', { claudeStub: stubClaude({ draft: () => ({ slides: 'not a list' }) }) }],
   ] as const) {
     const { query } = await freshDb();
     await addPool(query, 6);
@@ -648,7 +654,6 @@ test('a hard gate fails the draft and nothing is stored; its tips count an attem
   const repeated = (ids: string[]) => ({
     slides: [{ tipId: ids[0], ...CANNED_SLIDES[0]! }, { tipId: ids[1], ...CANNED_SLIDES[1]! }, { tipId: ids[2], ...CANNED_SLIDES[1]!, headline: CANNED_SLIDES[2]!.headline }],
     skipped: [],
-    caption: CANNED_CAPTION,
   });
   const engine = stubEngine(query, { claudeStub: stubClaude({ draft: repeated }) });
   const r = await carryOutFieldNotesRun(worker(query, engine).w, await claim(query, tipIds[0]));
@@ -833,7 +838,7 @@ test('a scored run: a non-AI tip scores 0 and is never picked; at most two repo 
     `SELECT id::text AS id, source_url, leaf, score, status FROM field_notes.tips`)).rows;
   const notAi = tips.find((t) => t.source_url.endsWith('/notai'))!;
   assert.equal(Number(notAi.score), 0, 'the AI gate zeroes it');
-  assert.equal(notAi.status, 'candidate', 'stored as found, never drafted');
+  assert.equal(notAi.status, 'expired', 'stored as found (so never scored again), never drafted; a 0 tip leaves the best-30 pool');
   const [post] = await posts(query);
   const onPost = post!.tip_ids.map((id) => tips.find((t) => t.id === id)!);
   assert.ok(!onPost.some((t) => t.id === notAi.id), 'the non-AI tip is not on the post');
@@ -1115,7 +1120,8 @@ test('Rule 2: a run scores only candidates it just found that are not stored, ne
   assert.equal(r.status, 'ok', r.note);
   assert.equal(engine.jevStub.calls, 3, 'the three new tips only');
   const left = (await getTip(query, leftover))!;
-  assert.deepEqual([left.score, left.leaf, left.status], [null, null, 'candidate'], 'the earlier candidate is untouched');
+  assert.deepEqual([left.score, left.leaf], [null, null], 'the earlier candidate is never scored');
+  assert.equal(left.status, 'expired', 'unpickable (no score), so the best-30 pool lets it go: a status change only');
 });
 
 // ── ingestion and dedup over many runs (F1, 2026-11-06) ────────────────────
@@ -1330,7 +1336,7 @@ test('the stored slides are the layout, mapped to types.ts Slide, and the draft 
   assert.deepEqual(bodyText, [CANNED_SLIDES[0]!.body], 'one plain body paragraph');
   assert.ok(!JSON.stringify(tipSlide.blocks).includes(CANNED_SLIDES[0]!.tryIt), 'the usage line is not on the slide');
   const photos = await Promise.all([0, 1, 2, 3, 4].map(async (i) => ({ photoId: `p${i}`, bytes: await photoBytes(i) })));
-  const draft = { slides: CANNED_SLIDES.slice(0, 3).map((x, i) => ({ kind: 'tip' as const, tipId: tipIds[i]!, ...x })), caption: CANNED_CAPTION };
+  const draft = { slides: CANNED_SLIDES.slice(0, 3).map((x, i) => ({ kind: 'tip' as const, tipId: tipIds[i]!, ...x })) };
   const inputs = draftToSlideInputs({ draft, photos });
   assert.deepEqual(inputs.map((i) => i.kind), ['cover', 'tip', 'tip', 'tip', 'follow']);
   assert.equal(inputs[0]!.headline, '3 AI tips to try');
@@ -1354,7 +1360,7 @@ test('a slide the source gives no exact usage for still posts: its how-to-try li
   await addPool(query, 6);
   const tipIds = await seedSet(query, 3);
   const claudeStub = stubClaude({
-    draft: (ids) => ({ slides: ids.map((tipId, i) => ({ tipId, ...CANNED_SLIDES[i]!, ...(i === 1 ? { tryIt: '' } : {}) })), skipped: [], caption: CANNED_CAPTION }),
+    draft: (ids) => ({ slides: ids.map((tipId, i) => ({ tipId, ...CANNED_SLIDES[i]!, ...(i === 1 ? { tryIt: '' } : {}) })), skipped: [] }),
   });
   const engine = stubEngine(query, { claudeStub });
   const { w } = worker(query, engine);
@@ -1364,18 +1370,10 @@ test('a slide the source gives no exact usage for still posts: its how-to-try li
   assert.deepEqual(post!.tip_ids, tipIds, 'no tip was skipped for a missing install command');
   const url = (await query<{ source_url: string }>(`SELECT source_url FROM field_notes.tips WHERE id = $1`, [tipIds[1]])).rows[0]!.source_url;
   assert.ok(url);
-  assert.ok(post!.caption.includes(`1. ${CANNED_SLIDES[0]!.name}: ${CANNED_SLIDES[0]!.tryIt}`), post!.caption);
-  assert.ok(post!.caption.includes(`2. ${CANNED_SLIDES[1]!.name}: ${url}`), post!.caption);
+  assert.ok(post!.caption.includes(`1. ${CANNED_SLIDES[0]!.name}: ${CANNED_SLIDES[0]!.tryIt.replace(/`/g, '')}`), post!.caption);
+  assert.ok(post!.caption.includes(`2. ${CANNED_SLIDES[1]!.name}: ${SOURCE_LINK_LABEL} ${url}`), post!.caption);
 });
 
-test('the caption keeps the writer text, adds the follow line and tags, keeps at most one exclamation mark and fits 2,200', () => {
-  const c = buildFieldNotesCaption('Turn on the review option! Save this post!');
-  assert.ok(c.startsWith('Turn on the review option! Save this post.'));
-  assert.ok(c.includes(FIELD_NOTES_FOLLOW_LINE) && c.includes('#FieldNotes'));
-  assert.equal((c.match(/!/g) ?? []).length, 1);
-  const long = buildFieldNotesCaption('A sentence that goes on. '.repeat(200));
-  assert.ok(long.length <= CAPTION_MAX_CHARS && long.includes(FIELD_NOTES_FOLLOW_LINE));
-});
 
 
 test('no live call: the injected clients were the only transports and the engine builds none of its own', async () => {
@@ -1421,7 +1419,14 @@ test('score_version: a tip scored by an older question set (or with no version) 
   assert.equal(engine.jevStub.calls, 3, 'only the new finds are scored; the old rows are never re-scored');
   const [post] = await posts(query);
   assert.ok(post!.tip_ids.every((id) => !old.includes(id)), 'no old-version tip on the post');
-  assert.deepEqual(await snapshot(), before, 'the old rows are untouched (no re-score, no rewrite)');
+  // The best-30 pool (tip-pool.ts) expires them (selection can never pick them): status and reason only, nothing re-scored or rewritten.
+  const strip = (rows: Array<{ j: unknown }>) => rows.map((x) => {
+    const { status, reject_reason, updated_at, ...rest } = JSON.parse(String(x.j));
+    return { rest, status, reject_reason };
+  });
+  const afterRows = strip(await snapshot());
+  assert.deepEqual(afterRows.map((x) => x.rest), strip(before).map((x) => x.rest), 'the old rows are not re-scored or rewritten');
+  assert.ok(afterRows.every((x) => x.status === 'expired' && x.reject_reason === POOL_TRIM_REASON), 'they leave the pool by status only');
   const saved = (await query<{ score_version: string | null }>(`SELECT score_version FROM field_notes.tips WHERE id <> ALL($1::uuid[])`, [old])).rows;
   assert.equal(saved.length, 3);
   assert.ok(saved.every((t) => t.score_version === FIELD_NOTES_SCORE.version), 'each new tip records the version that scored it');

@@ -115,8 +115,8 @@ SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.capti
            AND (u.post_id = p.id
              OR (u.post_id IS NULL AND u.story_id = p.story_id
                  AND u.used_at BETWEEN p.created_at - interval '1 day' AND p.created_at + interval '1 day'))) AS photo_sources,
-       (SELECT e->'checks' FROM jsonb_array_elements(
-          CASE WHEN jsonb_typeof(r.record->'result'->'posts') = 'array' THEN r.record->'result'->'posts' ELSE '[]'::jsonb END) e
+       -- post_summaries is the run's posts cut to {storyId, costUsd, checks}; record itself is ~1 MB a row.
+       (SELECT e->'checks' FROM jsonb_array_elements(COALESCE(r.post_summaries, '[]'::jsonb)) e
          WHERE e->>'storyId' = p.story_id LIMIT 1) AS checks
   FROM social.posts p
   LEFT JOIN social.runs r ON r.id = p.run_id
@@ -126,9 +126,9 @@ SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.capti
 /** Candidate stories from the newest daily run's shortlist, scored by Jev (probSum). */
 export const CAROUSEL_IDEAS_SQL = `
 WITH latest AS (
-  -- Sort the id only. The shortlist is read from that one run, so the other daily records stay on the server.
+  -- Sort the id only. The shortlist column is read from that one run; record (~1 MB a row) is never opened.
   SELECT id, started_at FROM social.runs
-   WHERE kind = 'daily' AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
+   WHERE kind = 'daily' AND shortlist IS NOT NULL
    ORDER BY started_at DESC NULLS LAST LIMIT 1
 )
 SELECT c->>'id' AS story_id,
@@ -147,7 +147,7 @@ SELECT c->>'id' AS story_id,
                 WHERE ci.vertical = 'carousels' AND ci.idea_ref = c->>'id' AND s.status IN ('scheduled', 'publishing')) AS scheduled
   FROM (
     SELECT c, latest.started_at FROM latest
-    JOIN social.runs r ON r.id = latest.id, jsonb_array_elements(r.record->'selection'->'shortlist') c
+    JOIN social.runs r ON r.id = latest.id, jsonb_array_elements(r.shortlist) c
     UNION ALL
     -- A person's seeded stories (design 2026-10-25-carousels-seeding): theirs until they expire after a week.
     SELECT c, (c->'seed'->>'addedAt')::timestamptz AS started_at

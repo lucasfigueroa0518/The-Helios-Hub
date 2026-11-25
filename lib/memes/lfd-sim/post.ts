@@ -29,7 +29,7 @@ export type SavedStory = {
   names: string[];
   body: string;
   photo: Photo;
-  photoSource?: 'lead' | 'harvest' | 'finder' | 'meme';
+  photoSource?: 'lead' | 'harvest' | 'finder' | 'meme' | 'video';
   meme?: { templateId: string; memeId: string; rank: number; role: 'cover' | 'slide'; position: number; object: string; text: string[] };
 };
 

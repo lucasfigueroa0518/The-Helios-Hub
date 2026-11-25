@@ -26,7 +26,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
-ZONE="${GCP_ZONE:-us-west1-a}"
+# Both worker VMs live in Montreal next to the Supabase database (ca-central-1) since 2026-11-24.
+ZONE="${SOCIAL_ZONE:-${GCP_ZONE:-northamerica-northeast1-a}}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
 UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher helios-reel-ai-drama}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"
@@ -102,7 +103,12 @@ trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}"' EXIT
 # com.apple.provenance). They start with NUL bytes; an explainer render that copied the kit read one and
 # failed (invalid byte sequence 0x00). COPYFILE_DISABLE stops them; the ._* exclude is for other tars.
 # The local worktrees are whole repo copies the workers never use.
+# Local-only files under planning/ (review renders, audition clips) are not code: only tracked planning docs ship.
+PLANNING_EXCLUDES="$(mktemp)"
+{ git ls-files --others --directory -- planning || true; git ls-files --others --ignored --exclude-standard --directory -- planning || true; } 2>/dev/null \
+  | sed -e 's#/$##' -e 's#^#./#' | sort -u > "${PLANNING_EXCLUDES}"
 COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
+  --exclude-from="${PLANNING_EXCLUDES}" \
   --exclude='._*' \
   --exclude='./.worktrees' \
   --exclude='./.claude/worktrees' \
@@ -116,6 +122,15 @@ COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
   --exclude='./runs' \
   --exclude='./Claude outputs' \
   --exclude='./.explainers-local' \
+  --exclude='./.stories-local' \
+  --exclude='./.memes-local' \
+  --exclude='./.venv-rembg' \
+  --exclude='./.tmp' \
+  --exclude='./.vercel' \
+  --exclude='./__MACOSX' \
+  --exclude='./Content Review *' \
+  --exclude='./outreach brain' \
+  --exclude='./exports/stories' \
   --exclude='./explainers/smoke/.out' \
   --exclude='./explainers/design/sfx/dropins' \
   .
@@ -151,6 +166,10 @@ fi
 
 gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
   set -euo pipefail
+  # One deploy at a time: each one deletes and re-unpacks the app folder, so two at once leave it half-built
+  # (2026-11-24: two sessions overlapped and every worker stopped with no package.json).
+  exec 9>/tmp/helios-social-deploy.lock
+  if ! flock -n 9; then echo 'ERROR: another deploy is running on the VM. Nothing was stopped or replaced; try again when it finishes.' >&2; exit 1; fi
   if [[ -f ${REMOTE_ENV} ]]; then
     sudo mv ${REMOTE_ENV} /opt/helios-social/worker.env
     sudo chmod 600 /opt/helios-social/worker.env
@@ -213,6 +232,11 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   command -v bwrap >/dev/null && command -v socat >/dev/null && command -v unzip >/dev/null || sudo apt-get install -y -qq bubblewrap socat unzip
   # IG Stories: color emoji for the homemade frames.
   fc-list | grep -qi 'Noto Color Emoji' || sudo apt-get install -y -qq fonts-noto-color-emoji
+  # Video finder (MD/LFD clips, MD-LFD D16): ffmpeg from apt; yt-dlp kept current in its own venv (YouTube changes
+  # often). yt-dlp solves YouTube's player JS with a runtime; Node is already here, so helios's config enables it.
+  command -v ffmpeg >/dev/null || sudo apt-get install -y -qq ffmpeg
+  sudo python3 -m venv /opt/helios-social/yt-dlp && sudo /opt/helios-social/yt-dlp/bin/pip install -q -U 'yt-dlp[default]' && sudo ln -sfn /opt/helios-social/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp
+  \${AS_HELIOS} mkdir -p \${H}/.config/yt-dlp && echo '--js-runtimes node' | sudo -u helios tee \${H}/.config/yt-dlp/config >/dev/null
   (cd explainers/runtime && \${AS_HELIOS} npm ci --no-audit --no-fund && \${AS_HELIOS} npx --no-install hyperframes browser ensure || true)
   for unit in ${UNITS}; do
     sudo cp /tmp/${STAMP}-\${unit}.service /etc/systemd/system/\${unit}.service

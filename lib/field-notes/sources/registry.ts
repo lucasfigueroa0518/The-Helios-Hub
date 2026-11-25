@@ -62,6 +62,8 @@ import {
 
 /** The day every entry below was last opened with a plain fetch. */
 export const VERIFIED_ON = '2026-11-06';
+/** The teaching sources (Lucas, 2026-11-24: sources that teach using AI, building good agents, prompting and work practice) were opened this day. */
+export const VERIFIED_ON_TEACHING = '2026-11-24';
 /** Kept for importers: the thin-leaf sources were opened the same day. */
 export const VERIFIED_ON_THIN_LEAVES = VERIFIED_ON;
 /** Window for the "new repos" searches, counted back from the run's date. */
@@ -99,6 +101,7 @@ export type SourceEntry =
   | (Base & { type: 'github-search'; query: GithubSearchQuery; sort?: GithubSearchSort; perPage?: number });
 
 const V = VERIFIED_ON;
+const T = VERIFIED_ON_TEACHING;
 const rss = (id: string, name: string, feedUrl: string) => rssAdapter({ id, name, type: 'A6', bucket: 'A', feedUrl });
 
 export const SOURCE_REGISTRY: readonly SourceEntry[] = [
@@ -290,6 +293,112 @@ export const SOURCE_REGISTRY: readonly SourceEntry[] = [
     read: 'rss adapter (RSS 2.0, full posts)',
     note: '200, 922 KB RSS; newest post Oct 20, 2026.',
     why: 'Practitioner advice on using AI tools at work.',
+  },
+  // ── Teaching sources (2026-11-24): building good agents, AI coding practice, prompting and AI at work ──
+  {
+    type: 'adapter', id: 'anthropic-engineering', label: 'Anthropic Engineering', kind: 'rss', leaves: ['technique', 'coding_agent_feature'], vendor: 'Anthropic', verifiedOn: T, enrich: 'linked-page',
+    adapter: rss('anthropic-engineering', 'Anthropic Engineering', 'https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml'),
+    read: 'rss adapter over a community mirror (Olshansk/rss-feeds; anthropic.com/engineering has no feed); the article page is fetched per item',
+    note: '200, 16 KB RSS; 29 posts, 3 in the last 60 days (newest Nov 13 "The components of agent memory"); short summaries only.',
+    why: "Anthropic's own write-ups on building agents: context engineering, agent memory, evals.",
+  },
+  {
+    type: 'docs', id: 'claude-code-best-practices', label: 'Claude Code best practices', kind: 'docs', leaves: ['technique', 'coding_agent_feature'], vendor: 'Anthropic', verifiedOn: T,
+    pageUrl: 'https://code.claude.com/docs/en/best-practices', fetchUrl: 'https://code.claude.com/docs/en/best-practices.md', format: 'markdown', split: 'sections',
+    read: 'docs adapter, markdown twin split into one undated item per ## section',
+    note: '200, 52 KB markdown; 9 ## sections.',
+    why: "The vendor's guide to working well with a coding agent: a cited source for technique tips.",
+  },
+  {
+    type: 'adapter', id: 'claude-articles', label: 'Claude articles', kind: 'rss', leaves: ['llm_app_feature', 'technique'], vendor: 'Anthropic', verifiedOn: T, enrich: 'linked-page',
+    adapter: rss('claude-articles', 'Claude articles', 'https://claude.com/resources/articles/rss.xml'),
+    read: 'rss adapter (the feed claude.com/blog links); the article page is fetched per item',
+    note: '200, 16 KB RSS; 44 posts in the last 60 days (newest Nov 23), product guides and how-tos; short summaries only.',
+    why: 'First-party guides to getting work done with Claude.',
+  },
+  {
+    type: 'adapter', id: 'github-blog-ai', label: 'GitHub Blog: AI & ML', kind: 'rss', leaves: ['technique', 'coding_agent_feature'], vendor: 'GitHub', verifiedOn: T,
+    adapter: rss('github-blog-ai', 'GitHub Blog AI & ML', 'https://github.blog/ai-and-ml/feed/'),
+    read: 'rss adapter (RSS 2.0, full posts)',
+    note: '200, 1.8 MB RSS; 10 posts in the last 60 days (newest Nov 12 "Build once, run on any agent: A practical guide").',
+    why: 'Practical guides to coding with agents from the team behind Copilot.',
+  },
+  {
+    type: 'adapter', id: 'gemini-blog', label: 'Google Blog: Gemini', kind: 'rss', leaves: ['llm_app_feature', 'technique'], vendor: 'Google', verifiedOn: T, enrich: 'linked-page',
+    adapter: rss('gemini-blog', 'Google Blog Gemini', 'https://blog.google/products/gemini/rss/'),
+    read: 'rss adapter (the Gemini product feed); the article page is fetched per item',
+    note: '200, 27 KB RSS; 20 posts in the last 60 days (newest Nov 24), product news with some tips; short summaries only.',
+    why: 'Gemini tips and features for people using it at work; scoring drops the plain news.',
+  },
+  {
+    type: 'adapter', id: 'martin-fowler', label: 'Martin Fowler', kind: 'rss', leaves: ['technique'], vendor: 'any', verifiedOn: T,
+    adapter: rss('martin-fowler', 'Martin Fowler', 'https://martinfowler.com/feed.atom'),
+    read: 'rss adapter (Atom, full posts)',
+    note: '200, 150 KB Atom; 22 posts in the last 60 days (newest Nov 20), AI-assisted development among general software topics.',
+    why: 'Careful practice notes on working with coding agents; the AI gate drops the rest.',
+  },
+  {
+    type: 'adapter', id: 'addy-osmani', label: 'Addy Osmani (Elevate)', kind: 'rss', leaves: ['technique'], vendor: 'any', verifiedOn: T,
+    adapter: rss('addy-osmani', 'Addy Osmani', 'https://addyo.substack.com/feed'),
+    read: 'rss adapter (Substack, full posts)',
+    note: '200, 1.1 MB RSS; 2 posts in the last 60 days (newest Oct 14 "Agentic Verification").',
+    why: 'Workflow advice for engineers coding with agents.',
+  },
+  {
+    type: 'adapter', id: 'armin-ronacher', label: 'Armin Ronacher', kind: 'rss', leaves: ['technique'], vendor: 'any', verifiedOn: T,
+    adapter: rss('armin-ronacher', 'Armin Ronacher', 'https://lucumr.pocoo.org/feed.atom'),
+    read: 'rss adapter (Atom, full posts)',
+    note: '200, 269 KB Atom; 4 posts in the last 60 days (newest Nov 9 "What is Codemode").',
+    why: 'A practitioner writing up how he works with coding agents.',
+  },
+  {
+    type: 'adapter', id: 'jesse-vincent', label: 'Jesse Vincent', kind: 'rss', leaves: ['technique', 'skill'], vendor: 'any', verifiedOn: T,
+    adapter: rss('jesse-vincent', 'Jesse Vincent', 'https://blog.fsck.com/feed/feed.xml'),
+    read: 'rss adapter (Atom, full posts)',
+    note: '200, 1.6 MB Atom; 6 posts in the last 60 days (newest Nov 17 "The Toolsmith").',
+    why: 'The author of the Superpowers skills framework on agent workflows.',
+  },
+  {
+    type: 'adapter', id: 'hamel-husain', label: 'Hamel Husain', kind: 'rss', leaves: ['technique'], vendor: 'any', verifiedOn: T,
+    adapter: rss('hamel-husain', 'Hamel Husain', 'https://hamel.dev/index.xml'),
+    read: 'rss adapter (RSS 2.0, full posts)',
+    note: '200, 548 KB RSS; 2 posts in the last 60 days (newest Oct 20 "How To Use Decision Models for Evals").',
+    why: 'Evals and the practice of shipping reliable AI features.',
+  },
+  {
+    type: 'adapter', id: 'kent-beck', label: 'Kent Beck (Tidy First)', kind: 'rss', leaves: ['technique'], vendor: 'any', verifiedOn: T, enrich: 'linked-page',
+    adapter: rss('kent-beck', 'Kent Beck', 'https://tidyfirst.substack.com/feed'),
+    read: 'rss adapter (Substack); the post page is fetched per item (the feed holds teasers)',
+    note: '200, 141 KB RSS; 10 posts in the last 60 days (newest Nov 12); augmented coding among general topics.',
+    why: 'Augmented-coding practice from a veteran engineer; the AI gate drops the rest.',
+  },
+  {
+    type: 'adapter', id: 'jeff-su', label: 'Jeff Su', kind: 'rss', leaves: ['technique', 'llm_app_feature'], vendor: 'any', verifiedOn: T,
+    adapter: rss('jeff-su', 'Jeff Su', 'https://www.jeffsu.org/rss/'),
+    read: 'rss adapter (Ghost, full posts)',
+    note: '200, 187 KB RSS; 13 posts in the last 60 days (newest Nov 24 "8 ChatGPT and Claude Plugins I Actually Use").',
+    why: 'Short, practical AI tips for professionals using ChatGPT and Claude at work.',
+  },
+  {
+    type: 'adapter', id: 'nates-newsletter', label: "Nate's Newsletter", kind: 'rss', leaves: ['technique', 'llm_app_feature'], vendor: 'any', verifiedOn: T,
+    adapter: rss('nates-newsletter', "Nate's Newsletter", 'https://natesnewsletter.substack.com/feed'),
+    read: 'rss adapter (Substack; paid posts carry the free part only)',
+    note: '200, 162 KB RSS; 20 posts in the last 60 days (newest Nov 23), model choice and AI workflows at work.',
+    why: 'Prompting and workflow strategy for people using AI in their jobs.',
+  },
+  {
+    type: 'adapter', id: 'excellent-prompts', label: 'Excellent Prompts', kind: 'rss', leaves: ['technique', 'llm_app_feature'], vendor: 'any', verifiedOn: T,
+    adapter: rss('excellent-prompts', 'Excellent Prompts', 'https://excellentprompts.substack.com/feed'),
+    read: 'rss adapter (Substack, full posts)',
+    note: '200, 159 KB RSS; 20 posts in the last 60 days (newest Nov 24 "The Claude Duet Feature I Ignored, and Now Use Every Day").',
+    why: 'Prompts and feature walkthroughs people can use the same day.',
+  },
+  {
+    type: 'adapter', id: 'prosper-ai', label: 'Prosper', kind: 'rss', leaves: ['technique', 'llm_app_feature'], vendor: 'any', verifiedOn: T,
+    adapter: rss('prosper-ai', 'Prosper', 'https://prosperinai.substack.com/feed'),
+    read: 'rss adapter (Substack, full posts)',
+    note: '200, 693 KB RSS; 9 posts in the last 60 days (newest Nov 19 "OpenAI Dots Explained: Set Up Your First Always-On...").',
+    why: 'Step-by-step setups of AI features for professionals.',
   },
 ];
 

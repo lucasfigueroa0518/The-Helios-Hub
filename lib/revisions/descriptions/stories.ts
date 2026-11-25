@@ -16,17 +16,20 @@
  *
  *   color    the frame's backdrop (black | white | orange | green): render only, 0 model calls
  *   layout   the photo's crop (photo.focus): render only
- *   wording  Morning Download story headlines only: the writer's length/sentence rule → Jev md-grounding
- *            (bar 0.6) over the frame's words; a miss gets ONE Sonnet md-headlines rewrite, which must
- *            ground again (the build's rule). Free vs. Paid words came through gates this path can't
- *            re-run (the pair score), so they are refused.
+ *   wording  Morning Download story frames only: the frame's length/sentence rule → the news writer's Haiku
+ *            fact check (lib/news-writer checkFacts) over the person's words; a miss gets ONE news-writer
+ *            rewrite (writeStories('md'), the build's writer, with the person's request as an added
+ *            instruction), whose own fact check must pass (else the story is dropped and nothing changes).
+ *            Free vs. Paid words came through gates this path can't re-run (the pair score), so they are refused.
  *
  * AI Trivia frames are videos rendered as a pair (lib/stories/trivia/render), Real or AI? frames are its
  * screened images and their answers (planning/Real or AI/CONTRACT.md), and Guess the Number is retired
  * (AT-14): none takes a revision; Regenerate makes a new set.
- *   photo    one finder search (createLivePhotoFinder().find) per request, at most two requests, never a
- *            photo another frame of the set shows (the opener counts), the replaced photo, or one in
- *            the used-photo ledger (CI-32: published in the last 20 days)
+ *   photo    Morning Download story frames only: ONE news photo finder run (lib/news-photos findStoryPhoto, the
+ *            build's; a person's hint adds one image search's results as extra candidates), then the build's
+ *            band fit (bandPhotoFor: fitToBand/decideBand, stored under the set). Never a photo another frame
+ *            of the set shows, the replaced photo, or one in the used-photo ledger (CI-32: published in the
+ *            last 20 days). The opener draws every story's photo (no photo of its own); Free vs. Paid is retired.
  *
  * Parts: `{ kind: 'frame', key: '<seq>' }` (the frame's real seq, 1-based).
  */
@@ -34,8 +37,10 @@ import { randomUUID } from 'node:crypto';
 
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Query } from '@/lib/social/store/pg';
+import type { PhotoResult } from '@/lib/news-photos';
+import type { PhotoBankSink } from '@/lib/news-photos/bank-offer';
+import type { PhotoStory } from '@/lib/news-photos/candidates';
 import type { Queryable } from '@/lib/stories/db';
-import type { PhotoRequest } from '@/lib/stories/photos';
 import { BACKDROPS, MAX_JPEG_BYTES, VIDEO_SERIES, framePhoto, type Backdrop, type Frame, type FrameData, type Photo, type Series, type Style } from '@/lib/stories/render/types';
 import type { FrameRevisionState, SetStatus } from '@/lib/stories/repository';
 
@@ -53,17 +58,16 @@ export type { Metered };
 export const STORIES_STAGE_TAGS = ['pick', 'write', 'ground', 'photo', 'backdrop', 'render'] as const;
 
 /**
- * A wording fix's worst case: one Sonnet 5.5 md-headlines rewrite for one story at Stories' own rates
- * (lib/stories/cost.ts RATES: $2 in / $10 out per MTok; ~8K input incl. the 9,000-char article and
- * ~2K output ≈ $0.036) plus two Jev md-grounding calls (fractions of a cent), rounded up.
- * NEEDS TOMMY'S CONFIRMATION before caps are approved.
+ * A wording fix's worst case: one Haiku fact check, then one news-writer rewrite of one story (Opus 5.5 at
+ * $4 in / $20 out per MTok: up to three turns of ~5K input incl. the 9,000-char article, ~1K output in all,
+ * ≈ $0.10) with its own one or two Haiku checks, rounded up. Under the approved $0.15 Stories wording cap.
  */
-export const STORIES_WORDING_ESTIMATE_USD = 0.05;
+export const STORIES_WORDING_ESTIMATE_USD = 0.12;
 
 /**
- * A photo swap: at most two finder searches (Jev picks + Haiku 5.5 photo vision, priced by
- * lib/stories/cost.ts). No constant exists for one search; Carousels and Last Few Days price one
- * photo search at $0.05, so two are $0.10. NEEDS TOMMY'S CONFIRMATION before caps are approved.
+ * A photo swap: one news photo finder run (Haiku brief + AI check, Jev grades of up to ~15 candidates, one or
+ * two Serper searches) and one Jev band check. Priced like Carousels' and Last Few Days' $0.05 photo search,
+ * doubled for the grades; under the approved $0.20 Stories photo cap.
  */
 export const STORIES_PHOTO_SWAP_ESTIMATE_USD = 0.1;
 
@@ -71,9 +75,10 @@ export const STORIES_PHOTO_SWAP_ESTIMATE_USD = 0.1;
 const HEADLINE_MAX = 260;
 /** The build's article cut for the writer and grounding (morning-download.ts BODY_CHARS). */
 export const STORIES_BODY_CHARS = 9000;
-/** The build's rewrite note (morning-download.ts, the second writeFor), verbatim. */
-const REWRITE_NOTE =
-  'Each of these stories had no headline last time, or its headline made a claim the source does not support, or ran past two sentences or 240 characters. Write one headline for each, stating only what the source says.';
+/** The person's request, added to the news writer's conversation (writeStories `instruction`); the W12 text is unchanged. */
+export function storiesRewriteInstruction(value: string): string {
+  return `A person reviewing this Morning Download frame asked for it to say: "${value}". Keep that change as far as the source supports it.`;
+}
 
 /** Crop positions for a frame photo (photo.focus as object-position fractions, render/types.ts). */
 const CROPS = {
@@ -97,26 +102,34 @@ export type StoriesDeps = {
   renderFrame: (input: { frame: Frame; key: string }) => Promise<{ file: string; bytes: number; problems: string[] }>;
   /** Photo URLs published in the last 20 days (the CI-32 ledger; the build's `held` set). Free. */
   heldPhotos: (q: Query) => Promise<Set<string>>;
-  /** The story's article text (its stories.pool entry, else the page), or null when it can't be read. Free. */
-  sourceText: (q: Query, story: { key: string; url: string }) => Promise<string | null>;
-  /** Jev md-grounding@1 on a headline: the `supported` probability. Charges `meter` as it pays. */
-  grounded: (input: { setId: string; headline: string; source: string }, meter: Metered) => Promise<number>;
   /**
-   * ONE Sonnet md-headlines rewrite of the story with `note`; null only when the writer answered with no
-   * headline. An outage, refusal or other error THROWS (reported as failed, not as a fact-check miss).
-   * Charges `meter` as it pays.
+   * The story's article (its stories.pool entry, else the page): its text and the source's own headline (null when
+   * only the page could be read), or null when it can't be read. Free.
    */
-  rewrite: (
-    input: { setId: string; story: { key: string; headline: string; outlet: string; url: string; body: string }; note: string },
-    meter: Metered,
-  ) => Promise<{ headline: string } | null>;
-  /** ONE finder search (createLivePhotoFinder().find) for `request`, or null. Charges `meter` as it pays. */
-  findPhoto: (input: { setId: string; request: PhotoRequest }, meter: Metered) => Promise<Photo | null>;
+  sourceText: (q: Query, story: { key: string; url: string }) => Promise<{ text: string; headline: string | null } | null>;
   /**
-   * A photo's pixel size (the finder's own size probe, lib/social/photos/size.ts createSizeProbe), or
-   * null when it can't be read. Free (an HTTP read, no model). Used for the opener's cover floor.
+   * The news writer's Haiku fact check (lib/news-writer checkFacts) on the frame's words against the article: `ok`
+   * when every claim is supported, else the failing claims in `why`. An error THROWS. Charges `meter` as it pays.
    */
-  photoSize: (url: string) => Promise<{ w: number; h: number } | null>;
+  factCheck: (input: { setId: string; story: MdSource; words: string }, meter: Metered) => Promise<{ ok: boolean; why: string }>;
+  /**
+   * ONE news-writer rewrite (writeStories('md'), the build's writer) of the story with the person's request as an
+   * added instruction: the frame's line (frameCopy of the headline and body), or `dropped` with the reason when its
+   * own fact check still failed. An outage, refusal or other error THROWS (reported as failed). Charges `meter`.
+   */
+  rewrite: (input: { setId: string; story: MdSource; instruction: string }, meter: Metered) => Promise<{ headline: string } | { dropped: string }>;
+  /**
+   * ONE news photo finder run (lib/news-photos findStoryPhoto) for the story, never a photo in `exclude`; `hint`'s
+   * image search adds extra candidates. The pick is band-fitted and stored as the build does (bandPhotoFor): `src` is
+   * the stored copy, `sourceUrl` the original. `photo` is null when nothing usable was found. Charges `meter`.
+   */
+  findPhoto: (input: { setId: string; story: PhotoStory; hint?: string; exclude: ReadonlySet<string> }, meter: Metered) => Promise<{ photo: Photo | null; log: string[]; result?: PhotoResult | null }>;
+  /**
+   * The photo bank (D49): the finder's `result` (pick and runner-ups) is offered with run ref
+   * `stories-revision:<set>:<iso>` at the frame's slide (lib/news-photos/bank-offer.ts). Absent, or null: nothing is
+   * offered. Never fails a revision.
+   */
+  photoBank?: () => Promise<PhotoBankSink | null>;
   /** The type's own un-approve: repository unscheduleSet (the set goes back to ready, its slot cancelled). */
   unschedule: (q: Query, setId: string) => Promise<{ ok: boolean; note: string }>;
   /** A short id for the revision's storage key. Default: random. */
@@ -137,7 +150,9 @@ type Row = {
   ig_container_id: string | null;
   ig_media_id: string | null;
 };
-type MdStory = { key: string; headline: string; url: string; source: string };
+type MdStory = { key: string; headline: string; url: string; source: string; angle?: string };
+/** A Morning Download story as the writer and fact check see it: the source's headline, its text and the build's angle. */
+export type MdSource = { key: string; headline: string; text: string; angle: string };
 type LogEntry = { frame: string; picked?: string; steps?: string[] };
 /** The frame's state, plus its JPEG size and its own photo-log steps (this frame's, so replaying them is safe). */
 type StoriesState = PartState & { jpegBytes?: number | null; logSteps?: string[] | null };
@@ -209,7 +224,9 @@ function derivePayload(set: SetRow, rows: Row[], steps?: { label: string; steps:
     for (const e of p.photo_log as LogEntry[]) {
       const row = rows.find((r) => logLabel(rows, r) === e.frame);
       if (!row) continue;
-      const src = framePhoto(row.copy)?.src;
+      // The build logs the original (a band-fitted photo's `sourceUrl`), not the stored copy.
+      const p = framePhoto(row.copy);
+      const src = p?.sourceUrl ?? p?.src;
       if (src) e.picked = src;
       else delete e.picked;
       if (steps && steps.label === e.frame) e.steps = steps.steps;
@@ -288,12 +305,8 @@ function metered(meter: { spend(usd: number): void }): Metered & { check(): void
   };
 }
 
-/** The request the build made for this frame (its photo-log trace starts `kind: "query"`), if logged. */
-function loggedAsk(set: SetRow, label: string): { kind: string; query: string } | null {
-  const first = logOf(set, label)?.steps?.[0];
-  const m = first ? /^([a-z]+): "(.*)"$/.exec(first) : null;
-  return m ? { kind: m[1]!, query: m[2]! } : null;
-}
+/** A photo's addresses: the stored copy and, for a band-fitted photo, its original. */
+const photoUrls = (p: Photo | null | undefined): string[] => [p?.src, p?.sourceUrl].filter((u): u is string => Boolean(u));
 
 const REPLACED = /^revision: replaced (\S+) with /;
 
@@ -317,8 +330,7 @@ async function rejectedPhotos(q: Query, set: SetRow, label: string, seq: number)
     );
     for (const r of rows) {
       const before = r.before as { copy?: FrameData; photo?: Photo | null } | null;
-      const src = (before?.copy ? framePhoto(before.copy)?.src : undefined) ?? before?.photo?.src;
-      if (src) out.add(src);
+      for (const u of photoUrls((before?.copy ? framePhoto(before.copy) : undefined) ?? before?.photo)) out.add(u);
     }
   } catch {
     // The revisions log is not there (a database without revisions_schema.sql): the photo log alone counts.
@@ -435,9 +447,9 @@ export function createStoriesDescription(deps: StoriesDeps, vertical: StoryVerti
         if (!fits(value)) return blocked(`That headline is ${value.length} characters and ${sentenceCount(value)} sentence(s); a story frame takes one or two sentences and at most ${HEADLINE_MAX} characters, so it was not changed.`);
         const story = (Array.isArray(set.payload.stories) ? (set.payload.stories as MdStory[]) : [])[storyIndex(rows, row)];
         if (!story?.url) return failed(`I could not find which article frame ${seq} came from, so its new headline could not be fact-checked; nothing was changed.`);
-        const source = await deps.sourceText(q, { key: story.key, url: story.url });
-        if (!source) return failed(`I could not re-read frame ${seq}'s article to fact-check the new headline, so nothing was changed.`);
-        const { GROUNDING_BAR } = await import('@/lib/stories/build/morning-download');
+        const article = await deps.sourceText(q, { key: story.key, url: story.url });
+        if (!article) return failed(`I could not re-read frame ${seq}'s article to fact-check the new headline, so nothing was changed.`);
+        const source: MdSource = { key: story.key, headline: article.headline ?? story.headline, text: article.text.slice(0, STORIES_BODY_CHARS), angle: story.angle ?? '' };
         // An outage or error from the fact check or the writer is "could not do it" (failed), never a
         // fact-check rejection; a ceiling stop re-throws.
         type Called<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -453,96 +465,70 @@ export function createStoriesDescription(deps: StoriesDeps, vertical: StoryVerti
         };
         const unreachable = (what: string, error: string) => failed(`I couldn't reach the ${what} (${error}), so frame ${seq}'s headline was not changed.`);
         let headline = value;
-        const was = row.copy.headline;
-        const first = await call(() => deps.grounded({ setId: set.id, headline, source }, m));
+        const first = await call(() => deps.factCheck({ setId: set.id, story: source, words: value }, m));
         if (!first.ok) return unreachable('fact check', first.error);
-        if (!(first.value >= GROUNDING_BAR)) {
-          // The build's rule: a grounding miss gets ONE rewrite, which must ground again.
-          const note = `${REWRITE_NOTE}\n\nA person asked for this headline: "${value}". Keep that change as far as the source supports it.`;
-          const retry = await call(() => deps.rewrite({ setId: set.id, story: { key: story.key, headline: was, outlet: story.source, url: story.url, body: source }, note }, m));
+        if (!first.value.ok) {
+          // The build's writer, once: the person's request rides along as an instruction, and the writer's own fact
+          // check (with its one rewrite turn) must pass, or the story is dropped.
+          const retry = await call(() => deps.rewrite({ setId: set.id, story: source, instruction: storiesRewriteInstruction(value) }, m));
           if (!retry.ok) return unreachable('writer', retry.error);
-          const again = retry.value?.headline?.trim();
+          if ('dropped' in retry.value) {
+            return blocked(`The fact check could not match frame ${seq}'s new headline to its article (${first.value.why}), and the writer's rewrite did not pass it either, so it was not changed. Try words the article states.`);
+          }
+          const again = retry.value.headline.trim();
           if (!again) return failed(`The fact check did not match the new headline, and the writer returned no rewrite for frame ${seq}, so nothing was changed.`);
           if (!fits(again)) return blocked(`The fact check did not match the new headline, and the one rewrite ran past two sentences or ${HEADLINE_MAX} characters, so frame ${seq} was not changed.`);
-          const second = await call(() => deps.grounded({ setId: set.id, headline: again, source }, m));
-          if (!second.ok) return unreachable('fact check', second.error);
-          if (!(second.value >= GROUNDING_BAR)) return blocked(`The fact check could not match frame ${seq}'s new headline to its article, even after one rewrite, so it was not changed. Try words the article states.`);
           headline = again;
         }
         copy = { ...row.copy, headline };
       } else if (it.fixKind === 'photo') {
         if (row.role === 'closer' || row.role === 'intro') return blocked(`Frame ${seq} (the ${row.role}) shows no photo, so there is nothing to replace.`);
         if (row.role === 'paid' || row.role === 'free') return blocked(`Frame ${seq} shows the tool's own logo, so it was not replaced.`);
-        // Never a photo another frame shows (the opener counts), the one being replaced, or one published in the last 20 days.
+        if (row.role === 'opener') return blocked(`Frame ${seq} (the opener) shows every story's own photo, so it has none of its own to replace. Ask for a new photo on a story frame instead.`);
+        if (set.series !== 'morning_download' || row.copy.role !== 'story') return blocked(`Frame ${seq} (the ${row.role}) takes no new photo: only Morning Download story frames do, so it was not changed.`);
+        const story = (Array.isArray(set.payload.stories) ? (set.payload.stories as MdStory[]) : [])[storyIndex(rows, row)];
+        if (!story?.url) return failed(`I could not find which article frame ${seq} came from, so no new photo was looked for; nothing was changed.`);
+        // Never a photo another frame shows, the one being replaced, or one published in the last 20 days (original or stored copy).
         const exclude = new Set<string>(await deps.heldPhotos(q));
         for (const r of rows) {
-          for (const p of [framePhoto(r.copy), r.photo]) if (p?.src) exclude.add(p.src);
+          for (const p of [framePhoto(r.copy), r.photo]) for (const u of photoUrls(p)) exclude.add(u);
         }
         const label = logLabel(rows, row);
         // Nor a photo the person already turned down on this frame (an earlier "different photo" revision).
         for (const u of await rejectedPhotos(q, set, label, seq)) exclude.add(u);
-        const stories = Array.isArray(set.payload.stories) ? (set.payload.stories as MdStory[]) : [];
-        const url = row.role === 'story' ? stories[storyIndex(rows, row)]?.url : row.role === 'opener' ? stories[0]?.url : (set.payload.url as string | undefined);
-        const words = row.copy.role === 'story' ? row.copy.headline : row.copy.role === 'opener' ? (stories[0]?.headline ?? wordsOf(row.copy)) : wordsOf(row.copy);
-        const fallback = { kind: 'thematic', query: words.slice(0, 200) };
+        // The build's story: the source's headline and its article text (the photo brief reads both). Free.
+        const article = await deps.sourceText(q, { key: story.key, url: story.url });
+        const photoStory: PhotoStory = { id: story.key, headline: article?.headline ?? row.copy.headline, text: (article?.text ?? row.copy.headline).slice(0, STORIES_BODY_CHARS), url: story.url, duplicateUrls: [] };
         const hint = args.hint?.trim();
-        const asks = hint ? [{ kind: 'thematic', query: hint }, loggedAsk(set, label) ?? fallback] : [loggedAsk(set, label) ?? fallback, fallback];
-        const unique = asks.filter((a, i) => asks.findIndex((b) => b.kind === a.kind && b.query === a.query) === i).slice(0, 2);
-        const tried: string[] = [];
-        let found: Photo | null = null;
-        for (const ask of unique) {
+        m.check();
+        let got: { photo: Photo | null; log: string[]; result?: PhotoResult | null };
+        try {
+          got = await deps.findPhoto({ setId: set.id, story: photoStory, ...(hint ? { hint } : {}), exclude }, m);
+        } catch (e) {
           m.check();
-          const request: PhotoRequest = {
-            kind: ask.kind,
-            query: ask.query,
-            subjects: ask.kind === 'person' ? [{ name: ask.query, type: 'person' }] : [],
-            storyDate: set.ny_date,
-            sourceUrls: url ? [url] : [],
-            exclude: new Set(exclude),
-            copy: words,
-            ...(row.role === 'opener' ? { cover: true } : {}),
-          };
-          let photo: Photo | null = null;
+          return failed(`I couldn't search for another photo for frame ${seq} (${errText(e)}), so the original was kept.`);
+        }
+        // The photo bank (D49): what the finder found, the swapped-in pick as `picked` at this frame. Best effort.
+        if (got.result && deps.photoBank) {
           try {
-            photo = await deps.findPhoto({ setId: set.id, request }, m);
-          } catch (e) {
-            m.check();
-            tried.push(`"${ask.query}" (${errText(e)})`);
-            continue;
+            const [bank, { offerToBank }] = await Promise.all([deps.photoBank(), import('@/lib/news-photos/bank-offer')]);
+            const at = new Date();
+            offerToBank(bank, got.result, { runRef: `stories-revision:${set.id}:${at.toISOString()}`, slide: seq, posted: Boolean(got.photo), headline: photoStory.headline, at });
+          } catch {
+            /* the bank never fails a revision */
           }
-          m.check();
-          if (!photo?.src || !photo.credit?.trim()) {
-            tried.push(`"${ask.query}" (nothing usable)`);
-            continue;
-          }
-          if (exclude.has(photo.src)) {
-            tried.push(`"${ask.query}" (only a photo already used)`);
-            continue;
-          }
-          if (row.role === 'opener') {
-            // The cover rules the build's design stage applies to the opener (photos.ts findSet `cover`; size.ts):
-            // never a logo, and at least COVER_MIN_SHORT_SIDE on the short side. find() does not apply them.
-            exclude.add(photo.src);
-            if (photo.kind === 'logo') {
-              tried.push(`"${ask.query}" (a logo, which the opening frame never shows)`);
-              continue;
-            }
-            const { COVER_MIN_SHORT_SIDE, clearsFloor } = await import('@/lib/social/photos/size');
-            const floor = await clearsFloor({ url: photo.src, width: null, height: null }, COVER_MIN_SHORT_SIDE, deps.photoSize);
-            if (!floor.ok) {
-              tried.push(`"${ask.query}" (too small for the opening frame: ${floor.size}; needs ${COVER_MIN_SHORT_SIDE})`);
-              continue;
-            }
-          }
-          found = { src: photo.src, credit: photo.credit, kind: photo.kind };
-          break;
         }
-        if (!found) {
-          return failed(`I searched for another photo for frame ${seq} (${tried.join('; ')}) and couldn't find a different usable one (not shown on another frame of this set, turned down before, or published in the last 20 days), so the original was kept.`);
+        m.check();
+        const photo = got.photo;
+        const original = photo?.sourceUrl ?? photo?.src;
+        if (!photo?.src || !original || !photo.credit?.trim() || photoUrls(photo).some((u) => exclude.has(u))) {
+          return failed(`I searched for another photo for frame ${seq}${hint ? ` ("${hint}")` : ''} and couldn't find a different usable one (not shown on another frame of this set, turned down before, or published in the last 20 days), so the original was kept.`);
         }
+        const found: Photo = clone(photo);
         copy = withPhoto(row.copy, found);
         const old = logOf(set, label)?.steps ?? [];
-        logSteps = { label, steps: [...old, `revision: replaced ${cur?.src ?? 'no photo'} with ${found.src} (a person asked for a different photo)`] };
+        const was = cur?.sourceUrl ?? cur?.src;
+        logSteps = { label, steps: [...old, `revision: replaced ${was ?? 'no photo'} with ${original} (a person asked for a different photo)`] };
       } else {
         return blocked(`${it.fixKind} fixes are not available for Stories.`);
       }

@@ -35,8 +35,6 @@ export const TIP_HEADLINE_TARGET_CHARS = 60;
 /** The Writer is asked to aim for about this many words in the body. */
 export const TIP_BODY_TARGET_WORDS = 30;
 
-/** Characters in the Writer's own caption text (before code adds the how-to-try lines, the follow line and hashtags). */
-export const WRITER_CAPTION_CAP = 300;
 
 /** Characters in the assembled caption: Instagram's limit. Over it after the hashtags are dropped is a hard gate. */
 export const CAPTION_CAP = 2200;

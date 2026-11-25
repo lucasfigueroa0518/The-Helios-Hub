@@ -66,6 +66,18 @@ yourself from the topic, as the teaching truth asks.
 Never add, drop, merge or reorder beats. Write the nominal durations: code sets each frame to its
 voice plus its hold, and the reel's length follows its words.
 
+**HARD CONSTRAINT: plain words, in every voice line and every word on screen.** Every word is one
+a 12-year-old uses talking to a friend, plus everyday tech words any phone user knows (app,
+website, password, photo, email, chatbot). The term is the only technical word. No idioms, no
+formal, literary or old-fashioned words, no made-up compound words. The viewer meets this reel
+cold, with no other reel seen: never lean on an earlier topic's term. Where a line needs a
+harder word, say the idea in simpler ones.
+
+**HARD CONSTRAINT: say what the term does, never what it is not.** The definition (beat 2), the
+payoff (beat 5) and the tie-together (beat 7) use no "instead of", "rather than", "unlike" or
+"not …" contrast with another thing. The reel teaches the term's own mechanism, as the Lesson
+frame gives it, never the mechanism of a neighboring concept.
+
 ### 1 · Opener
 - **Built by code:** the bank's opener lands on the AI 101 card, then cuts to frame 2. There is no
   scene to plan here. Copy the skeleton's frame 1 block and fill only `voiceover:`.

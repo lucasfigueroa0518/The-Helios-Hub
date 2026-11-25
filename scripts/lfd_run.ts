@@ -46,7 +46,7 @@ async function main() {
   const { deps, spentUsd, drainBank } = await liveLfdDeps(query, { capUsd: cap, trigger: 'manual' });
   const res = await runLastFewDays(deps);
   console.log(JSON.stringify({ ...res, spentUsd: spentUsd() }, null, 2));
-  // The photo bank's queued offers (D49) before the pool closes; never fails the run.
+  // The photo bank's offers (D49) finish before the pool closes; at most a minute.
   await drainBank(60_000);
   await closeDbPool();
   process.exit(res.ok ? 0 : 1);

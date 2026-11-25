@@ -8,9 +8,11 @@ import test from 'node:test';
 import {
   CURRICULUM,
   MAX_FAILED_TRIES,
+  POOL_TARGET,
   levelOfRank,
   matchAssigned,
   nextSyllabusTopics,
+  refillCount,
   syllabusEntry,
   syllabusRank,
 } from '@/lib/explainers/ideas/curriculum';
@@ -117,4 +119,10 @@ test('the hub shows a syllabus topic\'s level; topics off the syllabus show none
   const last = CURRICULUM.at(-1)!;
   assert.match(explainerIdeas([row(last.rank)])[0]!.detail ?? '', new RegExp(`· Level ${last.level} ·`));
   assert.doesNotMatch(explainerIdeas([row(null)])[0]!.detail ?? '', /Level/);
+});
+
+test('refillCount tops the pool up to ten, never below zero', () => {
+  assert.equal(POOL_TARGET, 10);
+  assert.deepEqual([0, 1, 4, 9, 10, 14].map((waiting) => refillCount(waiting)), [10, 9, 6, 1, 0, 0]);
+  assert.equal(refillCount(0, 3), 3);
 });

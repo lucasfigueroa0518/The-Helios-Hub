@@ -186,7 +186,8 @@ test('the voice and rules are the cached prefix, and per-request text stays out 
   const system = calls[0]!.system as Anthropic.TextBlockParam[];
   assert.equal(system.length, 1);
   assert.ok(system[0]!.cache_control);
-  assert.match(system[0]!.text, /SOUL: Helios/);
+  assert.ok(system[0]!.text.includes(readSoul()), 'the shared Helios voice is in the cached prefix');
+  assert.match(system[0]!.text, /# Helios voice/);
   assert.match(system[0]!.text, /Operating rules/);
   const copyInJson = JSON.stringify(post.copy).slice(1, -1);
   assert.ok(!system[0]!.text.includes(copyInJson) && !system[0]!.text.includes('my hot take'));
@@ -258,5 +259,5 @@ test('every written route has its reply rule, and silent routes and jokes have n
 test('samples exist, and the voice file loads', () => {
   assert.ok(LAB_SAMPLE_COMMENTS.every((g) => g.comments.length > 0));
   assert.equal(postById('nope'), null);
-  assert.match(readSoul(), /Unpretentious/);
+  assert.match(readSoul(), /Trustworthy/);
 });
