@@ -616,21 +616,20 @@ test('nightlyTick: one refill a night from 22:00 to the 00:00 fill; it never req
   assert.equal(rows[0].n, 0);
 });
 
-test('nightlyTick skips the night while the pool holds enough makeable pitches', async () => {
+test('nightlyTick develops every night, a full pool included', async () => {
   const db = await freshDb();
-  await saveSetting(db, 'auto', true);
   for (const t of ['A', 'B', 'C', 'D', 'E']) await insertPitch(db, t, 'pooled');
   const { deps, log } = scheduleDeps(db);
   const out = await nightlyTick(deps, TUE_2230_NY);
-  assert.equal(out.development, 'pool_stocked');
+  assert.equal(out.development, 'ran');
   assert.equal(out.makeable, 5);
-  assert.deepEqual(log, []);
+  assert.equal(log.length, 1);
 });
 
 test('nightlyTick skips development once the night is spent', async () => {
   const db = await freshDb();
   await saveSetting(db, 'auto', true);
-  await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 1.2 });
+  await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 2.2 });
   await db.query(`UPDATE reel_ai_drama.cost_events SET created_at = $1`, ['2026-11-04T03:10:00Z']); // Tue 22:10 EST, from a click
   const { deps, log } = scheduleDeps(db);
   const out = await nightlyTick(deps, TUE_2230_NY);

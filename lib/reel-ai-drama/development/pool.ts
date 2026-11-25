@@ -144,3 +144,24 @@ export async function tendPool(
   }
   return { faded, retired, rechecked };
 }
+
+/**
+ * The competition: the pool keeps the best `pool_refill_below` pitches plus the day's posts (so it still holds the
+ * floor after the day's picks); the lowest-ranked beyond that are retired. A floor of 0 turns trimming off.
+ */
+export async function trimPool(db: Queryable, settings: ReelAiDramaSettings, now: Date): Promise<number> {
+  if (settings.pool_refill_below <= 0) return 0;
+  const keep = settings.pool_refill_below + settings.posts_per_day;
+  const ranked = (await pooledPitches(db))
+    .map((row) => ({ row, rank: rankScore(row, settings, now) }))
+    .sort((a, b) => b.rank - a.rank || a.row.created_at.localeCompare(b.row.created_at));
+  const out = ranked.slice(keep);
+  for (const { row } of out) {
+    await db.query(`UPDATE reel_ai_drama.pitches SET status = 'retired', reject_reason = $2, updated_at = $3 WHERE id = $1`, [
+      row.id,
+      `outranked: the pool keeps its best ${keep}`,
+      now.toISOString(),
+    ]);
+  }
+  return out.length;
+}
