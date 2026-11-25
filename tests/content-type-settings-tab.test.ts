@@ -62,7 +62,7 @@ test('the state line is STATE_COPY’s', () => {
 test('refill line: "Refills every night", or the type’s own cadence sentence', () => {
   assert.equal(refillLine('reels'), 'Refills every night');
   assert.equal(refillLine('ai_events'), 'Refills every Sunday at noon');
-  assert.match(refillLine('reel_ai_drama'), /^Weekly development session/);
+  assert.equal(refillLine('reel_ai_drama'), 'Refills every night at 10 PM while fewer than five pitches wait');
 });
 
 test('refill cap input: a positive amount to the cent; empty, zero and junk are errors', () => {
