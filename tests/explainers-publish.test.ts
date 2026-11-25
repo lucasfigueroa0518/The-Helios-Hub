@@ -14,7 +14,7 @@ import path from 'node:path';
 import type { Queryable } from '@/lib/explainers/db';
 import { pollExplainerInsights, type ExplainerInsightsClient } from '@/lib/explainers/publish/insights';
 import { explainerItemId } from '@/lib/explainers/publish/items';
-import { productionSpendForDay, saveFeedback } from '@/lib/explainers/repository';
+import { spendForDay, saveFeedback } from '@/lib/explainers/repository';
 import type { ReelMetaClient } from '@/lib/explainers/publish/meta';
 import { claimAndPublish, EXPLAINERS_NOT_LIVE_NOTE, hardPublishJob, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
 import { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved, scheduleJob } from '@/lib/explainers/publish/schedule';
@@ -315,9 +315,9 @@ test('lead time: the daily spend cap counts a cost against its render’s target
   await cost({ job: click }, 2);
   await cost({ cycle: cycle!.id }, 1);
   await cost({}, 0.5);
-  assert.equal(await productionSpendForDay(db, '2026-10-10'), 4);
-  assert.equal(await productionSpendForDay(db, '2026-10-09'), 1);
-  assert.equal(await productionSpendForDay(db, '2026-10-08'), 2.5);
+  assert.equal(await spendForDay(db, '2026-10-10'), 4);
+  assert.equal(await spendForDay(db, '2026-10-09'), 1);
+  assert.equal(await spendForDay(db, '2026-10-08'), 2.5);
 });
 
 test('B2 in Approval (Generate on, Live off): a night render books its window (contract §4.3); Hard publish is refused and records nothing (Live only)', async () => {

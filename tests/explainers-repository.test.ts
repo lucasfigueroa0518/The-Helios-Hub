@@ -18,7 +18,7 @@ import {
   listRecentlyRendered,
   nyDate,
   parseTopicList,
-  productionSpendForDay,
+  spendForDay,
   recordCost,
   rejectTopic,
   requestRender,
@@ -300,9 +300,18 @@ test('production caps: two renders and $10 per Eastern day; development has neit
   // Idea-pipeline spend alone can exhaust the production day (A-4).
   const roomy = { ...production, daily_render_cap: 5 };
   await recordCost(db, { mode: 'production', vendor: 'anthropic', component: 'idea_generator', usd: 10 });
-  assert.equal(await productionSpendForDay(db, nyDate()), 10);
+  assert.equal(await spendForDay(db, nyDate()), 10);
   assert.deepEqual(
     await requestRender(db, { topicId: c, trigger: 'click', settings: roomy }),
+    { ok: false, reason: 'daily_spend_cap' },
+  );
+  // The spend cap holds in every mode, and development spend counts toward it.
+  const devRoomy = { ...DEFAULT_SETTINGS, daily_spend_cap_usd: 12 };
+  assert.equal(devRoomy.mode, 'development');
+  await recordCost(db, { mode: 'development', vendor: 'heygen', component: 'tts', usd: 3 });
+  assert.equal(await spendForDay(db, nyDate()), 13);
+  assert.deepEqual(
+    await requestRender(db, { topicId: c, trigger: 'click', settings: devRoomy }),
     { ok: false, reason: 'daily_spend_cap' },
   );
 });

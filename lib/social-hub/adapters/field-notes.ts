@@ -1,10 +1,11 @@
 import { attemptStatus, boardDate, cancelNote, historyByMedia, iso, latest, nyDateFor, scheduleStatus, slotCategory, slotText, text } from '@/lib/social-hub/adapters/common';
-import { LEAF_LABEL } from '@/components/field-notes/constants';
+import { LEAF_LABEL, TIER_LABEL, WANT_LABEL } from '@/components/field-notes/constants';
+import { parseHowToTry } from '@/lib/field-notes/caption';
 import { PLACEHOLDER_USE } from '@/lib/field-notes/types';
 import { hubId } from '@/lib/social-hub/ids';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type { FieldNotesPostRow, FieldNotesRead, FieldNotesTipRow } from '@/lib/social-hub/queries/field-notes';
-import type { FactorValue, HubIdea, HubPost, HubStatus, IdeaState, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
+import type { FactorValue, HubIdea, HubPost, HubStatus, IdeaState, MetricSnapshot, NativeField, SourceRef, TipNote } from '@/lib/social-hub/types';
 
 /**
  * Field Notes posts and ideas for the hub. A post is one field_notes.posts row through its life
@@ -53,6 +54,28 @@ export function fieldNotesSources(row: FieldNotesPostRow): SourceRef[] {
     out.push({ url: t.source_url, title: t.source_label ?? t.subject ?? null });
   }
   return out;
+}
+
+/** A stored tag's plain words, only when it is one we know; anything else (or missing) is not tagged. */
+const labelOf = (labels: Record<string, string>, value: unknown): string | null =>
+  typeof value === 'string' && Object.hasOwn(labels, value) ? labels[value]! : null;
+
+/**
+ * Every tip on the post, in slide order, for the post panel: its tags and the tool's name and how to try it. The
+ * caption's how-to-try lines are code-built, one per tip slide in slide order (lib/field-notes/caption.ts), so line i is tip i.
+ */
+export function fieldNotesTipNotes(row: Pick<FieldNotesPostRow, 'tips' | 'caption'>): TipNote[] {
+  const tips = Array.isArray(row.tips) ? row.tips : [];
+  if (!tips.length) return [];
+  const howToTry = parseHowToTry(row.caption ?? '');
+  return tips.map((t, i) => ({
+    subject: t.subject ?? '',
+    kind: labelOf(LEAF_LABEL, t.leaf),
+    want: labelOf(WANT_LABEL, t.want),
+    knowHow: labelOf(TIER_LABEL, t.tier),
+    name: howToTry[i]?.name ?? null,
+    tryIt: howToTry[i]?.tryIt ?? null,
+  }));
 }
 
 /** The slides: rendered JPEGs through /api/field-notes/slides once stored, else the outline from the slide text. */
@@ -117,6 +140,7 @@ function shell(row: FieldNotesPostRow, ctx: Context) {
     sources: fieldNotesSources(row),
     costItemKey: `field_notes:${row.post_id}`,
     reviewNotes: fieldNotesReviewNotes(row),
+    tipNotes: fieldNotesTipNotes(row),
   };
 }
 

@@ -1,26 +1,29 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { SettingsForm } from '@/app/explainers/settings/settings-form';
+import { SettingsForm, TAB_KEYS as EXPLAINERS_TAB_KEYS } from '@/app/explainers/settings/settings-form';
 import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons';
 import { AiEventsRunButton, CarouselRunButton, DramaDevelopButton, IdeaCycleButton, LfdRunButton, StoriesGenerate } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
 import { FieldNotesHub } from '@/components/content-type/FieldNotesHub';
 import { ReelAiDramaHub } from '@/components/content-type/ReelAiDramaHub';
-import { ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
+import { RAD_TAB_KEYS, ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
 import type { TypeHub } from '@/components/content-type/TypeHub';
 import { FieldNotesRunButton } from '@/components/field-notes/FieldNotesRunButton';
 import type { PageVertical } from '@/lib/content-type/config';
 import { aiEventsRebuildRefusal } from '@/lib/content-type/model';
 import { explainersDb } from '@/lib/explainers/connection';
 import { loadSettingsView } from '@/lib/explainers/overview';
+import { FIELD_NOTES_PHOTOS_HREF } from '@/lib/social-hub/links';
 import type { LoadedPage } from '@/lib/social-hub/live';
 
 /**
  * The parts of a content type's page that are components, not data: the buttons in the header and the one extra
  * section in the pool's Settings tab, its "This type only" block (settings standard D8; the data half is
  * lib/content-type/config.ts). Every type gets the same page; this is the only place a type adds to it. A type can add
- * buttons and one settings section, and a panel above the bench (the page's `top` slot); nothing else.
+ * buttons and one settings section; nothing else (no type has a panel above the pool any more: Field Notes' photos moved
+ * to the Photo Bank, UI-REWORK-PLAN D1/D2). A type's own bits on a post or idea go through TypeHub's `postExtras` /
+ * `ideaExtras`, in the type's `hub` wrapper.
  */
 
 export type TypeParts<D = undefined> = {
@@ -62,7 +65,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
     ),
   }),
   // Generate picks the next tip and renders its carousel on the pool's photos; Make it on a row makes that tip. Each click approves that run's capped spend.
-  field_notes: defineParts({ actions: () => <FieldNotesRunButton />, hub: FieldNotesHub }),
+  // Photos opens the Photo Bank's Field Notes section, where the photos are uploaded and kept (UI-REWORK-PLAN D6).
+  field_notes: defineParts({ actions: () => <><FieldNotesRunButton /><Link className="rh-btn" href={FIELD_NOTES_PHOTOS_HREF}>Photos</Link></>, hub: FieldNotesHub }),
   explainers: defineParts<RenderingView>({
     load: () => explainersDb().then(loadSettingsView).catch((error: unknown) => ({ error: message(error) })),
     actions: () => <IdeaCycleButton />,
@@ -72,8 +76,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
         <p className="rh-empty">Could not load settings: {view.error}</p>
       ) : (
         <>
-          <h3 className="rh-rest__title">Rendering</h3>
-          <SettingsForm initial={view.settings} hide={['auto_render', 'daily_render_cap']} />
+          <SettingsForm initial={view.settings} only={EXPLAINERS_TAB_KEYS} />
+          <p className="pl-set__line"><Link href="/explainers/settings">Advanced settings</Link> · models, voice, pool size, ideas</p>
         </>
       ),
   }),
@@ -82,8 +86,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
     actions: () => <><DramaDevelopButton /><Link className="rh-btn" href="/reel-ai-drama/lab">Lab</Link></>,
     settingsSection: () => (
       <>
-        <h3 className="rh-rest__title">Rendering</h3>
-        <ReelAiDramaSettingsForm />
+        <ReelAiDramaSettingsForm only={RAD_TAB_KEYS} />
+        <p className="pl-set__line"><Link href="/reel-ai-drama/lab?tab=settings">Advanced settings</Link> · models, scoring, timing, development</p>
       </>
     ),
     hub: ReelAiDramaHub,

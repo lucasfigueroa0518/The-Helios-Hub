@@ -364,19 +364,19 @@ export async function replaceCostBreakdown(db: ExplainersDb, jobId: string, rows
 }
 
 /**
- * Production spend counted against one Eastern-time day: renders plus the idea pipeline (A-4). Lead time (Bald-Eagle
+ * Spend counted against one Eastern-time day, in every mode: renders plus the idea pipeline (A-4). The daily spend cap
+ * applies in every mode (it once applied in production only; with Mode a developer label, an uncapped day was possible). Lead time (Bald-Eagle
  * D4, D8): a cost counts against the date its render was made FOR (`target_date`), or its idea cycle's date (the date
  * that cycle filled), else the day it was spent. So the night's spend for a date two days ahead is that date's, and the
  * cutover night may spend up to one cap per date it fills.
  */
-export async function productionSpendForDay(db: Queryable, day: string): Promise<number> {
+export async function spendForDay(db: Queryable, day: string): Promise<number> {
   const { rows } = await db.query<{ usd: unknown }>(
     `SELECT COALESCE(SUM(e.usd), 0) AS usd
        FROM explainers.cost_events e
        LEFT JOIN explainers.jobs j ON j.id = e.job_id
        LEFT JOIN explainers.idea_cycles c ON c.id = e.idea_cycle_id
-      WHERE e.mode = 'production'
-        AND COALESCE(${jobTargetSql('j')}, c.ny_date, (e.created_at AT TIME ZONE '${NY_TZ}')::date) = $1::date`,
+      WHERE COALESCE(${jobTargetSql('j')}, c.ny_date, (e.created_at AT TIME ZONE '${NY_TZ}')::date) = $1::date`,
     [day],
   );
   return num(rows[0].usd);
@@ -477,12 +477,13 @@ export async function requestRender(
 
     // A person's confirmed click may go over the day's caps (it is one render, and the spend is recorded as any render's);
     // the night never does.
-    if (settings.mode === 'production' && !(trigger === 'click' && input.overrideCaps)) {
+    if (!(trigger === 'click' && input.overrideCaps)) {
       const day = input.targetDate ?? nyDate(input.now);
-      if ((await productionRendersForDay(tx, day)) >= settings.daily_render_cap) {
+      if (settings.mode === 'production' && (await productionRendersForDay(tx, day)) >= settings.daily_render_cap) {
         return { ok: false, reason: 'daily_render_cap' } as const;
       }
-      if ((await productionSpendForDay(tx, day)) >= settings.daily_spend_cap_usd) {
+      // The daily spend cap applies in every mode.
+      if ((await spendForDay(tx, day)) >= settings.daily_spend_cap_usd) {
         return { ok: false, reason: 'daily_spend_cap' } as const;
       }
     }

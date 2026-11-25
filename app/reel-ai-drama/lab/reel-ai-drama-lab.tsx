@@ -334,8 +334,8 @@ function SettingsPanel({ onSaved }: { onSaved: (note: string) => void }) {
   );
 }
 
-export function ReelAiDramaLab() {
-  const [tab, setTab] = useState<Tab>('pool');
+export function ReelAiDramaLab({ initialTab }: { initialTab?: string } = {}) {
+  const [tab, setTab] = useState<Tab>(TABS.some(([key]) => key === initialTab) ? (initialTab as Tab) : 'pool');
   const [data, setData] = useState<LabView | null>(null);
   /** Only the lab's own load failing, or a click the server refused; run failures come from the data. */
   const [error, setError] = useState<string | null>(null);

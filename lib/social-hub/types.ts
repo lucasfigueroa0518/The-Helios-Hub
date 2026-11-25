@@ -132,9 +132,17 @@ export type HubPost = {
   costItemKey: string | null;
   /** Review notes the pipeline left (carousel render checks, story flags). */
   reviewNotes?: string[];
+  /** Field Notes: every tip on the post, in slide order, for the post panel. */
+  tipNotes?: TipNote[];
   /** Native ids the action routes need (schedule id, job id, set id …). */
   refs: Record<string, string>;
 };
+
+/**
+ * One tip on a Field Notes post, for the post panel: the tool's name and how to try it (from the caption's
+ * how-to-try line), and the tip's tags. `kind`, `want`, `knowHow` are display labels, null when not tagged.
+ */
+export type TipNote = { subject: string; kind: string | null; want: string | null; knowHow: string | null; name: string | null; tryIt: string | null };
 
 /** One line of where an idea's score comes from. */
 export type ScorePart = {

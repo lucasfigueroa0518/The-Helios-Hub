@@ -15,7 +15,7 @@ import {
   listTopicTerms,
   listUnscoredSyllabusIdeas,
   nyDate,
-  productionSpendForDay,
+  spendForDay,
   recordCost,
   requestRender,
   saveLessonFrame,
@@ -501,10 +501,8 @@ async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead:
   reportFill(fill, fillLog, { dailyRenderCap: settings.daily_render_cap });
   if (fill.making < 1) return { status: 'skipped', reason: 'quota_filled', fill };
 
-  if (
-    settings.mode === 'production' &&
-    (await productionSpendForDay(db, day)) >= settings.daily_spend_cap_usd
-  ) {
+  // The daily spend cap applies in every mode.
+  if ((await spendForDay(db, day)) >= settings.daily_spend_cap_usd) {
     return { status: 'skipped', reason: 'daily_spend_cap' };
   }
 
