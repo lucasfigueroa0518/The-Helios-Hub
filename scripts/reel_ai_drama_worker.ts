@@ -65,7 +65,7 @@ async function main(): Promise<void> {
       (settings.auto
         ? `Generate is on: up to ${settings.daily_render_cap} job(s) a day (≤ $${settings.daily_spend_cap_usd.toFixed(2)} a day).`
         : 'Paused: no night fill; only queued jobs and clicks make reels.') +
-      ` The pool refills in every state: a 10 PM development session while fewer than ${settings.pool_refill_below} makeable pitches are pooled (≤ $${settings.nightly_dev_cap_usd.toFixed(2)} a night, on its refill cap pool_refill_cap_usd).`,
+      ` The pool competes in every state: every 10 PM at least ${settings.ideas_per_night} new pitches, more while it holds fewer than ${settings.pool_refill_below}, then the best are kept (≤ $${settings.nightly_dev_cap_usd.toFixed(2)} a night, and its refill cap pool_refill_cap_usd).`,
   );
   if (!process.argv.includes('--yes')) {
     console.log('Not run. Pass --yes to start the worker.');

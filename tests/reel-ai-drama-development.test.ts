@@ -9,7 +9,7 @@ import { CALIBRATION_ITEMS, CALIBRATION_STORIES, NEAR_MISSES } from '@/lib/reel-
 import { calibrationReport, runCalibration, seedCalibrationPitches } from '@/lib/reel-ai-drama/development/calibration';
 import { eventKey, findDuplicate, similarity } from '@/lib/reel-ai-drama/development/dedupe';
 import { allCells, cellFromRow, markSearched, newsTouching, pickCells, seedCells } from '@/lib/reel-ai-drama/development/ledger';
-import { nextForProduction, rankScore, tendPool } from '@/lib/reel-ai-drama/development/pool';
+import { nextForProduction, pooledPitches, rankScore, tendPool, trimPool } from '@/lib/reel-ai-drama/development/pool';
 import { producePitches, selectPitches, validatePitch, type CreateMessage } from '@/lib/reel-ai-drama/development/producer';
 import { capWithoutPlayer, combineDrama, combineMaterial, DRAMA_SET, MATERIAL_SET } from '@/lib/reel-ai-drama/development/scores';
 import { CELL_ESTIMATE_USD, runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
@@ -639,4 +639,28 @@ test('drama v3 caps a story that is not about AI', () => {
   const off = combineDrama({ ...all, about_ai: { noul: 0.1 } });
   assert.equal(off.score, 0.45);
   assert.equal(off.notes.cap, 'not an AI story');
+});
+
+test('trimPool keeps the best floor plus the day’s posts and retires the lowest', async () => {
+  const db = await freshDb();
+  for (const [i, drama] of [0.9, 0.6, 0.8, 0.7, 0.95].entries()) await insertPooled(db, pitch({ title: `P${i}` }), { drama, player: null });
+  const retired = await trimPool(db, { ...DEFAULT_SETTINGS, pool_refill_below: 2, posts_per_day: 1 }, new Date('2026-10-28T00:00:00Z'));
+  assert.equal(retired, 2);
+  assert.deepEqual((await pooledPitches(db)).map((p) => p.title).sort(), ['P0', 'P2', 'P4']);
+});
+
+test('the nightly session goes round after round until it has made its ideas', async () => {
+  const db = await freshDb();
+  let calls = 0;
+  const create = (async () => {
+    calls += 1;
+    return message([{ type: 'tool_use', id: 't', name: 'submit_pitches', input: { candidates: [] } }], 'tool_use', { input_tokens: 10, output_tokens: 10 });
+  }) as unknown as CreateMessage;
+  const summary = await runDevelopmentSession(
+    { db, producer: { create, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 1, nightly_dev_cap_usd: 100 }, random: () => 0.5, news: async () => [], totalQuery: fakeTotalLedger().q },
+    { trigger: 'auto' },
+  );
+  // Nothing is ever pitched, so only the round limit stops it.
+  assert.equal(summary.cellsSearched, 40);
+  assert.ok(calls >= 40);
 });

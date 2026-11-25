@@ -9,8 +9,8 @@ import type { PitchRow } from '@/lib/reel-ai-drama/types';
 
 /**
  * The nightly refill clock (MD-156; was weekly, MD-28). The development session is AI Drama's pool refill (settings
- * standard D16, D3): it runs in every state, each night from 22:00 New York until the 00:00 fill, only while fewer than
- * `pool_refill_below` makeable pitches are pooled, under `nightly_dev_cap_usd` and the refill cap
+ * standard D16, D3): it runs in every state, every night from 22:00 New York until the 00:00 fill, making new pitches to
+ * compete for the pool (session.ts, pool.ts trimPool), under `nightly_dev_cap_usd` and the refill cap
  * (`pool_refill_cap_usd`, D14). Production does not come from here (HUB-WIRING-CONTRACT.md §1.1): it comes only
  * from the nightly fill (lib/reel-ai-drama/night.ts) or a person's click, and the worker tends the pool once a day on
  * its own. Safe to call on every worker poll.
@@ -28,8 +28,8 @@ export type TickResult = {
   auto: boolean;
   /** The refill night this tick belongs to: the last 22:00 New York at or before now. */
   nightStart: string;
-  /** `not_yet`: outside 22:00–00:00. `pool_stocked`: enough makeable pitches pooled, so tonight is skipped. */
-  development: 'ran' | 'already_ran' | 'capped' | 'off' | 'failed' | 'not_yet' | 'pool_stocked';
+  /** `not_yet`: outside 22:00–00:00. */
+  development: 'ran' | 'already_ran' | 'capped' | 'off' | 'failed' | 'not_yet';
   /** Makeable pooled pitches when the tick checked (null when it stopped before checking). */
   makeable: number | null;
 };
@@ -96,9 +96,8 @@ export async function nightlyTick(deps: ScheduleDeps, now: Date): Promise<TickRe
     return result;
   }
   result.makeable = await makeableCount(db, settings, now);
-  if (result.makeable >= settings.pool_refill_below) {
-    result.development = 'pool_stocked';
-  } else if ((await developmentSpendSince(db, start)) >= settings.nightly_dev_cap_usd) {
+  // Every night develops (2026-11-25): new pitches compete with the pool whether or not it is full.
+  if ((await developmentSpendSince(db, start)) >= settings.nightly_dev_cap_usd) {
     result.development = 'capped';
   } else {
     try {

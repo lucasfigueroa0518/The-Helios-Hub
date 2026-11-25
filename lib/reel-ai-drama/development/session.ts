@@ -7,7 +7,7 @@ import type { Pitch, PitchRow } from '@/lib/reel-ai-drama/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { eventKey, findDuplicate } from '@/lib/reel-ai-drama/development/dedupe';
 import { markSearched, pickCells, seedCells, type CellRow, type NewsItem } from '@/lib/reel-ai-drama/development/ledger';
-import { pitchFromRow, rankScore, tendPool } from '@/lib/reel-ai-drama/development/pool';
+import { pitchFromRow, pooledPitches, rankScore, tendPool, trimPool } from '@/lib/reel-ai-drama/development/pool';
 import { producePitches, ProducerError, MAX_NEAREST, type ProducerDeps } from '@/lib/reel-ai-drama/development/producer';
 import { scoreDrama, scoreMaterial } from '@/lib/reel-ai-drama/development/scores';
 import { checkVisuals, type VisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
@@ -22,6 +22,9 @@ import { dbQuery } from '@/lib/db';
  * through the same checks first. It stops starting new work once the night's development spend (since the
  * last 22:00 New York) reaches `nightly_dev_cap_usd` (MD-156); a step already started finishes.
  */
+
+/** Most rounds of cells one nightly session searches, whatever else happens. */
+const MAX_ROUNDS = 40;
 
 /** A producer cell's usual cost with margin (iteration 5 measured about $0.36; Nov 2026 sessions $0.21–0.34 a cell), for launching cells in parallel. */
 export const CELL_ESTIMATE_USD = 0.4;
@@ -188,7 +191,7 @@ async function checkPitch(
  */
 export async function runDevelopmentSession(
   deps: DevelopmentDeps,
-  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number },
+  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number; fill?: boolean },
 ): Promise<SessionSummary> {
   if (opts.refillCapUsd == null) return runSession(deps, opts);
   const log = deps.log ?? (() => {});
@@ -212,7 +215,7 @@ async function runSession(
    * `refillCapUsd`: the nightly session is AI Drama's pool refill (settings standard D16), held to `pool_refill_cap_usd`
    * (D14) on top of the weekly development cap. Absent (a person's click, calibration): only the weekly cap, as before.
    */
-  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number },
+  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number; fill?: boolean },
 ): Promise<SessionSummary> {
   const { db } = deps;
   const now = (deps.now ?? (() => new Date()))();
@@ -276,11 +279,9 @@ async function runSession(
       await seedCells(db);
       const news = deps.news ? await deps.news(now, NEWS_REOPEN_DAYS) : [];
       const reopen = news.map((n) => ({ playerId: n.playerId, reason: `news: ${n.headline}`, since: n.publishedAt }));
-      const cells = await pickCells(db, settings, now, { reopen, random: deps.random });
-      log('cells', { picked: cells.map((c) => `${c.player_id}/${c.story_type}/${c.era}`) });
 
       // Cells search at the same time (Lucas, 2026-11-03: "running in parallel to the max"); each checks the cap before it starts.
-      const runCell = async (cell: (typeof cells)[number]): Promise<void> => {
+      const runCell = async (cell: CellRow): Promise<void> => {
         if (await capReached()) {
           summary.status = 'capped';
           return;
@@ -339,6 +340,13 @@ async function runSession(
         if (refill.capUsd != null) for (const p of pitches) await checkOne(p);
         else await Promise.all(pitches.map(checkOne));
       };
+      // The nightly session goes round after round until it has made `ideas_per_night` pitches and the pool holds
+      // `pool_refill_below`, or a cap stops it. A person's click is one round.
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+      const cells = await pickCells(db, settings, now, { reopen: round === 0 ? reopen : [], random: deps.random });
+      if (!cells.length) break;
+      log('cells', { picked: cells.map((c) => `${c.player_id}/${c.story_type}/${c.era}`) });
+      const searchedBefore = summary.cellsSearched;
       // In parallel the cap can't stop a later cell after an expensive one, so launch only the cells the
       // budget left can cover at a cell's usual cost; the rest wait for the next session.
       const nightlyLeft = settings.nightly_dev_cap_usd - (await developmentSpendSince(db, nightStart));
@@ -346,8 +354,16 @@ async function runSession(
       const launch = cells.slice(0, Math.max(1, Math.floor(left / CELL_ESTIMATE_USD)));
       if (launch.length < cells.length) summary.status = 'capped';
       await Promise.all(launch.map(runCell));
+      if ((opts.trigger !== 'auto' && !opts.fill) || summary.status === 'capped' || (await capReached())) break;
+      if (summary.cellsSearched === searchedBefore) break; // every search failed: don't keep paying for errors
+      if (summary.pitchesMade >= settings.ideas_per_night && (await pooledPitches(db)).length >= settings.pool_refill_below) break;
+      }
     }
     await tendPool(db, settings, now);
+    if (opts.trigger !== 'calibration') {
+      const trimmed = await trimPool(db, settings, now);
+      if (trimmed) log('pool_trimmed', { sessionId, retired: trimmed });
+    }
   } catch (e) {
     summary.status = 'failed';
     summary.errors.push(e instanceof Error ? e.message : String(e));

@@ -129,7 +129,8 @@ test('renderTriviaClips: two clips in order (10 s, 5 s), HyperFrames at 30 fps, 
       assert.match(html, /Are you smarter than AI\?/);
       assert.match(html, /--qpx:60px/, 'the fit size (60) on both clips');
       assert.doesNotMatch(html, /<img|tv-photo|tv-dim|rgba\(6,6,8/i, 'no photo and no dim layer');
-      assert.doesNotMatch(html, /https?:\/\//, 'no network in the composition');
+      assert.doesNotMatch(html.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//, 'no network in the composition');
+      assert.match(html, /id="tv-critter-data"/, 'the critter is on the clip with no direction in the copy');
       assert.equal((html.match(/class="bulb p[01]"/g) ?? []).length, 30, '30 bulbs around the sign');
       const drawn = html.slice(html.indexOf('<body>'), html.indexOf('<script>', html.indexOf('<body>'))).replace(/<[^>]+>/g, ' ');
       assert.ok(!drawn.includes('!'), 'no exclamation marks drawn');

@@ -684,6 +684,7 @@ test('buildAiTrivia: a failed fact-check archives the top row; the next passes â
   await poolRow(db, 't03a05', 0.9);
   await poolRow(db, 't04a02', 0.8);
   const write = stubWriter({
+    submit_direction: () => ({ head: 'gradcap', hand: 'none', opening_mood: 'happy', pondering_mood: 'curious' }),
     submit_check: (params, n) => {
       const m = materialOf(params);
       assert.ok(typeof m.question === 'string' && Array.isArray(m.options) && typeof m.answer_line === 'string');
@@ -694,7 +695,8 @@ test('buildAiTrivia: a failed fact-check archives the top row; the next passes â
   const r = await buildAiTrivia(deps);
   assert.equal(r.ok, true);
   if (!r.ok) return;
-  assert.equal(write.calls.length, 2);
+  assert.equal(write.calls.length, 3, 'two checks, then the critter direction');
+  for (const f of r.frames) assert.equal((f.copy as unknown as { critter?: { head?: string } }).critter?.head, 'gradcap', 'the direction reaches both frames');
   assert.equal((write.calls[0]!.tools as Array<{ name: string; max_uses?: number }>).find((t) => t.name === 'web_search')?.max_uses, 3);
 
   // The failed one: archived and out of the pool.
@@ -757,7 +759,7 @@ test('buildAiTrivia with an opponent (AT-74/75): both frames carry its label and
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.equal(asked.length, 1, 'asked once');
-    assert.equal(write.calls.length, 1, 'the opponent does not go through the writer');
+    assert.equal(write.calls.length, 2, 'the fact-check and the critter direction; the opponent does not go through the writer');
     for (const f of r.frames) {
       const o = (f.copy as unknown as { opponent?: unknown }).opponent;
       assert.deepEqual(o, choice ? { label: 'GPT-5 nano', picked: choice } : undefined, `${f.role}`);

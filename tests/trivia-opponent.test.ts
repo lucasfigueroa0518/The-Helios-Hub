@@ -11,6 +11,7 @@ import { askOpponent, modelGone, OpponentHttpError, OPPONENTS, type OpponentClie
 import { answerTop, leanFrom, leanOrder, recentAiResults } from '@/lib/stories/trivia/lean';
 import { compositionHtml, copyProblems } from '@/lib/stories/trivia/render/clip';
 import { critterData, critterProblems, outcomeBeats, type CritterDirection } from '@/lib/stories/trivia/render/critter';
+import { defaultDirection, DIRECT_HANDS, DIRECT_HEADS, directionFrom } from '@/lib/stories/trivia/direction';
 import { answerTimeline, CLIP_S, REVEAL_S, SEAM_T } from '@/lib/stories/trivia/render/timeline';
 import type { TriviaOption, TriviaPoolPayload } from '@/lib/stories/trivia/types';
 
@@ -224,4 +225,15 @@ test('the critter with an opponent: stands on sign-right; from the reveal it cel
   assert.deepEqual(right.map((b) => [b.at, b.mood ?? b.state]), [[0.2, 'focused'], [REVEAL_S, 'done'], [outcomeBeats('right')[1]!.at, 'happy']]);
   const wrong = answerOf('wrong');
   assert.deepEqual(wrong.map((b) => [b.at, b.mood ?? b.state]), [[0.2, 'focused'], [REVEAL_S, 'worried'], [outcomeBeats('wrong')[1]!.at, 'sleepy']]);
+});
+
+test('every question has a critter: a built or default direction passes the rules, with only kit pieces', async () => {
+  const kit = (await import('@/lib/stories/trivia/render/kit/wear.js' as string)) as { HEADS: string[]; HANDS: string[] };
+  assert.deepEqual([...DIRECT_HEADS], kit.HEADS);
+  assert.deepEqual([...DIRECT_HANDS], kit.HANDS);
+  for (const d of [defaultDirection(), directionFrom({ head: 'gradcap', hand: 'book', opening_mood: 'proud', pondering_mood: 'worried' }), directionFrom({ head: 'crown', hand: 'none' })]) {
+    assert.deepEqual(critterProblems(d, CLIP_S, true), []);
+    assert.deepEqual(critterProblems(d, CLIP_S), []);
+    assert.ok(d.head || d.hand);
+  }
 });

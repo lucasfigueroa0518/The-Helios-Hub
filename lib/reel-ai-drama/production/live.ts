@@ -187,6 +187,8 @@ export async function runLiveDevelopment(
   overrides: Partial<ReelAiDramaSettings> = {},
   /** The weekly session's refill cap (D14); a person's click has none. */
   refillCapUsd?: number,
+  /** Loop until the pool is full, as the night does (scripts/reel_ai_drama_fill_pool.ts). */
+  fill = false,
 ): Promise<unknown> {
   // `overrides` is for a one-off run Lucas asks for (e.g. a bigger round past the weekly cap); never saved.
   const settings = { ...(await loadSettings(db)), ...overrides };
@@ -201,7 +203,7 @@ export async function runLiveDevelopment(
       // (no shared DB locally) means no news reopens this session, never a failed session.
       news: (now, days) => newsTouching(liveStoriesDb, now, days).catch(() => []),
     },
-    { trigger, ...(refillCapUsd != null ? { refillCapUsd } : {}) },
+    { trigger, fill, ...(refillCapUsd != null ? { refillCapUsd } : {}) },
   );
 }
 
