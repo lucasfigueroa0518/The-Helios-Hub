@@ -1,0 +1,368 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Reel AI Drama kit gallery</title>
+<style>html,body{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;background:#111}
+#w{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden}
+/* A still of the caption skin (presets/reel-ai-drama/caption-skin.html): the band, the size, the colours. */
+.cap{position:absolute;left:96px;width:844px;top:292px;z-index:90;font:700 74px/1.05 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-.02em;text-transform:lowercase;color:#FEF9F3;text-shadow:0 2px 18px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.6)}
+.cap.ink{color:#1F1915;text-shadow:none}
+.cap.plate{text-shadow:none;isolation:isolate}
+.cap.plate span{position:relative}
+.cap.plate span::before{content:'';position:absolute;z-index:-1;top:.06em;bottom:.06em;left:-.14em;right:-.14em;background:#15110E}
+.tag{position:absolute;right:20px;top:20px;z-index:95;font:700 18px Roboto;color:#fff;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:4px}</style>
+</head><body><div id="w"></div>
+<script type="module">
+// The kit gallery: ?shot=<name>&t=<seconds>. Every treatment on real banked images and the smoke
+// fixture's page and map; a still of the caption over each. No network beyond the local server.
+import * as nk from './components/index.js';
+import close from './close.js';
+import { CLOSE } from './close-timing.js';
+
+const q = new URLSearchParams(location.search);
+const shot = q.get('shot') || 'photo';
+const T = Number(q.get('t') ?? 2.5);
+const R = '../../../';
+const BANK = R + 'explainers/real-case/bank/';
+const FIX = '../smoke/fixture/media/';
+const LOGO = R + 'lib/social/render/assets/logos/';
+nk.installKit(document, { textures: './textures/', fonts: {
+  pragmatica: R + 'explainers/design/fonts/PragmaticaExtended-Bold.otf',
+  roboto400: R + 'explainers/design/fonts/Roboto-400.woff2',
+  roboto500: R + 'explainers/design/fonts/Roboto-500.woff2',
+  roboto700: R + 'explainers/design/fonts/Roboto-700.woff2',
+  hand: './fonts/PatrickHand-Regular.ttf', playfair: './fonts/PlayfairDisplay.ttf', courier: './fonts/CourierPrime-Regular.ttf',
+  tinos400: './fonts/Tinos-Regular.ttf', tinos700: './fonts/Tinos-Bold.ttf', tinosItalic: './fonts/Tinos-Italic.ttf',
+} });
+await Promise.all(['700 40px "Pragmatica Extended"', '400 40px Roboto', '500 40px Roboto', '700 40px Tinos', '400 40px "Patrick Hand"', '700 40px "Playfair Display"'].map((f) => document.fonts.load(f).catch(() => null)));
+// Iteration 4 cases (gallery.mjs): real job pictures with hand-made regions (what a box sidecar holds).
+const JOB = R + '.explainers-local/reel-ai-drama/jobs/9a30dce0-9c66-48e8-951a-20f6aeae1970/render/project/assets/media/';
+const four = {
+  portrait: { id: 'V78', file: JOB + 'V78.jpg', width: 900, height: 900, people: ['Person A'], credit: 'Photo: fixture credit', regions: { faces: [{ x: 0.2734, y: 0.2734, w: 0.4422, h: 0.4422 }] } },
+  offside: { id: 'V66', file: JOB + 'V66.jpg', width: 1440, height: 960, people: ['Person B'], credit: 'Photo: fixture credit', face: { x: 0.5359, y: 0.2225, w: 0.2109, h: 0.3162 } },
+  cutout: { id: 'V48', file: JOB + 'V48.png', width: 1768, height: 2062, people: ['Person A'], character_image: true, face: { x: 0.326, y: 0.1828, w: 0.3716, h: 0.3187 } },
+  other: { id: 'V8', file: JOB + 'V8.jpg', width: 1337, height: 1771, people: ['Person C'], credit: 'Photo: fixture credit', face: { x: 0.3064, y: 0.2453, w: 0.3872, h: 0.2922 } },
+  article: {
+    id: 'V59', file: JOB + 'V59.png', width: 1080, height: 1920, people: ['Person A'], credit: 'a saved article page · supplied by the harvest',
+    regions: {
+      faces: [{ x: 0.39, y: 0.35, w: 0.22, h: 0.13 }],
+      words: [{ text: 'The Making Of Dario Amodei', box: { x: 0.0296, y: 0.074, w: 0.786, h: 0.0396 } }],
+      photos: [{ x: 0.03, y: 0.308, w: 0.94, h: 0.3 }],
+      lift: null,
+    },
+  },
+  sketchA: { id: 'M2', file: JOB + 'M2.png', width: 1024, height: 1024, made: true, made_kind: 'expression' },
+  sketchB: { id: 'M5', file: JOB + 'M5.png', width: 1024, height: 1024, made: true, made_kind: 'expression' },
+};
+// Iteration 7 cases: a real room photo and a real object photo cut out locally with rembg (no network).
+const SEVEN = R + '.explainers-local/reel-ai-drama/kit-fixtures/iter7/';
+const seven = {
+  room: { id: 'V55', file: JOB + 'V55.jpg', width: 2000, height: 1334, people: [], made: false, flags: [], credit: 'Photo: fixture credit' },
+  boxes: { id: 'V91', file: SEVEN + 'V61-cut.png', width: 2001, height: 1425, people: [], made: false, flags: ['cutout', 'cutout_thing', 'cutout_of:V61'] },
+};
+four.cutout.flags = ['cutout'];
+const media = {
+  founderA: { file: BANK + 'source/elon-musk.jpg', width: 3363, height: 4602, credit: 'Photo: Gage Skidmore, CC BY-SA 4.0' },
+  founderB: { file: BANK + 'source/jensen-huang.jpg', width: 645, height: 839, credit: 'Photo: fixture credit' },
+  founderC: { file: BANK + 'source/demis-hassabis.jpg', width: 2458, height: 3275, credit: 'Photo: fixture credit' },
+  page: { file: FIX + 'V5.png', width: 1520, height: 1044, boxes: [{ text: 'A Smaller Model Learns to Plan', x: 21, y: 32, w: 719, h: 49 }], credit: 'a saved research page (fixture)' },
+  map: { file: FIX + 'V6.jpg', width: 1620, height: 2880, map: { plain: FIX + 'V6.plain.jpg', width: 1620, height: 2880, pin: { x: 810, y: 1440 }, label: 'The restaurant', sublabel: 'The town · one summer' } },
+};
+const ctx = { id: shot, duration: 6, nk, assets: R + 'explainers/design/helios-design-system/assets/', media, timing: { words: [] } };
+const doc = document;
+const host = document.getElementById('w');
+let caption = 'a still of the caption, two lines at most.';
+let ink = false;
+let r = null;
+const B = {
+  photo() {
+    const p = nk.photo(doc, { media: media.founderA, focus: [0.5, 0.24], move: 'push', duration: 6, credit: media.founderA.credit });
+    const n = nk.number(doc, { value: '$4M', label: 'then the board met.', at: 1 });
+    p.el.append(n.el);
+    caption = 'she put four million into the lab.';
+    return { el: p.el, render: (t) => { p.render(t); n.render(t); } };
+  },
+  'photo-pan'() {
+    const p = nk.photo(doc, { media: media.founderC, focus: [0.5, 0.3], move: 'pan', dir: 'left', grade: 'cool', duration: 6, credit: media.founderC.credit });
+    caption = 'a pan, cool grade.';
+    return p;
+  },
+  cutout_lift() {
+    const c = nk.cutoutLift(doc, { cutout: BANK + 'cutouts/sam-altman.png', name: 'The co-founder', role: 'Chief executive, the lab', at: [0.1, 0.7], duration: 6, credit: 'Photo: Steve Jurvetson, CC BY 2.0' });
+    caption = 'he won the case.';
+    return c;
+  },
+  collision() {
+    const c = nk.collision(doc, { left: { src: BANK + 'cutouts/elon-musk.png', height: 800 }, right: { src: BANK + 'cutouts/sam-altman.png', height: 760 }, center: { src: LOGO + 'openai.png', w: 240, light: true }, at: [0.1, 0.8], credit: 'Photos: Gage Skidmore; Steve Jurvetson · Logo: OpenAI' });
+    const n = nk.number(doc, { value: '$12M', label: 'in damages, demanded', tone: 'orange', labelTone: 'muted', y: 1300, at: 1 });
+    c.el.append(n.el);
+    caption = 'he wanted both of them removed.';
+    return { el: c.el, render: (t) => { c.render(t); n.render(t); } };
+  },
+  page() {
+    caption = 'eight researchers wrote it.';
+    return nk.page(doc, { media: media.page, marks: [{ box: 'Smaller', kind: 'circle', at: 1.5 }], push: { at: [0, 6], scale: 1.1 }, duration: 6, credit: media.page.credit });
+  },
+  'page-underline'() {
+    caption = 'the same page, underlined.';
+    return nk.page(doc, { media: media.page, marks: [{ box: 0, kind: 'underline', at: 1 }, { box: 0, kind: 'highlight', at: 2 }], duration: 6, credit: media.page.credit });
+  },
+  document() {
+    caption = 'a paper, on the desk.';
+    return nk.documentSheet(doc, { media: media.page, marks: [{ box: 0, kind: 'box', at: 1.5 }], duration: 6, credit: media.page.credit });
+  },
+  post() {
+    caption = 'a post, recreated and labelled.';
+    return nk.post(doc, { text: 'We are pausing the rollout while we look into this.', speaker: 'Example Co.', date: 'Sep 14, 2026', credit: 'a public post (fixture)' });
+  },
+  map() {
+    caption = 'one dinner. five people at the table.';
+    return nk.map(doc, { media: media.map, at: 0.6, duration: 6 });
+  },
+  headline() {
+    caption = 'the news broke on a friday.';
+    return nk.headline(doc, { text: 'Board [[meets]] in private', publication: 'The Example Ledger', date: 'Friday', over: { media: media.founderB, focus: [0.5, 0.3], move: 'hold', grade: 'mono' }, at: 0.2, markAt: 1.4 });
+  },
+  lower_third() {
+    const p = nk.photo(doc, { media: media.founderB, focus: [0.5, 0.32], move: 'push', grade: 'warm', duration: 6, credit: media.founderB.credit });
+    const l = nk.lowerThird(doc, { name: 'The chipmaker', role: 'Co-founder and chief executive', at: 0.5 });
+    p.el.append(l.el);
+    caption = 'he bet the company on it.';
+    return { el: p.el, render: (t) => { p.render(t); l.render(t); } };
+  },
+  number() {
+    const p = nk.photo(doc, { media: media.founderC, focus: [0.5, 0.3], move: 'hold', grade: 'mono', duration: 6, credit: media.founderC.credit });
+    const n = nk.number(doc, { value: '1,200', label: 'researchers, by the end', countUp: true, at: 0.5 });
+    p.el.append(n.el);
+    caption = 'the lab kept growing.';
+    return { el: p.el, render: (t) => { p.render(t); n.render(t); } };
+  },
+  board() {
+    const s = nk.scene(doc, 'board');
+    const pol = nk.polaroid(doc, { cutout: BANK + 'cutouts/sam-altman.png', caption: 'The co-founder · CEO', x: 120, y: 760, w: 520, h: 600, rot: -3 });
+    const logo = nk.logoPrint(doc, { logo: LOGO + 'openai.png', x: 640, y: 1240, w: 340, h: 200, rot: 4 });
+    s.stage.append(pol, logo, nk.pushPin(doc, { x: 380, y: 790 }), nk.pushPin(doc, { x: 810, y: 1262, color: 'yellow' }));
+    caption = 'the board, for a moment.';
+    return s;
+  },
+  whiteboard() {
+    const s = nk.scene(doc, 'whiteboard', { framing: 'wide' });
+    const layer = nk.inkLayer(doc, s.stage, { kind: 'dry' });
+    const note = nk.markerNote(doc, layer, 'scale = compute', { x: 120, y: 520, size: 96 });
+    note.progress(1);
+    caption = 'the whiteboard, for a moment.';
+    ink = true;
+    return s;
+  },
+  newspaper() {
+    const s = nk.scene(doc, 'newspaper', { masthead: 'The Example Ledger', date: 'Friday' });
+    s.stage.append(nk.article(doc, { headline: 'Board meets in private', deck: 'A fixture story for the kit gallery', x: 0, y: 40, w: 1000, fillerLines: 30 }));
+    caption = 'the newspaper, for a moment.';
+
+    return s;
+  },
+  // ── Iteration 4 ──
+  'iter4-face-ring'() {
+    const p = nk.photo(doc, { media: four.portrait, move: 'push', duration: 6, credit: four.portrait.credit });
+    const m = nk.mark(doc, { on: p, target: 'face:0', kind: 'circle', at: 1.2, duration: 6 });
+    const l = nk.label(doc, { text: 'Person A', sub: 'a label kept beside the face', at: 0.6, near: { on: p, target: 'face:0' } });
+    p.el.append(l.el);
+    caption = 'the ring is the face, no bigger.';
+    return { el: p.el, render: (t) => { p.render(t); m.render(t); l.render(t); } };
+  },
+  'iter4-text-ring'() {
+    const pg = nk.page(doc, { media: four.article, sheet: 'page', duration: 6, credit: four.article.credit });
+    const m = nk.mark(doc, { on: pg, target: 'text:"Making Of"', kind: 'circle', at: 1.2, duration: 6 });
+    const u = nk.mark(doc, { on: pg, target: 'face:0', kind: 'circle', at: 2, duration: 6 });
+    caption = 'a phrase inside a line, ringed.';
+    return { el: pg.el, render: (t) => { pg.render(t); m.render(t); u.render(t); } };
+  },
+  'iter4-centred'() {
+    const p = nk.photo(doc, { media: four.offside, move: 'push', duration: 6, credit: four.offside.credit });
+    const l = nk.lowerThird(doc, { name: 'Person B', role: 'centred from the face box', at: 0.5, near: { on: p, target: 'face:0' } });
+    p.el.append(l.el);
+    caption = 'the face sits where you look.';
+    return { el: p.el, render: (t) => { p.render(t); l.render(t); } };
+  },
+  'iter4-cutout'() {
+    caption = 'a cutout, face on the subject line.';
+    return nk.cutoutLift(doc, { cutout: four.cutout.file, media: four.cutout, name: 'Person A', role: 'a role, under the face', duration: 6 });
+  },
+  'iter4-caption-article'() {
+    caption = 'captions read on a white page.';
+    return nk.photo(doc, { media: four.article, focus: [0.5, 0.2], move: 'hold', top: false, duration: 6, credit: four.article.credit });
+  },
+  'iter4-stat-counter'() {
+    caption = 'a counter that lands.';
+    return nk.stat(doc, { kind: 'counter', value: '$1,200M', label: 'a label under the figure', title: 'a short title', at: 0.3 });
+  },
+  'iter4-stat-bar'() {
+    caption = 'bars, true to their values.';
+    return nk.stat(doc, { kind: 'bar', title: 'a short title', items: [{ label: 'First', value: 12, display: '12' }, { label: 'Second', value: 40, display: '40' }, { label: 'Third', value: 95, display: '95' }], highlight: 2, at: 0.3 });
+  },
+  'iter4-stat-scale'() {
+    caption = 'a scale: areas, not lengths.';
+    return nk.stat(doc, { kind: 'scale', items: [{ label: 'small', value: 1, display: '1×' }, { label: 'large', value: 30, display: '30×' }], at: 0.3, over: four.other });
+  },
+  'iter4-lift'() {
+    caption = 'lifted off its own page.';
+    return nk.lift(doc, { media: four.article, at: 0.8, duration: 6, credit: four.article.credit });
+  },
+  'iter4-drawn'() {
+    caption = 'drawings never show paper.';
+    return nk.collage(doc, { ground: 'kraft', layers: [{ media: four.sketchA, x: 60, y: 640, w: 560 }, { media: four.sketchB, x: 470, y: 860, w: 560, at: 0.4 }], move: 'hold', duration: 6 });
+  },
+  'iter4-collage-style'() {
+    caption = 'one print for every face.';
+    return nk.collage(doc, { ground: 'charcoal', style: 'halftone', layers: [{ media: four.portrait, x: 80, y: 660, w: 520, rot: -3 }, { media: four.other, x: 520, y: 760, w: 480, rot: 3, at: 0.4 }, { seed: 'scribble-ring', around: 0, target: 'face:0', at: 1.2 }], move: 'hold', duration: 6 });
+  },
+  // ── Iteration 7 (MD-130 date labels; MD-127 real-cutout scenes) ──
+  'iter7-date-label'() {
+    const p = nk.photo(doc, { media: four.offside, move: 'push', duration: 6, credit: four.offside.credit });
+    // Started over the face on purpose: the keep-outs move it clear.
+    const d = nk.lineLabel(doc, { id: 'L1', start: 0.4, end: 3, label: 'December 11, 2015', label_kind: 'date' }, { y: 900 });
+    const l = nk.lineLabel(doc, { id: 'L2', start: 0.8, end: 5, label: 'Menlo Park', label_kind: null });
+    p.el.append(d.el, l.el);
+    caption = 'a date reads first.';
+    return { el: p.el, render: (t) => { p.render(t); d.render(t); l.render(t); } };
+  },
+  'iter7-object-tableau'() {
+    caption = 'real cutouts, staged in a real room.';
+    return nk.tableau(doc, {
+      setting: seven.room,
+      seats: [{ id: 'a', x: 420, y: 1330, h: 760 }],
+      cast: [{ media: four.cutout, seat: 'a' }],
+      props: [{ media: seven.boxes, x: 760, y: 1500, w: 520, rot: 2 }],
+      move: 'push', duration: 6, credit: 'Photos: fixture credits',
+    });
+  },
+  'iter7-object-collage'() {
+    caption = 'a collage of real photos.';
+    return nk.collage(doc, { ground: 'charcoal', layers: [
+      { media: seven.room, x: 60, y: 640, w: 700, rot: -2 },
+      { media: seven.boxes, x: 380, y: 980, w: 640, rot: 3, at: 0.4 },
+      { media: four.cutout, x: 120, y: 760, w: 460, at: 0.8 },
+    ], move: 'hold', duration: 6, credit: 'Photos: fixture credits' });
+  },
+  // ── Iteration 8 (MD-136, MD-138, MD-143): moves, the number's world, the board, the newspaper, the close ──
+  'move-flash'() {
+    caption = 'a flash, then the page.';
+    return nk.flashReveal(doc, { media: four.article, at: 0.5, duration: 5, credit: four.article.credit });
+  },
+  'move-phone'() {
+    caption = 'the page, on a phone.';
+    return nk.phoneShot(doc, { media: four.article, at: 0, duration: 6, credit: four.article.credit });
+  },
+  'move-click'() {
+    caption = 'a click, and the news drops.';
+    return nk.clickReveal(doc, { media: four.article, headline: 'A fixture headline, as the publication printed it', source: 'The Example Ledger', at: 0, clickAt: 0.8, duration: 6, credit: four.article.credit });
+  },
+  'move-burst'() {
+    caption = 'pictures flip past behind a number.';
+    return nk.stat(doc, { kind: 'counter', value: '1,200', label: 'a label under the figure', at: 0.2, burst: { media: [four.portrait, seven.room, four.other, media.founderB, media.founderC, four.offside], duration: 2 } });
+  },
+  'move-speech'() {
+    const p = nk.photo(doc, { media: four.portrait, move: 'push', duration: 6, credit: four.portrait.credit });
+    const say = nk.speech(doc, { on: p, target: 'face:0', text: 'a short paraphrase of what they said', side: 'auto', at: 0.5, duration: 4 });
+    caption = 'what they said, in a few words.';
+    return { el: p.el, render: (t) => { p.render(t); say.render(t); } };
+  },
+  'move-speech-tableau'() {
+    const tb = nk.tableau(doc, { ground: 'charcoal', seats: [{ id: 'a', x: 280, y: 1500, h: 760 }, { id: 'b', x: 800, y: 1500, h: 760 }], cast: [{ media: four.cutout, seat: 'a' }, { media: { id: 'C2', file: BANK + 'cutouts/sam-altman.png', character_image: true, width: 1000, height: 1250, flags: ['cutout'], face: { x: 0.34, y: 0.1, w: 0.32, h: 0.3 } }, seat: 'b' }], move: 'push', duration: 6 });
+    const say = nk.speech(doc, { on: tb.figures[0], target: 'face:0', text: 'come over tonight', side: 'right', at: 0.5, duration: 4 });
+    caption = 'tied to the figure, not a quote.';
+    return { el: tb.el, render: (t) => { tb.render(t); say.render(t); } };
+  },
+  'move-cuts'() {
+    const a = nk.photo(doc, { media: four.offside, move: 'push', duration: 2, credit: four.offside.credit });
+    const b = nk.stat(doc, { kind: 'counter', value: '38%', label: 'a beat on its own words', at: 0.1 });
+    const c = nk.flashReveal(doc, { media: four.article, at: 0, duration: 3, credit: four.article.credit });
+    caption = 'one frame, three beats.';
+    return nk.cuts(doc, [{ at: 0, ...a }, { at: 2, ...b }, { at: 4, ...c }]);
+  },
+  'move-drawn-logo'() {
+    const s = nk.scene(doc, 'whiteboard', { framing: 'wide' });
+    const m = nk.drawnLogo(doc, { media: { id: 'L1', file: LOGO + 'openai.png' }, at: 0.4, duration: 2, x: 200, y: 520, w: 560 });
+    s.stage.append(m.el);
+    caption = 'a logo, drawn in marker.';
+    ink = true;
+    return { el: s.el, render: (t) => { s.render(t); m.render(t); } };
+  },
+  'stat-camera'() {
+    caption = 'the camera pulls out; the ground holds.';
+    return nk.stat(doc, { kind: 'scale', at: 0, stagger: 1.6, items: [{ label: 'small', value: 24, display: '24' }, { label: 'large', value: 200, display: '200' }], camera: { on: 0, scale: 2, at: [1.5, 2.1] } });
+  },
+  'stat-world'() {
+    // The hand-built camera that showed a white border: a stat in a wrapper, translated and scaled. Its ground now reaches past the frame.
+    const st = nk.stat(doc, { kind: 'scale', at: 0, stagger: 3.8, items: [{ label: 'small', value: 24, display: '24' }, { label: 'large', value: 200, display: '200' }] });
+    const zoom = document.createElement('div');
+    zoom.style.cssText = 'position:absolute;left:0;top:0;width:1080px;height:1920px;transform-origin:0 0;transform:translate(80px,-1206px) scale(2)';
+    zoom.append(st.el);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden;background:#fff';
+    wrap.append(zoom);
+    caption = 'no border at any camera move.';
+    return { el: wrap, render: (t) => st.render(t) };
+  },
+  'board-players'() {
+    caption = 'three players, connected.';
+    return nk.playersBoard(doc, { players: [
+      { src: BANK + 'cutouts/sam-altman.png', name: 'The co-founder', at: 0 },
+      { media: four.portrait, name: 'Person A', at: 0.5 },
+      { src: LOGO + 'openai.png', name: 'The company', logo: true, at: 1 },
+    ], links: [{ from: 0, to: 1, label: 'funded', at: 1.2 }, { from: 0, to: 2, at: 1.7 }], duration: 6 });
+  },
+  'board-players-five'() {
+    caption = 'five players, still clear.';
+    return nk.playersBoard(doc, { players: [
+      { media: four.portrait, name: 'Person A', at: 0 },
+      { media: four.other, name: 'Person C', at: 0 },
+      { src: BANK + 'cutouts/sam-altman.png', name: 'The co-founder', at: 0 },
+      { src: LOGO + 'openai.png', name: 'The company', logo: true, at: 0 },
+      { media: four.offside, name: 'Person B', at: 0 },
+    ], links: [{ from: 0, to: 1 }, { from: 0, to: 2 }, { from: 1, to: 3 }, { from: 2, to: 4 }], duration: 6 });
+  },
+  'newspaper-moment'() {
+    caption = 'and then the papers had it.';
+    return nk.frontPage(doc, { masthead: 'The Example Ledger', date: 'Friday', vol: 'Vol. CXII', price: 'Late edition', photo: four.offside, headline: 'Board meets in private', at: 0.1, landAt: 0.9, duration: 6 });
+  },
+  'newspaper-words'() {
+    caption = 'and the next morning, the words.';
+    return nk.frontPage(doc, { masthead: 'The Example Ledger', date: 'Friday', vol: 'Vol. CXII', price: 'Late edition', headline: 'A much longer fixture headline set across the whole page', deck: 'A fixture deck under the headline', at: 0.1, landAt: 0.9, duration: 6 });
+  },
+  close() {
+    close.build(host, { ...ctx, assets: '../' });
+    caption = 'would you have taken the deal?';
+    return { el: null, render: (t) => close.render(t) };
+  },
+  'close-fade'() {
+    // The join as index.html plays it: the last story frame holds, the white fades in over it.
+    const p = nk.photo(doc, { media: four.offside, move: 'hold', duration: 6, credit: four.offside.credit });
+    host.append(p.el);
+    p.render(6);
+    const over = document.createElement('div');
+    over.style.cssText = 'position:absolute;left:0;top:0;width:1080px;height:1920px';
+    host.append(over);
+    close.build(over, { ...ctx, assets: '../' });
+    caption = 'would you have taken the deal?';
+    return { el: null, render: (t) => { close.render(t); const u = Math.min(1, t / CLOSE.fade[1]); over.style.opacity = String(u * u * (3 - 2 * u)); p.el.style.opacity = String(1 - u * u * (3 - 2 * u)); } };
+  },
+};
+r = (B[shot] ?? B.photo)();
+if (r.el) host.append(r.el);
+const cap = document.createElement('div');
+cap.className = `cap${ink ? ' ink' : ''}`;
+for (const ch of caption) { const sp = document.createElement('span'); sp.textContent = ch; cap.append(sp); }
+document.body.append(cap);
+const tag = document.createElement('div');
+tag.className = 'tag';
+tag.textContent = `${shot} · t ${T}s`;
+document.body.append(tag);
+await document.fonts.ready;
+await Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((ok) => { i.onload = i.onerror = ok; }))));
+r.render(0);
+r.render(T);
+// gallery.mjs: re-render, hide the caption while the band is sampled, and set the sampled tone.
+window.__render = (t) => r.render(t);
+window.__cap = (on) => { cap.style.visibility = on ? '' : 'hidden'; };
+window.__tone = (tone) => { cap.className = `cap${tone === 'light' ? ' ink' : tone === 'plate' ? ' plate' : ''}`; tag.textContent = `${shot} · t ${T}s · captions ${tone}`; };
+window.__ready = true;
+</script></body></html>

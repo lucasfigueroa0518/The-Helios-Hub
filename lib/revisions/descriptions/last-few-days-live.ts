@@ -2,10 +2,15 @@
  * Live deps for the Last Few Days revision description (last-few-days.ts). Every service import is
  * lazy, so importing the registry loads no renderer, storage, model or Jev client.
  *
- * Ceilings: vision.ts (checkSlide), the Stories finder and the structured writer call catch errors
- * from the calls they make, so a CeilingReached thrown inside a paid call would be swallowed and the
- * search would keep paying. Every paid call goes through meteredCreate / meteredJev, which refuse
- * BEFORE paying once the meter has stopped; each dep re-throws the stored error when it returns.
+ * Wording and photo fixes run the run's own pieces (lib/lfd/run.ts): the news writer (lib/news-writer
+ * writeStories('lfd') and its Haiku fact check, checkFacts) and the photo rung (lfdPhotoRung: findStoryPhoto with the
+ * lead image and, for a builder story, AI Drama's harvest as extra candidates).
+ *
+ * Ceilings: vision.ts (checkSlide), the photo finder and its graders catch errors from the calls they make, so a
+ * CeilingReached thrown inside a paid call would be swallowed and the search would keep paying. Every paid call goes
+ * through a metered wrapper (meteredCreate / meteredNewsCreate / meteredNewsPhotos), which refuses BEFORE paying once
+ * the meter has stopped; each dep re-throws the stored error when it returns. A builder story's harvest runs under its
+ * own cap (BUILDER_HARVEST_CAP_USD) and is charged to the meter when it returns.
  */
 import type { LastFewDaysDeps, Metered } from './last-few-days';
 
@@ -24,10 +29,7 @@ async function meteredClaude(m: Metered) {
   return meteredCreate(liveMessagesCreate(newAnthropic()), m, await pricer());
 }
 
-async function meteredJevAsk(m: Metered) {
-  const [{ createJevAsk, jevCostUsd }, { meteredJev }] = await Promise.all([import('@/lib/social/jev/client'), import('./carousels-live')]);
-  return meteredJev(createJevAsk(), m, jevCostUsd);
-}
+const meteredWriterCreate = async (m: Metered) => (await import('./carousels-live')).meteredNewsCreate(m);
 
 export const liveLastFewDaysDeps: LastFewDaysDeps = {
   async renderSlides({ slug, post, slides }) {
@@ -50,6 +52,7 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     for (const sl of draw.slides) {
       if (sl.photoUrl) sl.photoUrl = (await resolve(sl.photoUrl))!;
       if (sl.lfdCover?.meme) sl.lfdCover.meme.url = (await resolve(sl.lfdCover.meme.url))!;
+      if (sl.lfdCover?.image) sl.lfdCover.image.url = (await resolve(sl.lfdCover.image.url))!;
       for (const t of sl.lfdCover?.photos ?? []) t.url = (await resolve(t.url))!;
     }
     const wanted = new Map(slides.map((s) => [s.slide, s.key]));
@@ -57,6 +60,7 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     // The whole post is drawn (local Chromium, no AI) so slides keep their place; only the listed slides'
     // problems count against the fix, and only their JPEGs are uploaded, each to its own new key.
     await storeSlideJpegs(slug, draw, {
+      failedImagesCheckedPerSlide: true,
       prefix: 'lfd',
       fitCheck: async (p, opts) => {
         const r = await checkRenderFit(p, opts);
@@ -97,27 +101,58 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     return best.length >= MIN_TEXT_CHARS ? best : null;
   },
 
-  async grounded(copy, source, m) {
-    const { grounded } = await import('@/lib/lfd/ground');
-    const ok = await grounded(await meteredJevAsk(m), copy, source);
+  async factCheck(copy, source, m) {
+    const [{ checkFacts }, { WRITER_SOURCE_CHARS: SOURCE_CHARS }] = await Promise.all([import('@/lib/news-writer'), import('@/lib/lfd/run')]);
+    // The saved story keeps no source headline: the article text alone is the evidence.
+    const body = [copy.setup, copy.body].filter((x) => x?.trim()).join(' ');
+    const res = await checkFacts([{ key: 's1', headline: '', text: source.slice(0, SOURCE_CHARS) }], [{ key: 's1', headline: copy.headline, body }], { create: await meteredWriterCreate(m) });
     if (m.stopped()) m.halt();
-    return ok;
+    return { ok: res.failed.length === 0, why: res.failed.map((c) => `"${c.claim}": ${c.evidence}`).join('; ') };
   },
 
-  async rewrite({ pick, body, note }, m) {
-    const { writeStories } = await import('@/lib/lfd/write');
-    const res = await writeStories(await meteredClaude(m), [{ pick, body }], note);
+  async rewrite({ pick, source, instruction }, m) {
+    const [{ writeStories }, { copyOf, WRITER_SOURCE_CHARS: SOURCE_CHARS }] = await Promise.all([import('@/lib/news-writer'), import('@/lib/lfd/run')]);
+    // The run's writer call (run.ts writeSome) for this one story, under its ordinal key; no editor angle is saved.
+    const res = await writeStories('lfd', [{ key: 's1', headline: '', text: source.slice(0, SOURCE_CHARS) }], { s1: '' }, { create: await meteredWriterCreate(m) }, { instruction });
     if (m.stopped()) m.halt();
-    return res.ok ? (res.stories[0] ?? null) : null;
+    const w = res.written.find((x) => x.key === 's1');
+    return w ? copyOf(pick.key, w) : { dropped: res.dropped[0]?.reason ?? 'the writer wrote no story' };
   },
 
-  async findPhoto({ pick, copy, exclude }, m) {
-    const [{ createLivePhotoFinder }, { findPhotos }] = await Promise.all([import('@/lib/stories/photos'), import('@/lib/lfd/photos')]);
-    // Every Jev pick and Haiku photo-vision call the finder makes is metered and refused once the meter stopped.
-    const finder = createLivePhotoFinder({ jev: await meteredJevAsk(m), create: await meteredClaude(m), runRef: `lfd-revision:${pick.key}:${new Date().toISOString()}` });
-    const found = await findPhotos(finder, [{ pick, copy }], new Set(exclude));
+  async findPhoto({ pick, exclude, ledger, hint }, m) {
+    const [np, { lfdPhotoRung }, { BUILDER_HARVEST_CAP_USD }, { liveBuilderHarvest }, { readPage }, { meteredNewsPhotos }] = await Promise.all([
+      import('@/lib/news-photos'),
+      import('@/lib/lfd/run'),
+      import('@/lib/lfd/photos'),
+      import('@/lib/lfd/live'),
+      import('@/lib/social/reporter/read-page'),
+      import('./carousels-live'),
+    ]);
+    const create = await meteredWriterCreate(m);
+    const { jev, serper, fetchImage } = await meteredNewsPhotos(m);
+    // One read per article page: the lead image and the finder share it (as the run does).
+    const pages = new Map<string, ReturnType<typeof readPage>>();
+    const read = (url: string) => {
+      if (!pages.has(url)) pages.set(url, readPage(url));
+      return pages.get(url)!;
+    };
+    // The person's hint: one image search whose results join the candidates (graded the same way).
+    const extra: import('@/lib/news-photos').Candidate[] = hint && serper ? (await serper(hint).catch(() => [] as string[])).map((src) => ({ src, source: 'extra', credit: '' })) : [];
+    const harvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
+    const harvest = pick.lane === 'builder' && !m.stopped() ? { deps: await liveBuilderHarvest(), budget: harvestBudget, now: new Date() } : undefined;
+    const rung = await lfdPhotoRung(pick, {
+      readPage: read,
+      findPhoto: (s, o) => np.findStoryPhoto(s, { create, jev, serper, fetchImage, readPage: np.readPageImages(read), usedReason: o.usedReason }, { extra: o.extra }),
+      taken: exclude,
+      ledger,
+      // CI-32: a lead image is downloaded and hashed to check it against the ledger's pictures.
+      usedPhotos: { http: fetch },
+      ...(harvest ? { harvest } : {}),
+      extra,
+    });
+    if (harvestBudget.usd > 0) m.spend(harvestBudget.usd);
     if (m.stopped()) m.halt();
-    return { photo: found.photos[0] ?? null, trace: found.traces[0] ?? [] };
+    return { photo: rung.photo ?? null, trace: rung.trace, ...(rung.source ? { source: rung.source } : {}), result: rung.result };
   },
 
   async vision(png, story, m) {
@@ -125,6 +160,11 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     const v = await checkSlide(await meteredClaude(m), png, story);
     if (m.stopped()) m.halt();
     return v;
+  },
+
+  async photoBank() {
+    const { liveNewsPhotoBank } = await import('@/lib/news-photos/bank-live');
+    return liveNewsPhotoBank();
   },
 
   async unschedule(q, postId) {

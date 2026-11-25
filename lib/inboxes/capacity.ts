@@ -29,11 +29,33 @@ export type CapacityInbox = {
 /** Weekdays in [from, to) — the ramp counts business days, not calendar days. */
 export function businessDaysBetween(from: string, to: string): number {
   if (from >= to) return 0;
+  // Whole weeks hold 5 weekdays each; only the last partial week is walked. The send
+  // queue asks this for every mailbox on every day of its board, and walking day by
+  // day from a mailbox's stage start was most of /api/send-queue's time.
+  const total = wholeDaysBetween(from, to);
+  if (!Number.isInteger(total) || total <= 0) return walkBusinessDays(from, to);
+  let count = Math.floor(total / 7) * 5;
+  let day = addCalendarDays(from, total - (total % 7));
+  for (let i = 0; i < total % 7; i += 1, day = addCalendarDays(day, 1)) {
+    if (!isNyCalendarWeekend(day)) count += 1;
+  }
+  return count;
+}
+
+function walkBusinessDays(from: string, to: string): number {
   let count = 0;
   for (let day = from; day < to; day = addCalendarDays(day, 1)) {
     if (!isNyCalendarWeekend(day)) count += 1;
   }
   return count;
+}
+
+/** Calendar days from `from` to `to` (both YYYY-MM-DD); NaN when either is not a date. */
+function wholeDaysBetween(from: string, to: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return Number.NaN;
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
 }
 
 /**

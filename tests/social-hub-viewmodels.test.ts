@@ -64,10 +64,14 @@ test('place and move share the reschedule flag; every plan names a flag that exi
 
 test('slot choices are today’s open windows for the type', () => {
   const ready = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready')!;
-  const slots = slotChoices(d, ready, now);
-  assert.ok(slots.length > 0);
-  assert.ok(slots.every((s) => s.slot === 'morning' || s.slot === 'afternoon'));
-  const o = offerer(d, now);
+  // Carousels have no routine windows: with no calendar slot for them there is nothing to choose,
+  // and with carousel slots later today (the fixture clock is 3 PM) the choices are exactly those slots.
+  assert.deepEqual(slotChoices(d, ready, now), []);
+  const carouselSlot = (startMinute: number) => ({ vertical: 'carousels' as const, startMinute, series: null, feedMode: null, origin: 'template' as const });
+  const withCalendar = { ...d, dayQuotas: { ...d.dayQuotas, slots: { [nyDateOf(now)!]: [carouselSlot(960), carouselSlot(1080)] } } } as typeof d;
+  const slots = slotChoices(withCalendar, ready, now);
+  assert.deepEqual(slots.map((s) => s.slot), ['t0960', 't1080']);
+  const o = offerer(withCalendar, now);
   const offer = o.offer(ready);
   const place = [offer.menu.primary, ...offer.menu.secondary, ...offer.menu.more].find((a) => a?.key === 'place');
   if (place) assert.ok(place.slots?.length, 'place offers the picker');
@@ -87,7 +91,8 @@ test('today’s strip is only post ideas holding a slot; failed and never-made i
     post({ id: 'guess-failed', status: 'failed', idea: { id: 'guess', label: 'Guess' } }),
     post({ id: 'free-skipped', status: 'skipped', generatedAt: null, idea: { id: 'free', label: 'Free' } }),
     post({ id: 'no-idea', idea: null, status: 'scheduled' }),
-    post({ id: 'making', status: 'generating', generatedAt: null, idea: { id: 'download', label: 'Download' }, publishAt: null }),
+    // SS-1: Morning Download has one window a day, so the second set made today is Trivia's (a Thursday).
+    post({ id: 'making', vertical: 'ai_trivia', status: 'generating', generatedAt: null, idea: { id: 'download', label: 'Download' }, publishAt: null }),
     post({ id: 'made', status: 'scheduled', idea: { id: 'guess2', label: 'Guess 2' } }),
   ], '2026-10-08').map((p) => p.id);
   assert.deepEqual(ids, ['made', 'making']);
@@ -95,7 +100,7 @@ test('today’s strip is only post ideas holding a slot; failed and never-made i
 
 test('a day’s slots are the sum of that day’s quotas, and only scheduled or published posts fill them', () => {
   const post = (over: Partial<HubPost>): HubPost => ({ id: 'p', vertical: 'reels', nyDate: '2026-10-09', status: 'ready', ...over }) as HubPost;
-  const quotas = { reels: 1, carousels: 0, explainers: 1, last_few_days: 0 };
+  const quotas = { reels: 1, carousels: 0, explainers: 1, last_few_days: 0, field_notes: 0, reel_ai_drama: 0 };
   // Friday: Morning Download is the only Story series due, so 1 + 0 + 1 + 1 (+ 0 Last Few Days).
   const friday = slotsForDay([
     post({ id: 'ready', status: 'ready' }),
@@ -108,8 +113,9 @@ test('a day’s slots are the sum of that day’s quotas, and only scheduled or 
     post({ id: 'story', vertical: 'stories', status: 'publishing' }),
   ], '2026-10-09', quotas);
   assert.deepEqual(friday, { slots: 3, filled: 2 });
-  // No quotas loaded: each type's windows. Thursday has both Story series; Friday only Morning Download, plus Last Few Days.
-  assert.equal(slotsForDay([], '2026-10-08', null).slots, 9);
+  // No quotas loaded: each type's windows (Carousels have none). Thursday has both Story series; Friday only Morning Download, plus Last Few Days. AI Drama's 8:00 PM window is every day.
+  assert.equal(slotsForDay([], '2026-10-08', null).slots, 8);
+  // Friday is also a Field Notes day (Tue/Fri), so its one window counts: 9.
   assert.equal(slotsForDay([], '2026-10-09', null).slots, 9);
 });
 
@@ -123,7 +129,7 @@ test('the Content model leads with what needs a person and orders today by time'
 
 test('pools come in the fixed type order and rank within a type only', () => {
   const pools = poolSummaries(d.ideas);
-  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events']);
+  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama']);
   for (const p of pools) {
     const scores = p.next.map((i) => i.score ?? -Infinity);
     assert.deepEqual(scores, [...scores].sort((a, b) => b - a));

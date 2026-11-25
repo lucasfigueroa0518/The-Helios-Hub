@@ -10,6 +10,7 @@ import { hardPublish } from '@/app/api/social-hub/actions/hard-publish/handler';
 import { hardRegenerate } from '@/app/api/social-hub/actions/hard-regenerate/handler';
 import { rejectContent } from '@/app/api/social-hub/actions/reject/handler';
 import { aiEventsItemId } from '@/lib/ai-events/items';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { queueAiEventsRun } from '@/lib/ai-events/manual';
 import {
   AI_EVENTS_APPROVED_OFF_NOTE,
@@ -65,7 +66,7 @@ test('a post in review offers Approve, Reject, Schedule, Publish now and Rebuild
 });
 
 test('a booked, unapproved post offers Approve where it is, Move, Unschedule and Rebuild post', async () => {
-  const { query } = await openAiEventsDb({ publishingLive: true });
+  const { query } = await openAiEventsDb({ state: 'live' });
   const { id } = await seedRenderedPost(query);
   await scheduleAiEventsPost(query as unknown as Query, id, 'auto', SUN_NOON, '2026-10-25', () => 0);
   const post = await aiPost(query);
@@ -81,7 +82,11 @@ function actionsOn(q: Query, now: Date): ContentActions {
     approvePost: (qq, id) => approveAiEventsPost(qq, id, now),
     rejectPost: rejectAiEventsPost,
     hardPublishPost: hardPublishAiEventsPost,
-    publishingLive: async (qq) => (await readAiEventsSettings(qq)).publishingLive,
+    // Live only (D16), as lib/publishing/actions/live.ts wires it.
+    publishingLive: async (qq) => {
+      const s = await readAiEventsSettings(qq);
+      return postsToInstagram(stateOf(s.autoRun, s.publishingLive).state);
+    },
     unschedulePost: unscheduleAiEventsPost,
     queueRebuild: (qq, o) => queueAiEventsRun(qq as never, { kind: 'rebuild', requestedBy: o.requestedBy, weekKey: o.weekKey }),
     itemId: aiEventsItemId,
@@ -91,7 +96,7 @@ function actionsOn(q: Query, now: Date): ContentActions {
 }
 
 test('the verbs on the real spine: approve, move, unschedule, place, reject, delete, publish now', async () => {
-  const { query } = await openAiEventsDb({ publishingLive: true });
+  const { query } = await openAiEventsDb({ state: 'live' });
   const q = query as unknown as Query;
   const a = actionsOn(q, SAT_9);
   const { id: one } = await seedRenderedPost(query, { slug: 'ae-1' });
@@ -148,7 +153,7 @@ test('Rebuild post queues a rebuild of the post’s own week, once; a rejected o
 });
 
 test('a rejected post is refused by approve and Publish now, and the hub offers neither (nor Rebuild post)', async () => {
-  const { query } = await openAiEventsDb({ publishingLive: true });
+  const { query } = await openAiEventsDb({ state: 'live' });
   const q = query as unknown as Query;
   const a = actionsOn(q, SAT_9);
   const { id } = await seedRenderedPost(query);
@@ -167,21 +172,33 @@ test('a rejected post is refused by approve and Publish now, and the hub offers 
   }
 });
 
-test('while AI Events publishing is off: no Publish now in the hub, Publish now refuses with 409, Approve approves without a slot', async () => {
-  const { query } = await openAiEventsDb();
-  const q = query as unknown as Query;
-  const { id } = await seedRenderedPost(query);
-  const post = await aiPost(query);
-  for (const ctx of [{ quota: null, typicalCostLabel: null }, { quota: null, typicalCostLabel: null, aiEventsPublishingLive: false }, { quota: null, typicalCostLabel: null, lfdPublishingLive: true }]) {
-    const actions = actionsFor(post, ctx).filter((x): x is PostPlan => x.kind === 'post').map((x) => x.action);
-    assert.equal(actions.includes('hardPublish'), false);
-    assert.ok(actions.includes('approveContent'));
+test('while AI Events isn’t Live: no Publish now in the hub, Publish now refuses with 409; Paused approves without a slot, Approval books it', async () => {
+  for (const state of ['paused', 'approval', 'mismatch'] as const) {
+    const { query } = await openAiEventsDb(state === 'mismatch' ? { publishingLive: true } : { state });
+    const q = query as unknown as Query;
+    const { id } = await seedRenderedPost(query);
+    const post = await aiPost(query);
+    for (const ctx of [{ quota: null, typicalCostLabel: null }, { quota: null, typicalCostLabel: null, aiEventsPublishingLive: false }, { quota: null, typicalCostLabel: null, lfdPublishingLive: true }]) {
+      const actions = actionsFor(post, ctx).filter((x): x is PostPlan => x.kind === 'post').map((x) => x.action);
+      assert.equal(actions.includes('hardPublish'), false, state);
+      assert.ok(actions.includes('approveContent'), state);
+    }
+    const a = actionsOn(q, SAT_9);
+    assert.deepEqual(await a.publishNow!({ aiEventsPostId: id }, 'tommy'), { ok: false, status: 409, note: AI_EVENTS_PUBLISHING_OFF_NOTE }, state);
+    assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0, state);
+    const approved = await a.approve!({ aiEventsPostId: id }, 'tommy');
+    const slots = (await q(`SELECT count(*)::int AS n FROM social_hub.schedule WHERE status = 'scheduled'`)).rows[0].n;
+    if (state === 'approval') {
+      // Approval holds slots (contract §4.3): ready in its own Sunday's window; it posts only once Live.
+      assert.equal(approved.ok, true, approved.note);
+      assert.match(approved.note, /^Approved and scheduled for 2026-10-25T22:/);
+      assert.equal(slots, 1);
+    } else {
+      // Paused, and a Generate off + Live on mismatch (reads as paused): approved, it stays in Made (D17).
+      assert.deepEqual(approved, { ok: true, note: AI_EVENTS_APPROVED_OFF_NOTE }, state);
+      assert.equal(slots, 0, state);
+    }
   }
-  const a = actionsOn(q, SAT_9);
-  assert.deepEqual(await a.publishNow!({ aiEventsPostId: id }, 'tommy'), { ok: false, status: 409, note: AI_EVENTS_PUBLISHING_OFF_NOTE });
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0);
-  assert.deepEqual(await a.approve!({ aiEventsPostId: id }, 'tommy'), { ok: true, note: AI_EVENTS_APPROVED_OFF_NOTE });
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0);
 });
 
 test('the hub reads AI Events publishing into the offer (Publish now appears once it is on), and the menu says Rebuild post', async () => {
@@ -199,6 +216,9 @@ test('the hub reads AI Events publishing into the offer (Publish now appears onc
   assert.equal((off.match(/"key":"hardRegenerate","label":"Rebuild post"/g) ?? []).length, 2);
   assert.equal((off.match(/"confirmTitle":"Rebuild this post\?"/g) ?? []).length, 2);
   assert.doesNotMatch(off, /"label":"Regenerate"|Make a new version/);
+  // Live with Generate off is a mismatch: it reads as paused, so still no Publish now (D16).
   await query(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  assert.equal((await offer()).includes('hard-publish'), false);
+  await query(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   assert.equal((await offer()).includes('hard-publish'), true);
 });

@@ -7,8 +7,10 @@
  *   requested → building → ready → approved → scheduled → publishing → published
  *                   ↘ failed / skipped     ↘ rejected            ↘ failed
  */
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 import { hasColumn } from '@/lib/social-hub/slots/columns';
 import type { SetBy } from '@/lib/social-hub/slots/types';
+import { SERIES_OF_VERTICAL, SETLESS_COMPONENT_PREFIX, STORY_VERTICALS, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { Queryable, StoriesDb } from '@/lib/stories/db';
 import type { Backdrop, FrameData, FrameRole, Photo, Series, Style } from '@/lib/stories/render/types';
 import { projectSet } from '@/lib/stories/spine';
@@ -46,6 +48,10 @@ export type FrameRow = {
   photo: Photo | null;
   storage_path: string | null;
   jpeg_bytes: number | null;
+  /** 'video' for AI Trivia's MP4 frames (storage_path is the MP4, poster_path its JPEG); 'image' everywhere else. */
+  media: 'image' | 'video';
+  poster_path: string | null;
+  media_bytes: number | null;
   review: Record<string, unknown> | null;
   flagged: boolean;
   ig_container_id: string | null;
@@ -76,7 +82,13 @@ export const SET_SLOT_BY_SQL = `CASE WHEN to_jsonb(sets)->>'slot_by' = 'person' 
 
 const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, ${SET_SLOT_BY_SQL} AS "slotBy", flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
-const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
+/**
+ * The video columns (db/stories_ai_trivia.sql) read through the row's JSON, like SLOT_MINUTE_SQL (R12): before that
+ * file is applied every frame reads as an image.
+ */
+const FRAME_MEDIA_COLS = `COALESCE(to_jsonb(frames)->>'media', 'image') AS media, to_jsonb(frames)->>'poster_path' AS poster_path,
+  (to_jsonb(frames)->>'media_bytes')::int AS media_bytes`;
+const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, ${FRAME_MEDIA_COLS}, review, flagged,
   ig_container_id, ig_media_id, published_at`;
 
 /** The New York calendar date of an instant (posting windows are New York time, S-20). */
@@ -169,7 +181,7 @@ export async function claimNextRequested(db: StoriesDb): Promise<StorySet | null
 }
 
 /** A build that died mid-way stays `building` and blocks the day. Hand it back so the next pass tries again. */
-export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): Promise<string[]> {
+export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = RUN_HANG_BACKSTOP_MINUTES /* hang guard only; long builds are normal */): Promise<string[]> {
   const { rows } = await db.query<{ id: string }>(
     `UPDATE stories.sets
         SET status = 'requested', error = 'the previous build stopped before it finished; trying again', updated_at = now()
@@ -180,6 +192,15 @@ export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): 
   return rows.map((r) => r.id);
 }
 
+/**
+ * Called once when helios-stories boots, before it claims anything: builds run only inside that one daemon, so a set
+ * still `building` at boot died with the previous process (deploy restart). Handed back now, not after the 12 h
+ * backstop, so the set is rebuilt the same day. Returns the released ids.
+ */
+export async function releaseBuildsAtStartup(db: StoriesDb): Promise<string[]> {
+  return releaseStaleBuilds(db, 0);
+}
+
 export async function getSet(db: Queryable, setId: string): Promise<{ set: StorySet; frames: FrameRow[] } | null> {
   const { rows } = await db.query<StorySet>(`SELECT ${SET_COLS} FROM stories.sets WHERE id = $1`, [setId]);
   if (!rows[0]) return null;
@@ -187,10 +208,12 @@ export async function getSet(db: Queryable, setId: string): Promise<{ set: Story
   return { set: rows[0], frames: frames.rows };
 }
 
-export async function listSets(db: Queryable, opts: { series?: Series; statuses?: SetStatus[]; since?: string; limit?: number } = {}): Promise<StorySet[]> {
+/** `series`: one series, or a type's series (SS-1: Morning Download's list holds the retired series' history too). */
+export async function listSets(db: Queryable, opts: { series?: Series | readonly Series[]; statuses?: SetStatus[]; since?: string; limit?: number } = {}): Promise<StorySet[]> {
   const where: string[] = [];
   const params: unknown[] = [];
-  if (opts.series) where.push(`series = $${params.push(opts.series)}`);
+  if (typeof opts.series === 'string') where.push(`series = $${params.push(opts.series)}`);
+  else if (opts.series) where.push(`series = ANY($${params.push([...opts.series])}::text[])`);
   if (opts.statuses?.length) where.push(`status = ANY($${params.push(opts.statuses)}::text[])`);
   if (opts.since) where.push(`ny_date >= $${params.push(opts.since)}`);
   const { rows } = await db.query<StorySet>(
@@ -243,7 +266,20 @@ export async function saveBuild(
 export async function saveFrameRender(
   db: Queryable,
   frameId: string,
-  r: { storagePath: string; jpegBytes: number; review?: Record<string, unknown> | null; flagged?: boolean; backdrop?: Backdrop; template?: string | null; copy?: FrameData; photo?: Photo | null },
+  r: {
+    storagePath: string;
+    jpegBytes: number;
+    review?: Record<string, unknown> | null;
+    flagged?: boolean;
+    backdrop?: Backdrop;
+    template?: string | null;
+    copy?: FrameData;
+    photo?: Photo | null;
+    /** A video frame (AI Trivia): storagePath is the MP4, posterPath its JPEG, jpegBytes the poster's size. */
+    media?: 'image' | 'video';
+    posterPath?: string | null;
+    mediaBytes?: number | null;
+  },
 ): Promise<void> {
   await db.query(
     `UPDATE stories.frames SET storage_path = $2, jpeg_bytes = $3, review = $4::jsonb, flagged = $5,
@@ -253,6 +289,10 @@ export async function saveFrameRender(
     [frameId, r.storagePath, r.jpegBytes, r.review ? JSON.stringify(r.review) : null, r.flagged ?? false, r.backdrop ?? null, r.template ?? null,
       r.copy ? JSON.stringify(r.copy) : null, r.photo ? JSON.stringify(r.photo) : null, r.photo !== undefined],
   );
+  // Only a frame that says its media touches the video columns, so image sets keep saving before they exist.
+  if (r.media) {
+    await db.query(`UPDATE stories.frames SET media = $2, poster_path = $3, media_bytes = $4 WHERE id = $1`, [frameId, r.media, r.posterPath ?? null, r.mediaBytes ?? null]);
+  }
 }
 
 /** One frame's settings and render, as a Targeted Revision reads and writes them. */
@@ -361,9 +401,35 @@ export async function recordHistory(db: Queryable, series: Series, keys: string[
   for (const key of new Set(keys.map((k) => k.trim()).filter(Boolean))) {
     await db.query(`INSERT INTO stories.history (series, key, set_id) VALUES ($1, $2, $3)`, [series, key, setId]);
   }
+  if (series === 'morning_download' && setId) await recordWhatWeSaid(db, setId);
 }
 
-/** Keys shown in the last `days` days for a series (3 Morning Download, 30 Guess the Number, 90 Free vs. Paid). */
+/**
+ * Morning Download remembers what it said (Bald-Eagle 2026-11-12, D2): each history row of a published set gets the
+ * headline its story frame ran (the set's own headline when the frame has none) and its intake story id, which
+ * lib/stories/md-development.ts compares new coverage against. Only once db/bald_eagle_2026_11_12_md.sql has added
+ * the columns; never fails the publish.
+ */
+async function recordWhatWeSaid(db: Queryable, setId: string): Promise<void> {
+  try {
+    if (!(await hasColumn(db, 'stories', 'history', 'headline')) || !(await hasColumn(db, 'stories', 'history', 'intake_story_id'))) return;
+    await db.query(
+      `UPDATE stories.history h
+          SET headline = COALESCE(
+                (SELECT f.copy->>'headline' FROM stories.frames f WHERE f.set_id = s.id AND f.role = 'story' ORDER BY f.seq OFFSET st.ord - 1 LIMIT 1),
+                st.v->>'headline'),
+              intake_story_id = st.v->>'storyId'
+         FROM stories.sets s,
+              LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.payload->'stories') = 'array' THEN s.payload->'stories' ELSE '[]'::jsonb END) WITH ORDINALITY AS st(v, ord)
+        WHERE s.id = $1::uuid AND h.set_id = s.id AND h.series = 'morning_download' AND st.v->>'key' = h.key AND h.headline IS NULL`,
+      [setId],
+    );
+  } catch {
+    // The headline is a later set's comparison aid; the publish already happened.
+  }
+}
+
+/** Keys shown in the last `days` days for a series (3 Morning Download, 90 Free vs. Paid; AI Trivia keys by cell, trivia:<cellId>). */
 export async function recentKeys(db: Queryable, series: Series, days: number, now: Date = new Date()): Promise<Set<string>> {
   const { rows } = await db.query<{ key: string }>(
     `SELECT DISTINCT key FROM stories.history WHERE series = $1 AND shown_at > $2::timestamptz - make_interval(days => $3)`,
@@ -393,7 +459,7 @@ export async function sameDayKeys(db: Queryable, series: Series, nyDate: string,
 
 export type CostEvent = {
   setId?: string | null;
-  vendor: 'anthropic' | 'jev' | 'web_search';
+  vendor: 'anthropic' | 'jev' | 'web_search' | 'openai' | 'fal';
   component: string;
   model?: string | null;
   inputTokens?: number;
@@ -415,8 +481,32 @@ export async function recordCost(db: StoriesDb, e: CostEvent): Promise<void> {
   });
 }
 
-/** Spend this New York calendar month, for the monthly watch (plan §9). */
-/** Spend on one New York day (the daily cap, docs/social-overnight.md). */
+/** Set-less cost events by component: story-types.SETLESS_COMPONENT_PREFIX (SS-1). */
+const SETLESS_PREFIX = SETLESS_COMPONENT_PREFIX;
+
+/**
+ * SQL for the Stories-format type a cost event belongs to (SS-1): its set's type (the series' vertical; retired
+ * series are Morning Download's), or, for an event tied to no set, its component's. `c` is stories.cost_events,
+ * `s` the LEFT JOINed stories.sets.
+ */
+export function costTypeSql(c = 'c', s = 's'): string {
+  const others = STORY_VERTICALS.filter((v) => v !== 'stories');
+  const bySeries = others.map((v) => `WHEN '${SERIES_OF_VERTICAL[v]}' THEN '${v}'`).join(' ');
+  const byComponent = others.flatMap((v) => (SETLESS_PREFIX[v] ? [`WHEN ${c}.component LIKE '${SETLESS_PREFIX[v]}%' THEN '${v}'`] : [])).join(' ');
+  return `(CASE WHEN ${s}.id IS NOT NULL THEN (CASE ${s}.series ${bySeries} ELSE 'stories' END) ${byComponent} ELSE 'stories' END)`;
+}
+
+/** One type's spend on one New York day (SS-1: each type's daily cap counts only its own sets and set-less work). */
+export async function typeDaySpendUsd(db: Queryable, vertical: StoryVertical, now: Date = new Date()): Promise<number> {
+  const { rows } = await db.query<{ usd: number }>(
+    `SELECT COALESCE(sum(c.usd), 0)::float8 AS usd FROM stories.cost_events c LEFT JOIN stories.sets s ON s.id = c.set_id
+      WHERE (c.created_at AT TIME ZONE 'America/New_York')::date = $1::date AND ${costTypeSql()} = $2`,
+    [nyDate(now), vertical],
+  );
+  return rows[0]?.usd ?? 0;
+}
+
+/** Engine-wide spend on one New York day (every type together). */
 export async function daySpendUsd(db: Queryable, now: Date = new Date()): Promise<number> {
   const { rows } = await db.query<{ usd: number }>(
     `SELECT COALESCE(sum(usd), 0)::float8 AS usd FROM stories.cost_events
@@ -426,6 +516,7 @@ export async function daySpendUsd(db: Queryable, now: Date = new Date()): Promis
   return rows[0]?.usd ?? 0;
 }
 
+/** Spend this New York calendar month, for the engine-wide monthly watch (plan §9). */
 export async function monthSpendUsd(db: Queryable, now: Date = new Date()): Promise<number> {
   const month = nyDate(now).slice(0, 7);
   const { rows } = await db.query<{ usd: number }>(

@@ -61,7 +61,8 @@ function worker(query: HubQuery, over: Partial<CarryOutDeps> = {}) {
 
 test('a claimed run is carried out with the settings cap; its post joins the spine and, when live, takes today’s window', async () => {
   const { query } = await openHubTestDb();
-  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  // Live (D16): Generate on and publishing_live on. Live with Generate off reads as paused and books nothing.
+  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key IN ('publishing_live', 'auto_run')`);
   await query(`UPDATE lfd.settings SET value = '0.8'::jsonb WHERE key = 'run_cap_usd'`);
   const run = await claimed(query, 'manual');
   const { w, ran } = worker(query);
@@ -74,7 +75,20 @@ test('a claimed run is carried out with the settings cap; its post joins the spi
   assert.deepEqual([slot.d, slot.slot, slot.source], ['2026-10-13', 'morning', 'auto']);
 });
 
-test('publishing off: the post joins the spine but books nothing', async () => {
+test('Approval (Generate on, Live off): the post joins the spine and takes today’s window (contract §4.3); only Live posts it', async () => {
+  const { query } = await openHubTestDb();
+  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
+  await query(`UPDATE lfd.settings SET value = 'false'::jsonb WHERE key = 'publishing_live'`);
+  const { w } = worker(query);
+  const out = await carryOutLfdRun(w, await claimed(query, 'manual'));
+  assert.equal(out.status, 'ok');
+  assert.ok(out.scheduled, 'booked in Approval');
+  const slot = (await query<{ d: string; source: string }>(`SELECT ny_date::text AS d, source FROM social_hub.schedule`)).rows[0]!;
+  assert.deepEqual([slot.d, slot.source], ['2026-10-13', 'auto']);
+  assert.equal((await query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0, 'booking only');
+});
+
+test('Paused (the default): the post joins the spine but books nothing', async () => {
   const { query } = await openHubTestDb();
   const { w } = worker(query);
   const out = await carryOutLfdRun(w, await claimed(query, 'manual'));
@@ -88,6 +102,8 @@ test('daily fill: a scheduled run on a day a person already placed a post is ski
   const placed = await seedLfdPost(query, { slug: 'lfd-placed' });
   const item = await ensureContentItem(query as SpineQuery, { vertical: 'last_few_days', format: 'feed', nativeRef: placed, ideaRef: null });
   await bookSlot(query as SpineQuery, { vertical: 'last_few_days', itemId: item, nyDate: '2026-10-13', slot: 'morning', publishAt: new Date('2026-10-13T13:30:00Z'), source: 'user' });
+  // Making posts (D16): the scheduled run makes a post only while Generate is on; paused is tested in refill-split-social.
+  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   const scheduled = await claimed(query, 'scheduled');
   const a = worker(query);
   const out = await carryOutLfdRun(a.w, scheduled);
@@ -145,7 +161,7 @@ function slowRun(query: HubQuery, finishedAt: Date) {
 
 test('booking reads the clock after the run: a run finishing after 10:00 books nothing in the past; one finishing at 9:20 books 9:20–10:00', async () => {
   const late = await openHubTestDb();
-  await late.query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  await late.query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key IN ('publishing_live', 'auto_run')`);
   const a = slowRun(late.query, new Date('2026-10-13T14:05:00Z')); // 10:05 AM New York
   const outLate = await carryOutLfdRun(a.w, await claimed(late.query, 'manual'));
   assert.equal(outLate.status, 'ok');
@@ -153,7 +169,7 @@ test('booking reads the clock after the run: a run finishing after 10:00 books n
   assert.equal((await late.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0]!.n, 0);
 
   const onTime = await openHubTestDb();
-  await onTime.query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  await onTime.query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key IN ('publishing_live', 'auto_run')`);
   const b = slowRun(onTime.query, new Date('2026-10-13T13:20:00Z')); // 9:20 AM New York
   const out = await carryOutLfdRun(b.w, await claimed(onTime.query, 'manual'));
   assert.equal(out.status, 'ok');
@@ -163,35 +179,18 @@ test('booking reads the clock after the run: a run finishing after 10:00 books n
   assert.deepEqual([slot.d, slot.slot], ['2026-10-13', 'morning']);
 });
 
-test('a Last Few Days run that never settles is cut off at the limit; one that finishes in time is returned as is', async () => {
-  const { withLfdTimeout } = await import('@/lib/lfd/worker');
-  let timedOut = 0;
-  const hung = await withLfdTimeout(new Promise<string>(() => undefined), 20, async () => {
-    timedOut += 1;
-    return 'timed out';
-  });
-  assert.equal(hung, 'timed out');
-  assert.equal(timedOut, 1);
-  const done = await withLfdTimeout(Promise.resolve('ok'), 1_000, () => {
-    timedOut += 1;
-    return 'timed out';
-  });
-  assert.equal(done, 'ok');
-  assert.equal(timedOut, 1, 'onTimeout is not called for a run that finished');
+test('no Last Few Days run limit is left: the config exports none', async () => {
+  const cfg = await import('@/lib/lfd/config');
+  assert.equal('LFD_RUN_TIMEOUT_MS' in cfg, false);
 });
 
-test('the in-process run limit is 30 minutes', async () => {
-  const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
-  assert.equal(LFD_RUN_TIMEOUT_MS, 30 * 60_000);
-});
-
-test('a run whose finish was ignored (the worker already timed it out) is logged, and its row stays failed', async () => {
+test('a run whose finish was ignored (the worker already judged it hung) is logged, and its row stays failed', async () => {
   const { query } = await openHubTestDb();
   const run = await claimed(query, 'manual');
   const { w, logs } = worker(query, {
     run: async (d) => {
       const postId = await seedLfdPost(query, { nyDate: '2026-10-13' });
-      await query(`UPDATE lfd.runs SET status = 'failed', error = 'timed out after 30 minutes' WHERE id = $1`, [d.runId]);
+      await query(`UPDATE lfd.runs SET status = 'failed', error = 'no progress for 45 minutes (hung)' WHERE id = $1`, [d.runId]);
       const recorded = await finishRun(query, d.runId!, { status: 'ok', claudeUsd: 0.2, jevUsd: 0.05, record: {} });
       return { ok: true as const, runId: d.runId!, postId, stories: 6, short: false, recorded };
     },

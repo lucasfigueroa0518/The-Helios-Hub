@@ -16,6 +16,7 @@ import {
   type TargetingParse,
 } from '@/lib/auto-campaigns/targeting-parse';
 import { buildMappingSystemPrompt } from '@/lib/auto-campaigns/mapping-prompt';
+import { industryKeywordQueue } from '@/lib/auto-campaigns/keyword-queue';
 
 const SENIORITY_SET = new Set<string>(APOLLO_SENIORITIES);
 
@@ -124,18 +125,7 @@ export function hasIndustrySignal(params: PeopleSearchParams): boolean {
   );
 }
 
-export function industryKeywordQueue(params: PeopleSearchParams): string[] {
-  const queue: string[] = [];
-  const seen = new Set<string>();
-  for (const value of [...(params.industry_keywords ?? []), params.q_keywords ?? '']) {
-    const trimmed = value.trim();
-    const key = trimmed.toLowerCase();
-    if (!trimmed || seen.has(key)) continue;
-    seen.add(key);
-    queue.push(trimmed);
-  }
-  return queue;
-}
+export { industryKeywordQueue };
 
 function assembleParams(input: {
   titles?: string[];

@@ -1,3 +1,4 @@
+import { jobTargetSql } from '@/lib/explainers/lead';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queries/spine';
 import { settingIsOn, type InsightRow } from '@/lib/social-hub/queries/reels';
@@ -14,6 +15,8 @@ export type ExplainerJobRow = {
   requested_at: string;
   finished_at: string | null;
   error: string | null;
+  /** The date the night made it FOR (Bald-Eagle D4, db/bald_eagle_2026_11_12_leadtime.sql); null for a person's render. */
+  target_date?: string | null;
   title: string;
   scope: string | null;
   source_url: string | null;
@@ -62,6 +65,10 @@ export type ExplainerScheduleRow = {
 export type ExplainerTopicRow = {
   topic_id: string;
   title: string;
+  /** The concept the reel defines (EX3-86); null on topics written before terms. */
+  term?: string | null;
+  /** Its place in the syllabus (curriculum, 2026-11-21); null off the syllabus or written before it. */
+  syllabus_rank?: number | null;
   scope: string | null;
   status: string;
   origin: string;
@@ -101,6 +108,7 @@ export type ExplainersRead = {
 export const EXPLAINER_JOBS_SQL = `
 SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
        j.requested_at::text AS requested_at, j.finished_at::text AS finished_at, j.error,
+       ${jobTargetSql('j')}::text AS target_date,
        t.title, t.scope, t.source_url, t.origin,
        t.audience_fit, t.teachability_45s, t.analogy_potential, t.visual_potential,
        t.accuracy_under_simplification, t.hook_strength, t.weighted_score,
@@ -116,12 +124,12 @@ SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
      ORDER BY a.seq DESC
      LIMIT 1
   ) vid ON true
- WHERE t.status <> 'archived'
+ WHERE t.status NOT IN ('archived', 'retired')
  ORDER BY j.seq DESC`;
 
 /** The topic pool (spec §7 Ideas): every live topic with its score and content stock. */
 export const EXPLAINER_TOPICS_SQL = `
-SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
+SELECT t.id AS topic_id, t.title, t.term, t.scope, t.status, t.origin, t.weighted_score, t.syllabus_rank,
        t.audience_fit, t.teachability_45s, t.analogy_potential, t.visual_potential,
        t.accuracy_under_simplification, t.hook_strength,
        (t.jev_notes->>'ai_focus')::numeric AS ai_focus,
@@ -149,7 +157,7 @@ SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
      LIMIT 1
   ) latest ON true
  WHERE t.status IN ('pool', 'promoted', 'queued', 'rendered', 'proposed')
- ORDER BY t.weighted_score DESC NULLS LAST, t.created_at DESC
+ ORDER BY t.syllabus_rank ASC NULLS LAST, t.weighted_score DESC NULLS LAST, t.created_at DESC
  LIMIT 200`;
 
 export const EXPLAINER_REQUIRE_APPROVAL_SQL = `SELECT value FROM explainers.settings WHERE key = 'require_approval'`;

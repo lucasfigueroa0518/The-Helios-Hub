@@ -28,8 +28,7 @@ test('import: used sightings for every row, sources for the ones the policy keep
   const { query } = await openBankTestDb();
   await seed(query);
   const r = await importUsedPhotos(query);
-  assert.deepEqual([r.read, r.sightings, r.sources, r.skipped.length], [4, 4, 3, 1]);
-  assert.match(r.skipped[0]!.reason, /not allowed|not recognised/, 'an unrecognised article credit is not stored');
+  assert.deepEqual([r.read, r.sightings, r.sources, r.skipped.length], [4, 4, 4, 0], 'an unrecognised credit is stored too (licence unknown)');
   const maxId = Number((await query(`SELECT max(id) AS m FROM social.used_photos`)).rows[0].m);
   assert.equal(await readWatermark(query), maxId);
   const sightings = (await query(`SELECT url, run_kind, run_ref, outcome, vision, verified, qid FROM media_library.sightings ORDER BY url`)).rows;
@@ -42,20 +41,21 @@ test('import: used sightings for every row, sources for the ones the policy keep
   assert.equal(trump.verified, true);
   const lanes = (await query(`SELECT url, lane, licence, reuse_ok FROM media_library.photo_sources ORDER BY url`)).rows.map((s) => [s.url, s.lane, s.licence, s.reuse_ok]);
   assert.deepEqual(lanes, [
+    ['https://cdn.test/agency.jpg', 'article', 'unknown', false],
     ['https://stock.test/clock.jpg', 'stocksnap', 'open', true],
-    ['https://stock.test/server.jpg', null, 'open', true],
+    ['https://stock.test/server.jpg', 'stories', 'open', true],
     ['https://upload.wikimedia.org/trump.jpg', 'headshot', 'open', true],
   ]);
   const again = await importUsedPhotos(query);
   assert.deepEqual([again.read, again.watermark], [0, null]);
-  assert.deepEqual([await count(query, 'sightings'), await count(query, 'photo_sources')], [4, 3]);
+  assert.deepEqual([await count(query, 'sightings'), await count(query, 'photo_sources')], [4, 4]);
 });
 
 test('dry run writes nothing; --since picks rows by date and leaves the watermark; file rows join', async () => {
   const { query } = await openBankTestDb();
   await seed(query);
   const dry = await importUsedPhotos(query, { dryRun: true });
-  assert.deepEqual([dry.read, dry.sources, dry.dryRun], [4, 3, true]);
+  assert.deepEqual([dry.read, dry.sources, dry.dryRun], [4, 4, true]);
   assert.deepEqual([await count(query, 'sightings'), await count(query, 'photo_sources'), await readWatermark(query)], [0, 0, 0]);
   const since = await importUsedPhotos(query, { since: new Date('2026-10-02T00:00:00Z') });
   assert.equal(since.read, 2);
@@ -73,9 +73,10 @@ test('ingest after the import: what resolves is stored with its inferred close-u
     'https://stock.test/clock.jpg': { body: await testImage({ seed: 21 }) },
     'https://upload.wikimedia.org/trump.jpg': { status: 404 },
     'https://stock.test/server.jpg': { body: await testImage({ seed: 22 }) },
+    'https://cdn.test/agency.jpg': { status: 404 },
   });
   const stats = await runIngest({ query, bucket: memoryBucket(), http });
-  assert.deepEqual(stats, { stored: 2, failed: 0, gone: 1, skipped: 0 });
+  assert.deepEqual(stats, { stored: 2, failed: 0, gone: 2, skipped: 0 });
   const photos = (await query(`SELECT p.vision_pass, p.tags, p.scenes, s.url FROM media_library.photos p JOIN media_library.photo_sources s ON s.photo_id = p.id ORDER BY s.url`)).rows;
   assert.deepEqual(photos.map((p) => [p.url, p.vision_pass]), [['https://stock.test/clock.jpg', true], ['https://stock.test/server.jpg', false]]);
   assert.deepEqual(photos[0].tags, ['wall', 'clock']);

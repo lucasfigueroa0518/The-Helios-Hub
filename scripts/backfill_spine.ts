@@ -6,6 +6,7 @@
  *   npx tsx scripts/backfill_spine.ts carousels --apply
  *   npx tsx scripts/backfill_spine.ts explainers --apply
  *   npx tsx scripts/backfill_spine.ts reels --apply
+ *   npx tsx scripts/backfill_spine.ts reel_ai_drama --apply
  */
 import path from 'node:path';
 
@@ -17,21 +18,28 @@ try {
 
 async function main() {
   const vertical = process.argv[2];
-  if (vertical !== 'carousels' && vertical !== 'explainers' && vertical !== 'reels' && vertical !== 'stories') {
-    throw new Error('Usage: npx tsx scripts/backfill_spine.ts <carousels|explainers|reels|stories> --apply');
+  if (vertical !== 'carousels' && vertical !== 'explainers' && vertical !== 'reels' && vertical !== 'stories' && vertical !== 'reel_ai_drama') {
+    throw new Error('Usage: npx tsx scripts/backfill_spine.ts <carousels|explainers|reels|stories|reel_ai_drama> --apply');
   }
   if (!process.argv.includes('--apply')) {
     console.error('Refusing to run without --apply (this writes to the shared database).');
     process.exit(2);
   }
   const { closeDbPool, dbQuery } = await import('@/lib/db');
-  const { backfillCarousels, backfillExplainers, backfillReels } = await import('@/lib/social-hub/backfill');
+  const { backfillCarousels, backfillExplainers, backfillReelAiDrama, backfillReels } = await import('@/lib/social-hub/backfill');
   try {
     if (vertical === 'stories') {
       // Stories are projected, not copied (D44): re-project every set from stories.sets.
       const { liveStoriesDb } = await import('@/lib/stories/db');
       const { projectAllSets } = await import('@/lib/stories/spine');
       console.log(JSON.stringify({ vertical, projected: await projectAllSets(liveStoriesDb) }));
+      return;
+    }
+    if (vertical === 'reel_ai_drama') {
+      // Drama lives on the explainers handle (HUB-WIRING-CONTRACT §2), which may not be the account's database.
+      const { explainersDb } = await import('@/lib/explainers/connection');
+      const db = await explainersDb();
+      console.log(JSON.stringify({ vertical, copied: await backfillReelAiDrama((text, params) => db.query(text, params)) }));
       return;
     }
     const run = { carousels: backfillCarousels, explainers: backfillExplainers, reels: backfillReels }[vertical];

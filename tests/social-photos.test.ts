@@ -385,13 +385,13 @@ test('M8a spreads: a wide scene photo spans two slides; a subject or narrow phot
 
 import { createInMemoryUsedPhotoLog, NO_REPEAT_DAYS } from '@/lib/social/photos/used-photos';
 
-test('used-photo log: only uses within 7 days count', async () => {
+test('used-photo log: only uses within 20 days count (CI-32)', async () => {
   const log = createInMemoryUsedPhotoLog([
-    { url: '/a.jpg', usedAt: '2026-10-01T12:00:00Z', storyId: 's', slide: 1 },
-    { url: '/b.jpg', usedAt: '2026-09-28T12:00:00Z', storyId: 's', slide: 1 },
+    { url: '/a.jpg', usedAt: '2026-09-20T12:00:00Z', storyId: 's', slide: 1 },
+    { url: '/b.jpg', usedAt: '2026-09-14T12:00:00Z', storyId: 's', slide: 1 },
   ]);
   const recent = await log.recent(new Date('2026-10-06T12:00:00Z'));
-  assert.equal(NO_REPEAT_DAYS, 7);
+  assert.equal(NO_REPEAT_DAYS, 20);
   assert.deepEqual([...recent], ['/a.jpg']);
 });
 

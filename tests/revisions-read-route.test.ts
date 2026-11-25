@@ -65,6 +65,10 @@ function registry(q: Query, _itemId?: string, calls = { query: 0 }): () => Promi
     stories: { vertical: 'stories' },
     last_few_days: { vertical: 'last_few_days' },
     ai_events: { vertical: 'ai_events' },
+    field_notes: { vertical: 'field_notes' },
+    reel_ai_drama: { vertical: 'reel_ai_drama' },
+    ai_trivia: { vertical: 'ai_trivia' },
+    real_or_ai: { vertical: 'real_or_ai' },
   });
 }
 
@@ -75,9 +79,6 @@ test('unreachable while the revise flag is off: 404, no session read, no DB read
   const res = await GET(get(`vertical=carousels&postId=${U}`));
   assert.equal(res.status, 404);
   assert.equal(sessionRead, false);
-  // The shipped flags (revise off) too.
-  const shipped = actionReadRoute(revisionsRead(neverActions), { session: async () => ({ email: 'x' }) });
-  assert.equal((await shipped(get(`vertical=carousels&postId=${U}`))).status, 404);
 });
 
 test('needs a session like the sibling routes', async () => {

@@ -22,6 +22,7 @@ import { heliosEnter } from "@/lib/trello/motion";
 import { Plus, Settings, Star } from "lucide-react";
 import { NewWorkspaceDialog } from "@/components/trello/shell/NewWorkspaceDialog";
 import { WorkspaceSettingsDialog } from "@/components/trello/shell/WorkspaceSettingsDialog";
+import { lastActivityBy } from "@/lib/trello/card-details";
 
 /**
  * Home — Trello-style workspace landing.
@@ -119,12 +120,7 @@ export function HomeView({
     const lastByBoard = new Map<string, number>();
     for (const c of cards) {
       if (!c.assigneeIds.includes(me.id) && c.createdById !== me.id) continue;
-      const times = c.activity
-        .filter((a) => a.authorId === me.id)
-        .map((a) => new Date(a.at).getTime());
-      const last = times.length
-        ? Math.max(...times)
-        : new Date(c.createdAt).getTime();
+      const last = lastActivityBy(c, me.id) ?? new Date(c.createdAt).getTime();
       const prev = lastByBoard.get(c.boardId) ?? 0;
       if (last > prev) lastByBoard.set(c.boardId, last);
     }

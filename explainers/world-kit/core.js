@@ -1,40 +1,171 @@
-// The Explainers world kit, core (hx-3, from Explainer 2.0; Explainers 3.0 adds the white ground): the style-independent math every shot stands on.
+// The Explainers world kit, core (hx-4, visual system 4.0; from Explainer 2.0): the style-independent math every shot stands on.
 // No DOM and no imports, so it runs in the browser and in Node tests alike.
 //
-//   palette tokens (V-T1) · polarity curves (V-8) · speed ramps (V-9) · the calm camera (V-7,
-//   X-20) · the state ledger (V-1) · seeded randomness and the stop-motion clock (V-15) · the
-//   isometric projection (V-2)
+//   palette tokens and their 4-step ramps (V-T1, still 06) · the grounds (paper studio sweep,
+//   the premium stage, white) · the one light · the critter ruler (CRITTER_CM, PX_PER_CM) and the
+//   cheated scale (CHEAT, propScale; 4.2) ·
+//   polarity curves (V-8) · speed ramps (V-9) · the calm camera (V-7, X-20) · the state ledger
+//   (V-1) · seeded randomness · the isometric projection (V-2)
 //
 // Determinism (E2-06): a shot has ONE clock. A single tween drives wall time; speed ramps warp
 // it into content time; everything on screen is a pure function of content time.
 
-export const VERSION = 'hx-3';
+export const VERSION = 'hx-4';
 export const FRAME = { w: 1080, h: 1920, safe: { x0: 96, x1: 940, y0: 570, y1: 1600 } };
 
-// ── Palette (V-T1) ────────────────────────────────────────────────────────────────────────
+// ── Palette (V-T1; hx-4 widens it, still 06) ──────────────────────────────────────────────
+// Every color is a ramp: lit, base, shade, dark. hx-6 (VISUAL_SYSTEM_6 §2): the names stay, the
+// values are the approved palette; lilac is retired and draws as slate. Orange stays the hero's.
 export const TOKENS = {
   paper: '#F3F0EA',
   'paper-lit': '#FBFAF6',
   'paper-shade': '#E2DACB',
   'paper-dark': '#CFC5B3',
+  /** The studio sweep's low end (the paper ground, hx-4). */
+  'paper-sweep': '#EFE9DF',
   canvas: '#FFFFFF',
   ink: '#171717',
   'ink-lit': '#2B2926',
+  'ink-shade': '#101010',
+  'ink-dark': '#0A0A0A',
   'text-secondary': '#525252',
   'text-tertiary': '#737373',
   orange: '#FF5E1A',
-  'orange-lit': '#FF7A3D',
-  'orange-shade': '#E8541C',
-  'orange-dark': '#C8430F',
+  'orange-lit': '#FF9462',
+  'orange-shade': '#E24213',
+  'orange-dark': '#A02B02',
   'orange-text': '#CC4E19',
   green: '#138510',
+  'green-lit': '#5D9831',
+  'green-shade': '#036A29',
+  'green-dark': '#013D1F',
+  // The four colors the brand already owns (still 06): sun yellow, royal blue, reels teal, stories lilac.
+  yellow: '#E0AB3E',
+  'yellow-lit': '#F3C65E',
+  'yellow-shade': '#C38F29',
+  'yellow-dark': '#8F6418',
+  blue: '#6684B0',
+  'blue-lit': '#86A1C8',
+  'blue-shade': '#4F6B94',
+  'blue-dark': '#34496A',
+  teal: '#46978F',
+  'teal-lit': '#5DB5AE',
+  'teal-shade': '#357A74',
+  'teal-dark': '#24534F',
+  lilac: '#6684B0',
+  'lilac-lit': '#86A1C8',
+  'lilac-shade': '#4F6B94',
+  'lilac-dark': '#34496A',
+  // Red (4.1), from the status-error / stage-red family: for the things that are red in the real
+  // place (a tomato, a fire extinguisher, a stop sign), never a ground and never the hero's accent.
+  red: '#B4473A',
+  'red-lit': '#D27665',
+  'red-shade': '#91372D',
+  'red-dark': '#5F231C',
+  // hx-6 (VISUAL_SYSTEM_6 §2): the approved palette's own names. slate and mustard are blue and
+  // yellow under their new names (same values); wood and leaf are new ramps; the room tones.
+  slate: '#6684B0',
+  'slate-lit': '#86A1C8',
+  'slate-shade': '#4F6B94',
+  'slate-dark': '#34496A',
+  mustard: '#E0AB3E',
+  'mustard-lit': '#F3C65E',
+  'mustard-shade': '#C38F29',
+  'mustard-dark': '#8F6418',
+  wood: '#9A7250',
+  'wood-lit': '#B48A62',
+  'wood-shade': '#7E5B3E',
+  'wood-dark': '#5E432D',
+  leaf: '#5F8F48',
+  'leaf-lit': '#7FAE62',
+  'leaf-shade': '#4A7438',
+  'leaf-dark': '#355428',
+  /** Room walls, with their wainscot and trim. */
+  wall: '#F1E9DA',
+  wainscot: '#E4D8C3',
+  trim: '#CDBFA6',
+  /** Room floors, with their board lines. */
+  floor: '#E2DACB',
+  board: '#D3C9B6',
+  window: '#BFD3EC',
+  white: '#FFFFFF',
   night: '#171717',
+  // The Helios premium stage (premium.css): charcoal under a warm glow, a red bloom low.
+  'stage-top': '#161616',
+  'stage-bottom': '#0B0B0B',
+  'stage-orange': '#FF6A2A',
+  'stage-red': '#E8413B',
+  // The sun gradient of the logo.
+  'sun-top': '#FDC60F',
+  'sun-mid': '#F48C3F',
+  'sun-bottom': '#EA3C3A',
+  /** The warm umber every soft shadow and occlusion is drawn in (never grey, never black). */
+  'shadow-warm': '#3B2A16',
   // Status colors (X-24): universal meaning only, on the signal itself, never a ground.
   'status-error': '#E5484D',
   'status-success': '#30C463',
   'status-warning': '#F5B014',
   'status-info': '#3E8BF0',
 };
+
+/** The palette colors that have a 4-step ramp, by name. */
+export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac', 'red', 'slate', 'mustard', 'wood', 'leaf'];
+
+/** A palette color's ramp: { lit, base, shade, dark }. */
+export function ramp(name) {
+  if (!PALETTE.includes(name)) throw new Error(`HX: no ramp "${name}". Ramps: ${PALETTE.join(', ')}.`);
+  return { lit: TOKENS[`${name}-lit`], base: TOKENS[name], shade: TOKENS[`${name}-shade`], dark: TOKENS[`${name}-dark`] };
+}
+
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const toLin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toGam = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+/** Two hex colors mixed in linear light (t = share of b), as hex: the tints and falloffs a soft
+ *  volume needs between the steps of one ramp. Inputs are palette hexes. */
+export function mixHex(a, b, t) {
+  const A = hexRgb(a);
+  const B = hexRgb(b);
+  const k = Math.min(1, Math.max(0, t));
+  return '#' + A.map((v, i) => {
+    const l = toLin(v / 255) * (1 - k) + toLin(B[i] / 255) * k;
+    return Math.round(Math.min(1, Math.max(0, toGam(l))) * 255).toString(16).padStart(2, '0');
+  }).join('').toUpperCase();
+}
+
+/** Names a tone may also go by: `white` is the canvas (the outfits palette says white). */
+export const TONE_ALIASES = { white: 'canvas' };
+const HEX6 = /^#[0-9A-Fa-f]{6}$/;
+/** Every color name a tone may use: the ramp names, the palette tokens and the aliases. */
+export const toneNames = () => [...new Set([...PALETTE, ...Object.keys(TOKENS), ...Object.keys(TONE_ALIASES)])];
+
+/**
+ * The one tone resolver (4.1): what every lens/draw solid and every set piece is painted from.
+ * Accepts a ramp name ('teal', 'red'; returned as is, so the solid uses the palette's own ramp), a
+ * palette token ('ink-lit', 'green-shade', 'yellow-lit'; its hex), `{ mix: [a, b, k] }` of two
+ * tones (k = share of b, default 0.5; mixed in linear light, as hex) or a '#RRGGBB' hex already
+ * mixed from the palette. Anything else THROWS with the allowed names: a color that silently
+ * rendered white or paper was the 4.1 Phase 1 bug. set.js tone() is this, with paper for nothing.
+ * @param {string | { mix: [any, any, number?] }} v
+ * @returns {string} a PALETTE ramp name or a hex
+ */
+export function resolveTone(v) {
+  if (typeof v === 'string') {
+    if (PALETTE.includes(v)) return v;
+    const name = TONE_ALIASES[v] ?? v;
+    if (TOKENS[name]) return TOKENS[name];
+    if (HEX6.test(v)) return v.toUpperCase();
+  } else if (v && typeof v === 'object' && Array.isArray(v.mix)) {
+    const [a, b, k = 0.5] = v.mix;
+    return mixHex(toneHex(a), toneHex(b), k);
+  }
+  const shown = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
+  throw new Error(`HX: unknown color ${shown}. A tone is a palette name (${PALETTE.join(', ')}), a palette token (${Object.keys(TOKENS).filter((k) => !PALETTE.includes(k)).join(', ')}), { mix: [a, b, k] } or a palette hex.`);
+}
+/** A tone as one hex: a ramp name gives its base. */
+export function toneHex(v) {
+  const t = resolveTone(v);
+  return HEX6.test(t) ? t : TOKENS[t];
+}
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -55,14 +186,69 @@ export function alpha(a, opacity) {
   return `color-mix(in oklab, ${tok(a)} ${p}%, transparent)`;
 }
 
-/** The three grounds (V-14). Forest is green mixed 30% into night, written out as hex. */
+/** The grounds (hx-4): `paper` the warm studio sweep (default), `stage` the Helios premium lit
+ *  stage (the one dark ground), `white` the close only. `fill` is the ground's flat color (the
+ *  caption band wash and anything that needs one color); ground() in draw.js paints the light. */
 export const GROUNDS = {
   paper: { fill: TOKENS.paper, dark: false },
-  night: { fill: TOKENS.night, dark: true },
-  forest: { fill: '#163815', dark: true },
+  stage: { fill: TOKENS['stage-top'], dark: true },
   // Explainers 3.0: the close is a white screen with only the logo (EX3-19). No grid, no grain.
   white: { fill: TOKENS.canvas, dark: false },
+  // hx-6 (VISUAL_SYSTEM_6 §5): the analogy frames' room ground, clean paper with the faint drafting
+  // grid (72 px, ink at 4.5%), no grain. draw.js ground() paints it.
+  room: { fill: TOKENS.paper, dark: false },
 };
+/** Grounds 4.0 retired, drawn as the stage so old projects still render (a storyboard naming
+ *  them is a lint error). */
+export const GROUND_ALIASES = { night: 'stage', forest: 'stage' };
+
+/** A ground by name, aliases resolved: { name, fill, dark }. Throws on an unknown name. */
+export function groundOf(name = 'paper') {
+  const key = GROUND_ALIASES[name] ?? name;
+  const gr = GROUNDS[key];
+  if (!gr) throw new Error(`HX: ground must be ${Object.keys(GROUNDS).join(', ')} (got "${name}").`);
+  return { name: key, ...gr };
+}
+
+// ── The one light (hx-4, stills 07/08) ────────────────────────────────────────────────────
+/** key: the screen direction the key light comes FROM (toward the top right); ambient: the
+ *  share of light a face turned away still gets; bounce: the warm light the floor throws back up. */
+export const LIGHT = { key: [0.62, -0.78], ambient: 0.42, bounce: 0.16 };
+
+// ── The ruler (hx-4, still 01) ────────────────────────────────────────────────────────────
+/** A critter's real height in cm: the ruler every world entity is sized against. */
+export const CRITTER_CM = 72;
+/** A critter's drawn height at s = 1 in px, feet (y 0) to the top of its body (y −142, cast.js). */
+export const CRITTER_PX = 142;
+/** Screen px per cm at scale 1. */
+export const PX_PER_CM = CRITTER_PX / CRITTER_CM;
+
+// ── Cheated scale (4.2) ───────────────────────────────────────────────────────────────────
+/** Scale is believable, not true (4.2, house style): things stay plausible next to each other, and
+ *  the props the action depends on are cheated bigger so they read on a phone. `scale: 'cheat'`
+ *  grows a prop until its longest side is at least `readCm` next to the 72 cm critter, at most
+ *  `max` times its real size, and never shrinks it. A number is the factor itself. */
+export const CHEAT = { readCm: 30, max: 3 };
+/**
+ * The factor a prop is drawn at: `scale` 'cheat' (CHEAT, from its real size `sizeCm`, a number or
+ * [w, d, h] in cm), a positive number (that factor), or nothing (1, its real size). Anything else
+ * throws, saying what it takes.
+ * @param {'cheat' | number | undefined | null} scale
+ * @param {number | number[]} [sizeCm]
+ */
+export function propScale(scale, sizeCm) {
+  if (scale === undefined || scale === null) return 1;
+  if (typeof scale === 'number') {
+    if (!(scale > 0 && Number.isFinite(scale))) throw new Error(`HX: a prop's scale is 'cheat' or a positive number (got ${scale})`);
+    return scale;
+  }
+  if (scale === 'cheat') {
+    const dims = (Array.isArray(sizeCm) ? sizeCm : [sizeCm]).filter((v) => typeof v === 'number' && v > 0);
+    if (!dims.length) throw new Error("HX: scale 'cheat' needs the prop's real size in cm (a number or [w, d, h])");
+    return Math.min(CHEAT.max, Math.max(1, CHEAT.readCm / Math.max(...dims)));
+  }
+  throw new Error(`HX: a prop's scale is 'cheat' or a positive number (got ${JSON.stringify(scale)})`);
+}
 
 // ── Polarity: the speed curve of a move (V-8) ─────────────────────────────────────────────
 function backOut(s, x) {
@@ -302,7 +488,7 @@ export function ledgerValue(start, changes, t) {
   return v;
 }
 
-// ── Seeded randomness and the stop-motion clock (V-15) ────────────────────────────────────
+// ── Seeded randomness; the old stop-motion clock (V-15, retired in hx-4) ──────────────────
 export function rng(seed) {
   let a = seed >>> 0;
   return () => {
@@ -314,13 +500,17 @@ export function rng(seed) {
   };
 }
 
-/** Drawn things move on twos: a new pose 15 times a second. */
+// hx-4 drops the boil and the on-twos pose clock: everything moves smoothly. The names stay
+// exported so older scene code keeps working.
+/** The old pose rate; mark.js still rounds its landing cue to it. */
 export const FPS_CAST = 15;
-/** The line wobble redraws 10 times a second. */
+/** The old wobble rate (no wobble is drawn any more). */
 export const FPS_BOIL = 10;
-export const onTwos = (t) => Math.floor(t * FPS_CAST + 1e-6) / FPS_CAST;
-/** The wobble seed at time t: cycles through six drawings so the line boils. */
-export const boilSeed = (t) => 4 + (Math.floor(t * FPS_BOIL + 1e-6) % 6);
+/** Smooth motion: returns t unchanged (it used to hold each pose for two frames). */
+export const onTwos = (t) => t;
+/** A constant seed (there is no boil any more). */
+/** No boil in hx-4: the seed never changes (kept for old callers, which pass t). */
+export const boilSeed = (_t = 0) => 4;
 
 // ── The isometric projection (V-2) ────────────────────────────────────────────────────────
 export const ISO_COS = Math.cos(Math.PI / 6);

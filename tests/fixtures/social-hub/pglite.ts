@@ -10,8 +10,8 @@ import path from 'node:path';
 
 import type { HubQuery } from '@/lib/social-hub/db';
 
-/** networking before ai_events: the AI Events pool references networking.events. */
-const SCHEMAS = ['reels', 'explainers', 'social', 'stories', 'lfd', 'networking', 'ai_events'] as const;
+/** networking before ai_events: the AI Events pool references networking.events. media_library before field_notes: its photo pool references media_library.photos. */
+const SCHEMAS = ['reels', 'explainers', 'social', 'stories', 'lfd', 'networking', 'ai_events', 'media_library', 'field_notes'] as const;
 
 function schemaSql(file: string): string {
   return readFileSync(path.join(process.cwd(), 'db', file), 'utf8')
@@ -31,9 +31,18 @@ const ACCOUNT_TABLES = ['account_insights_daily', 'account_demographics_daily', 
 export async function openHubTestDb(opts: { withHubSchema?: boolean; storiesMultiSlot?: boolean } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
   const pg = new PGlite({ extensions: { pg_trgm } });
   for (const schema of SCHEMAS) await pg.exec(schemaSql(`${schema}_schema.sql`));
+  // Central intake Phase 2: Reels readers read idea content through reels.idea_sources_v (legacy + intake rows).
+  await pg.exec(schemaSql('intake_schema.sql'));
+  await pg.exec(schemaSql('reels_intake_views.sql'));
   // The go-live state: two-a-day Stories (db/stories_multi_slot.sql, R25). false = the state before that step.
   if (opts.storiesMultiSlot !== false) await pg.exec(schemaSql('stories_multi_slot.sql'));
   await pg.exec(schemaSql('social_hub_schema.sql'));
+  // AI Trivia (AT-13): the ai_trivia series, its content map cells and the video frame columns.
+  await pg.exec(schemaSql('stories_ai_trivia.sql'));
+  // Real or AI? (planning/Real or AI/CONTRACT.md §2): the real_or_ai series, its still roles, archive and lab.
+  await pg.exec(schemaSql('stories_real_or_ai.sql'));
+  // Stories Split (SS-21): AI Trivia and Real or AI? become hub types of their own; the CHECKs take both.
+  await pg.exec(schemaSql('stories_split.sql'));
   if (!opts.withHubSchema) {
     for (const table of ACCOUNT_TABLES) await pg.exec(`DROP TABLE social_hub.${table}`);
   }

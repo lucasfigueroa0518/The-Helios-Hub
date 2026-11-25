@@ -2,86 +2,90 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  episodeLine,
+  CAPTION_MAX_CHARS,
   parseCaption,
-  stampCaption,
+  reviewCaption,
   stripEpisodePrefix,
+  withHeliosLine,
 } from '@/lib/explainers/caption';
-import { buildLineInstruction, recentClosingsBlock } from '@/lib/social/captions/build-line';
-import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
+import { CAPTION_WRITER_MAX_CHARS } from '@/lib/explainers/caption-format';
 import { nextPublishedEpisode, queuePublish } from '@/lib/explainers/publish/publish';
 import { saveFeedback } from '@/lib/explainers/repository';
+import { heliosLine, heliosLines, longestHeliosLine } from '@/lib/social/captions/helios-line';
+import { readHeliosVoice } from '@/lib/social/voice/voice';
 
 import { scratchExplainersDb } from './explainers-pglite';
 
-/** v5 shape: problem hook, why paragraphs, the save prompt or question, the Helios line, hashtags. */
-const HELIOS_LINE = "A law firm pasting a long contract into a chat feels this first. At Helios we'd split the file and hand the model one section at a time.";
+/** v14 shape: the writer's hook and paragraphs, then hashtags. Code adds the Helios line before the hashtags. */
 const CONTEXT_WINDOW = `Your long chat with AI forgot how it started. It fell off the desk.
 
 A context window is the text a language model can see at once, measured in tokens. Think of a desk that only holds so much paper. Once the pile is taller than the desk, the oldest pages slide off the edge.
 
 The reel's example is a 1,000-token window and a 1,200-token chat. The first 200 tokens of that chat are no longer in view. That is why a long thread starts answering as if the opening never happened.
 
-Save this for the next time a long chat loses the beginning.
-
-${HELIOS_LINE}
-
 #contextwindow #tokens #ai`;
 
 test('the context-window caption passes the post rules', () => {
   const text = parseCaption(CONTEXT_WINDOW);
+  assert.equal(text, CONTEXT_WINDOW);
   assert.equal(text.split('\n')[0], 'Your long chat with AI forgot how it started. It fell off the desk.');
-  const hook = text.split('\n')[0]!;
-  assert.ok(`${episodeLine(1)}\n\n${hook}`.length <= 125);
-  assert.ok(!/^AI Brain Break/i.test(text));
+  assert.ok(!/^AI Brain Break|^AI 101 Episode/i.test(text));
 });
 
 test('a caption is rejected when the hook, length, or tags are wrong', () => {
   const base = CONTEXT_WINDOW;
-  assert.throws(() => parseCaption(`AI Brain Break Episode 1:\n\n${'x'.repeat(120)}\n\n${base}`), /125/);
+  assert.throws(() => parseCaption(`AI Brain Break Episode 1:\n\n${'x'.repeat(130)}\n\n${base}`), /125/);
   assert.throws(() => parseCaption(base.replace('#ai', '')), /3 to 5/);
   assert.throws(() => parseCaption(`${base} #extra #tags #too #many`), /3 to 5/);
   assert.throws(() => parseCaption(`${base} 🔥`), /no emoji in the hashtags/);
   assert.throws(() => parseCaption(base.replace('that chat', 'https://example.com')), /URL/);
-  assert.throws(
-    () => parseCaption('A short hook.\n\nToo thin.\n\nSave this for later.\n\n#a #b #c'),
-    /at least 200/,
-  );
+  assert.throws(() => parseCaption('A short hook.\n\nToo thin.\n\n#a #b #c'), /at least 120/);
 });
 
-test('v5 keeps the loosened minimums, counting the Helios line: three paragraphs and 200 characters', () => {
-  const hook = 'Your long chat with AI forgot how it started. It ran out of desk.';
-  const ask = 'Save this for the next long contract.';
-  const read = 'A law firm pasting a long contract into a chat hits this first, and splitting the file before a model reads it is the kind of step Helios builds.';
-  const body = [hook, ask, read].join('\n\n');
-  assert.ok(body.length >= 200 && body.length <= 260, `body is ${body.length}`);
-  const caption = `${body}\n\n#contextwindow #tokens #ai`;
+test('v14 minimums: a 120-character body with a hook and one paragraph passes; one paragraph alone does not', () => {
+  const hook = 'Your long chat with AI forgot how it started.';
+  const para = 'The oldest messages slid out of the window the model can see, so it answers as if they never existed.';
+  const caption = `${hook}\n\n${para}\n\n#contextwindow #tokens #ai`;
+  assert.ok(`${hook}\n\n${para}`.length >= 120 && `${hook}\n\n${para}`.length < 200);
   assert.equal(parseCaption(caption), caption);
-  assert.throws(
-    () => parseCaption(`${hook} ${ask}\n\n${read}\n\n#contextwindow #tokens #ai`),
-    /the hook, the save prompt or question, and the Helios line/,
-  );
+  assert.throws(() => parseCaption(`${hook} ${para}\n\n#contextwindow #tokens #ai`), /hook and at least one paragraph/);
 });
 
-test('v5: the paragraph before the hashtags is the Helios line and must name Helios', () => {
-  // The old v4 order (Helios in the middle, the ask last) is rejected.
-  const v4Order = CONTEXT_WINDOW.replace(`Save this for the next time a long chat loses the beginning.\n\n${HELIOS_LINE}`, `${HELIOS_LINE}\n\nSave this for the next time a long chat loses the beginning.`);
-  assert.throws(() => parseCaption(v4Order), /paragraph before the hashtags does not name Helios/);
-  const noHelios = CONTEXT_WINDOW.replace(HELIOS_LINE, 'A law firm pasting a long contract into a chat feels this first.');
-  assert.throws(() => parseCaption(noHelios), /paragraph before the hashtags does not name Helios/);
-  assert.throws(() => parseCaption(CONTEXT_WINDOW.replace('At Helios', 'At Heliosphere')), /does not name Helios/);
-});
-
-test('we is allowed: the Helios line may speak as Helios', () => {
-  assert.match(HELIOS_LINE, /\bwe'd\b/);
+test('parseCaption has no Helios-line rule: the writer text and the text with its Helios line both pass', () => {
   assert.equal(parseCaption(CONTEXT_WINDOW), CONTEXT_WINDOW);
+  const withLine = withHeliosLine(CONTEXT_WINDOW, 'job-1');
+  assert.equal(parseCaption(withLine), withLine);
 });
 
-test('publish strips a baked-in episode line and stamps the published count', () => {
+test('an older caption has its episode line stripped; the review drawer shows it as it posts', () => {
   const old = `AI BRAIN BREAK - EPISODE 4:\n\n${CONTEXT_WINDOW}`;
   assert.equal(stripEpisodePrefix(old), CONTEXT_WINDOW);
-  assert.equal(stampCaption(old, 1), `${episodeLine(1)}\n\n${CONTEXT_WINDOW}`);
-  assert.equal(stampCaption('AI BRAIN BREAK - EPISODE 1: APIs', 2), `${episodeLine(2)}\n\nAPIs`);
+  assert.equal(stripEpisodePrefix('AI 101 Episode 7: APIs'), 'APIs');
+  assert.equal(reviewCaption(old), CONTEXT_WINDOW);
+});
+
+test('withHeliosLine puts the Helios line between the text and the hashtags', () => {
+  const out = withHeliosLine(CONTEXT_WINDOW, 'job-1');
+  const line = heliosLine('explainers', 'job-1');
+  const body = CONTEXT_WINDOW.slice(0, CONTEXT_WINDOW.indexOf('#contextwindow')).trim();
+  assert.equal(out, `${body}\n\n${line}\n\n#contextwindow #tokens #ai`);
+  assert.ok(heliosLines('explainers').includes(line));
+  assert.equal(withHeliosLine('A caption with no tags yet.', 'job-1'), `A caption with no tags yet.\n\n${line}`);
+});
+
+test('withHeliosLine is idempotent, whatever the seed, and drops an old episode line', () => {
+  const once = withHeliosLine(CONTEXT_WINDOW, 'job-1');
+  assert.equal(withHeliosLine(once, 'job-1'), once);
+  assert.equal(withHeliosLine(once, 'another-job'), once, 'a caption that already has a Helios line keeps it');
+  assert.equal(withHeliosLine(`AI 101 Episode 3:\n\n${CONTEXT_WINDOW}`, 'job-1'), once);
+});
+
+test('the writer leaves room for the longest Helios line', () => {
+  assert.equal(CAPTION_WRITER_MAX_CHARS, CAPTION_MAX_CHARS - longestHeliosLine('explainers').length - 2);
+  const tags = '#a #b #c';
+  const text = `${'x'.repeat(CAPTION_WRITER_MAX_CHARS - tags.length - 2)}\n\n${tags}`;
+  assert.equal(text.length, CAPTION_WRITER_MAX_CHARS);
+  assert.ok(withHeliosLine(text, 'x').length <= CAPTION_MAX_CHARS);
 });
 
 test('episode numbers count published explainers, not finished renders', async () => {
@@ -124,133 +128,72 @@ test('episode numbers count published explainers, not finished renders', async (
   assert.equal(await nextPublishedEpisode(db, {}), 2, 'no read: every published explainer counts');
 });
 
-test('the post caption names the viewer\'s problem and ends on the Helios line (explainer-caption-v5)', async () => {
-  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION, captionParams } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v6');
-  assert.match(CAPTION_INSTRUCTIONS, /names a problem or situation the viewer has/);
-  assert.match(CAPTION_INSTRUCTIONS, /the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags/);
-  assert.match(CAPTION_INSTRUCTIONS, /which of the reel's options they would use first/);
-  assert.match(CAPTION_INSTRUCTIONS, /The Helios line is the last paragraph before the hashtags/);
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /may end by inviting the viewer to follow/);
-  // Copy fix (2026-10-20): one concrete point, Helios's view, a follow clause only now and then.
-  assert.match(CAPTION_INSTRUCTIONS, /one or two plain sentences that make one concrete point about this episode's concept for the industry it names/);
-  assert.match(CAPTION_INSTRUCTIONS, /a short clause inviting the viewer to follow for the next episode is rare, never the default/);
-  assert.match(CAPTION_INSTRUCTIONS, /Short paragraphs of one or two sentences with a blank line between them/);
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /just before the call to action/);
-  // Fix round 3 (explainer-caption-v6): content described without a label noun; no label opener.
-  assert.match(CAPTION_INSTRUCTIONS, /what a business in that industry should start, stop, or watch because of this concept, said in Helios's voice/);
-  assert.match(CAPTION_INSTRUCTIONS, /Do not open it with a label or framing phrase; open on the industry, the action, or the stakes/);
-  assert.ok(!CAPTION_INSTRUCTIONS.includes('\u2014'), 'no em dashes');
-  assert.match(CAPTION_INSTRUCTIONS, /Do not walk the eight beats in order/);
-  // The retired v2 "catch" beat stays gone; the shared rules' quoted ban on "Here's the catch" (fix round 3) is not that beat.
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS.replace(/"Here's the catch"/g, ''), /catch|seven/);
-  assert.ok(CAPTION_INSTRUCTIONS.includes(HELIOS_CONTEXT), 'the Helios context is in the cached prefix');
-  assert.ok(CAPTION_INSTRUCTIONS.includes(CAPTION_SHARED_RULES), 'the shared caption rules are in the cached prefix');
-  assert.match(CAPTION_INSTRUCTIONS, /Helios line/);
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /no offer of Helios services/);
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Do not speak as "we"/);
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Do not sign off with Helios/);
-  assert.match(CAPTION_INSTRUCTIONS, /No URLs\./);
+test('the post caption never says "critter" (explainer-caption-v7, EX3-121)', async () => {
+  const { CAPTION_INSTRUCTIONS, checkNoCritter } = await import('@/lib/explainers/caption');
+  assert.match(CAPTION_INSTRUCTIONS, /never call it a "critter"/);
+  assert.throws(() => checkNoCritter('The hungry critter plates one slice.'), /says "critter"/);
+  assert.throws(() => checkNoCritter('Two Critters wait.'), /Critters/);
+  assert.doesNotThrow(() => checkNoCritter('The searcher plates one slice.'));
+});
 
-  const facts = { title: 'Context window', scope: 'What a model can see.', storyboard: 'sb', script: 'sc', source: null };
-  const recent = [{ closing: 'A dental practice hits this when Helios wires the front desk.', buildLine: true, createdAt: new Date() }];
-  const params = captionParams(facts, 'claude-sonnet-5-5', { recent, includeBuildLine: true });
-  const system = JSON.stringify(params.system);
-  assert.match(system, /cache_control/);
-  assert.doesNotMatch(system, /dental practice|include_build_line/, 'per-post inputs stay out of the cached prefix');
+test('caption v15: the shared voice then the instructions, a short text, and code owns the learn-more prompt and the Helios line', async () => {
+  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION, CAPTION_BODY_MAX_CHARS, captionParams, captionSystem, writeExplainerCaption, CaptionError } = await import('@/lib/explainers/caption');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v15');
+  assert.equal(captionSystem(), `${readHeliosVoice()}\n\n# This caption\n\n${CAPTION_INSTRUCTIONS}\n\nVersion: ${CAPTION_VERSION}`);
+  assert.match(CAPTION_INSTRUCTIONS, /a line about the page, then your hashtags/);
+  assert.match(CAPTION_INSTRUCTIONS, /do not write an episode title or number/);
+  assert.match(CAPTION_INSTRUCTIONS, new RegExp(`at most ${CAPTION_BODY_MAX_CHARS} characters before the hashtags`));
+  assert.match(CAPTION_INSTRUCTIONS, /Teach me about <teach_me_about>\. Dive into <dive_into/);
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Helios line|industr|builder_read/i);
+  const facts = { title: 'T', term: 'inference', scope: 'S', analogy: 'A', storyboard: 'BOARD', script: 'The final words.', source: 'SRC' };
+  const params = captionParams(facts, 'm', { retryReason: 'Too thin.' });
+  const system = params.system as Array<{ text: string; cache_control?: unknown }>;
+  assert.ok(system[0]!.cache_control, 'the system prefix carries the cache breakpoint');
+  assert.equal(system[0]!.text, captionSystem());
   const user = String(params.messages[0]!.content);
-  assert.ok(user.includes(recentClosingsBlock(recent)));
-  assert.ok(user.includes(buildLineInstruction(true)));
-  const schema = params.output_config.format.schema as { required: string[] };
-  assert.deepEqual(schema.required, ['caption', 'builder_read']);
-
-  const empty = String(captionParams(facts, 'm', { recent: [], includeBuildLine: false }).messages[0]!.content);
-  assert.doesNotMatch(empty, /Recent captions ended like this/);
-  assert.ok(empty.includes(buildLineInstruction(false)));
+  assert.match(user, /The final words\./);
+  assert.match(user, /The reel's term: inference/);
+  assert.match(user, /Nearby syllabus topics: .+/);
+  assert.match(user, /rejected: Too thin\./);
+  assert.doesNotMatch(user, /BOARD|SRC|Analogy:|Scope:/);
+  const clean = `A short hook that promises more below.\n\n${'A plain extra thought for the viewer. '.repeat(8).trim()}\n\n#ai #tokens #learn`;
+  const prompt = { teach_me_about: 'inference', dive_into: ['AI models', 'tokens', 'latency', 'GPUs'], so_i: 'so I understand how a trained model answers me.' };
+  const reply = (caption: string, parts: Record<string, unknown> = prompt) => ({ messages: { create: async () => ({ content: [{ type: 'text', text: JSON.stringify({ caption, ...parts }) }], usage: { input_tokens: 1, output_tokens: 1 }, model: 'm', stop_reason: 'end_turn' }) } }) as never;
+  const text = (await writeExplainerCaption(facts, 'm', { client: reply(clean) })).text;
+  assert.ok(text.startsWith('A short hook that promises more below.'));
+  assert.match(text, /\n\n(Want to learn more\?|Want to go deeper\?|Curious to learn more\?)\n(Screenshot this prompt for your AI:|Give this prompt to your AI:)\n\n"Teach me about/);
+  assert.ok(text.includes('\n\n"Teach me about inference. Dive into AI models, tokens, latency and GPUs, so I understand how a trained model answers me."\n\n#ai #tokens #learn'));
+  assert.equal(parseCaption(text), text);
+  const posted = withHeliosLine(text, 'job-1');
+  assert.ok(posted.indexOf('"Teach me about') < posted.indexOf(heliosLine('explainers', 'job-1')));
+  assert.ok(posted.endsWith(`${heliosLine('explainers', 'job-1')}\n\n#ai #tokens #learn`));
+  await assert.rejects(writeExplainerCaption(facts, 'm', { client: reply(clean.replace('A short hook', 'At Helios, a short hook')) }), (e: unknown) => e instanceof CaptionError && /names Helios/.test(e.message));
+  await assert.rejects(writeExplainerCaption(facts, 'm', { client: reply(clean, { ...prompt, teach_me_about: 'AI models' }) }), (e: unknown) => e instanceof CaptionError && /must name the reel's term, inference/.test(e.message));
+  const tooLong = `A short hook that promises more below.\n\n${'word '.repeat(Math.ceil(CAPTION_WRITER_MAX_CHARS / 5))}\n\n#ai #tokens #learn`;
+  assert.ok(tooLong.length > CAPTION_WRITER_MAX_CHARS && tooLong.length <= CAPTION_MAX_CHARS);
+  await assert.rejects(writeExplainerCaption(facts, 'm', { client: reply(tooLong) }), (e: unknown) => e instanceof CaptionError && new RegExp(`keep it within ${CAPTION_BODY_MAX_CHARS}`).test(e.message));
 });
 
-function stubClient(replies: { caption: string; builder_read: string }[]) {
-  const calls: unknown[] = [];
-  return {
-    calls,
-    client: {
-      messages: {
-        create: async (params: unknown) => {
-          calls.push(params);
-          const reply = replies[calls.length - 1]!;
-          return {
-            model: 'claude-sonnet-5-5',
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: JSON.stringify(reply) }],
-            usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
-          };
-        },
-      },
-    },
-  };
-}
-
-test('builder_read is the Helios line before the hashtags and names Helios', async () => {
-  const { writeExplainerCaption, CaptionError } = await import('@/lib/explainers/caption');
-  const facts = { title: 'Context window', scope: null, storyboard: null, script: null, source: null };
-
-  const good = stubClient([{ caption: CONTEXT_WINDOW, builder_read: HELIOS_LINE }]);
-  const draft = await writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: true, client: good.client as never });
-  assert.equal(draft.text, CONTEXT_WINDOW);
-  assert.equal(draft.builderRead, HELIOS_LINE);
-
-  const noHelios = 'An accounting firm feeding a year of receipts to a model hits this wall first.';
-  const missing = stubClient([{ caption: CONTEXT_WINDOW.replace(HELIOS_LINE, noHelios), builder_read: noHelios }]);
-  await assert.rejects(
-    writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: false, client: missing.client as never }),
-    (error: unknown) => error instanceof CaptionError && /does not name Helios/.test(error.message) && error.spent !== undefined,
-  );
-
-  // A read copied from somewhere else in the caption is not the Helios line.
-  const elsewhere = 'Save this for the next time a long chat loses the beginning.';
-  const outside = stubClient([{ caption: CONTEXT_WINDOW, builder_read: elsewhere }]);
-  await assert.rejects(
-    writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: false, client: outside.client as never }),
-    /not the caption's last paragraph before the hashtags/,
-  );
-});
-
-test('a retry tells the writer why the last caption was rejected, after the cache breakpoint', async () => {
-  const { captionParams, writeExplainerCaption } = await import('@/lib/explainers/caption');
-  const facts = { title: 'Context window', scope: null, storyboard: null, script: null, source: null };
-  const reason = 'the paragraph before the hashtags does not name Helios.';
-  const params = captionParams(facts, 'm', { recent: [], includeBuildLine: false, retryReason: reason });
-  assert.doesNotMatch(JSON.stringify(params.system), /was rejected/);
-  const user = String(params.messages[0]!.content);
-  assert.ok(user.trimEnd().endsWith(`Your last caption for this reel was rejected: ${reason} Fix that, and keep every other rule.`));
-  assert.doesNotMatch(String(captionParams(facts, 'm', { recent: [], includeBuildLine: false }).messages[0]!.content), /was rejected/);
-
-  const stub = stubClient([{ caption: CONTEXT_WINDOW, builder_read: HELIOS_LINE }]);
-  await writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: false, retryReason: reason, client: stub.client as never });
-  assert.match(JSON.stringify(stub.calls[0]), /was rejected: the paragraph before the hashtags does not name Helios/);
-});
-
-test('the build-fit Jev call is keyed by the subject id it is given, not the title', async () => {
-  const { liveExplainerBuildFit } = await import('@/lib/explainers/caption');
-  const metas: unknown[] = [];
-  const ask = (async (_request: unknown, meta: unknown) => (metas.push(meta), { answers: { builds: { noul: 0.7 } }, usage: { input_tokens: 1, output_tokens: 1 } })) as never;
-  const fit = liveExplainerBuildFit(ask);
-  assert.equal(await fit({ title: 'Context window', scope: null, storyboard: null, script: 'sc', source: null }, 'job-42'), 0.7);
-  assert.deepEqual(metas, [{ version: 'helios-build-fit@1', subjectId: 'job-42' }]);
-});
-
-test('Task 8b part 2 (v5 amended): at most two emoji, one leading the hook and one after the ask; none in the Helios line or hashtags', async () => {
-  const withTwo = CONTEXT_WINDOW.replace('Your long chat', '🧠 Your long chat').replace('loses the beginning.', 'loses the beginning. 👇');
-  assert.equal(parseCaption(withTwo), withTwo);
-  // The emoji follows the episode stamp that code adds.
-  assert.ok(stampCaption(withTwo, 3).startsWith(`${episodeLine(3)}\n\n🧠 Your long chat`));
-  assert.throws(() => parseCaption(withTwo.replace('desk.', 'desk. 🔥')), /3 emoji; at most 2/);
-  assert.throws(() => parseCaption(CONTEXT_WINDOW.replace("one section at a time.", 'one section at a time. 🚀')), /no emoji in the Helios line/);
-  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v6');
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /No emoji\./);
-  assert.match(CAPTION_INSTRUCTIONS, /At most two emoji, and none is required: usually one leads the hook/);
-  assert.match(CAPTION_INSTRUCTIONS, /code puts the episode line above it/);
-  assert.match(CAPTION_INSTRUCTIONS, /None in the Helios line or the hashtags/);
-  assert.match(CAPTION_INSTRUCTIONS, /the industry from the Helios context that best matches this story/);
+test('caption v15: the prompt parts are cleaned and checked, and the block is stable per seed', async () => {
+  const { parseLearnMore, learnMoreBlock, LEARN_MORE_OPENERS } = await import('@/lib/explainers/caption-format');
+  const { termNames, syllabusNeighbors } = await import('@/lib/explainers/caption');
+  const ok = { topic: 'AI models', diveInto: ['machine learning', 'model training', 'inference'], soI: 'So I see what I am really running.' };
+  const learn = parseLearnMore(ok, termNames('AI model'));
+  assert.deepEqual(learn, { topic: 'AI models', diveInto: ['machine learning', 'model training', 'inference'], soI: 'see what I am really running' });
+  assert.throws(() => parseLearnMore({ ...ok, diveInto: ['a', 'b'] }, ['AI model']), /give 3 to 5/);
+  assert.throws(() => parseLearnMore({ ...ok, diveInto: ['a', 'b', 'c', 'd', 'e', 'f'] }, ['AI model']), /give 3 to 5/);
+  assert.throws(() => parseLearnMore({ ...ok, diveInto: ['tokens', 'Tokens', 'GPUs'] }, ['AI model']), /same topic twice/);
+  assert.throws(() => parseLearnMore({ ...ok, diveInto: ['tokens', 'AI model', 'GPUs'] }, ['AI model']), /repeats the reel's own term/);
+  assert.throws(() => parseLearnMore({ ...ok, diveInto: ['tokens', '#GPUs', 'latency'] }, ['AI model']), /hashtag/);
+  assert.throws(() => parseLearnMore({ ...ok, soI: '' }, ['AI model']), /so_i is empty/);
+  assert.throws(() => parseLearnMore({ ...ok, topic: 'neural networks' }, ['AI model']), /must name the reel's term/);
+  assert.doesNotThrow(() => parseLearnMore({ ...ok, topic: 'anything' }, []), 'no term known: no term check');
+  const block = learnMoreBlock(learn, 'AI model');
+  assert.equal(block, learnMoreBlock(learn, 'AI model'));
+  assert.ok(LEARN_MORE_OPENERS.includes(block.split('\n')[0]!));
+  assert.ok(block.endsWith('"Teach me about AI models. Dive into machine learning, model training and inference, so I see what I am really running."'));
+  assert.ok(termNames('machine learning').includes('ML'));
+  assert.ok(syllabusNeighbors('AI model').includes('machine learning'), 'what it requires');
+  assert.ok(syllabusNeighbors('machine learning').includes('neural network'), 'what requires it');
+  assert.deepEqual(syllabusNeighbors('not a syllabus term'), []);
 });

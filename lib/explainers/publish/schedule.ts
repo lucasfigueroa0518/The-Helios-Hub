@@ -1,7 +1,10 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
+import { holdApprovedWhilePaused, unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
+import { explainerJobTarget } from '@/lib/explainers/lead';
 import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
 import { queueOrder } from '@/lib/social-hub/queue';
 import type { IdeaAdjustment } from '@/lib/social-hub/views/moves';
@@ -17,8 +20,9 @@ import { queuePublish } from './publish';
  * Up to `posts_per_day` explainers per Eastern day (default 2), one per
  * window (1:00–2:30 PM, 3:30–5:00 PM), each ≥ 30 minutes from any other
  * feed post (SH-46 – SH-48), on the lifecycle spine (D38). While
- * publishing is live, every approved, unposted render gets the next free
- * window; a due slot becomes a publish attempt. Slots live on the lifecycle
+ * Explainers hold slots (Approval or Live, contract §4.3), every approved,
+ * unposted render gets the next free window; a due slot becomes a publish
+ * attempt only while Live (D16). Slots live on the lifecycle
  * spine (social_hub.schedule, vertical 'explainers', D36).
  */
 
@@ -26,16 +30,44 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
-/** The `publishing_live` row of explainers.settings (the typed settings loader ignores it). */
+/**
+ * Whether Explainers are Live (D16): approved reels go to Instagram only in the Live state. Read from the
+ * `auto_render` and `publishing_live` rows; Generate off with Live on reads as paused (stateOf), so nothing is placed.
+ */
 export async function publishingLive(db: Queryable): Promise<boolean> {
-  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'publishing_live'`);
-  return rows[0]?.value === true;
+  return postsToInstagram(await explainersState(db));
 }
 
-/** The `require_approval` row: on unless set to false (docs/social-overnight.md). */
-export async function requireApproval(db: Queryable): Promise<boolean> {
-  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
-  return rows[0]?.value !== false;
+/** Explainers' state (D16): stateOf(auto_render, publishing_live). */
+export async function explainersState(db: Queryable): Promise<TypeState> {
+  const { rows } = await db.query<{ key: string; value: unknown }>(
+    `SELECT key, value FROM explainers.settings WHERE key IN ('auto_render', 'publishing_live')`,
+  );
+  const on = (key: string) => rows.some((row) => row.key === key && row.value === true);
+  return stateOf(on('auto_render'), on('publishing_live')).state;
+}
+
+/** Whether Explainers book slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
+export async function explainersHoldsSlots(db: Queryable): Promise<boolean> {
+  return holdsSlots(await explainersState(db));
+}
+
+/**
+ * An approve while Explainers are Paused (D18, 2026-11-20): the render is held out of automatic placement
+ * (scheduleApproved, the night fill), so it goes into a slot only when a person places it. Nothing while Explainers
+ * hold slots: there Approve books as before. Used by the hub's Approve and the review page's (E-08).
+ */
+export async function holdApprovedRender(db: Queryable, jobId: string, now = new Date()): Promise<boolean> {
+  if (await explainersHoldsSlots(db)) return false;
+  return holdApprovedWhilePaused(spineOf(db), { vertical: 'explainers', itemId: await explainerItemId(db, jobId), now });
+}
+
+/**
+ * Every post needs a person's approval (settings standard D16): `require_approval` is always true and is never read
+ * as false. Kept async with its db argument for its callers.
+ */
+export async function requireApproval(_db: Queryable): Promise<boolean> {
+  return true;
 }
 
 /** `posts_per_day` from explainers.settings (SH-48), else the default. */
@@ -48,18 +80,41 @@ export async function postsPerDay(db: Queryable): Promise<number> {
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
 
 /**
+ * The days a booking may use (Bald-Eagle D4, lib/social-hub/lead.ts). An explicit `fromDate` wins (the night placing a
+ * surviving render on the date it fills). Otherwise a render made for a date still ahead books from that date, never
+ * before it: a bounded booking (Approve, the finish booking: `throughDate` today) takes the target date only, an
+ * unbounded one (scheduleApproved) the target date or later. A render with no target, or whose date has passed,
+ * books as before: from today, through `throughDate`.
+ */
+export async function bookingDays(
+  db: Queryable,
+  jobId: string,
+  now: Date,
+  throughDate?: string,
+  fromDate?: string,
+): Promise<{ fromDate?: string; throughDate?: string }> {
+  if (fromDate) return { fromDate, throughDate };
+  const target = await explainerJobTarget(db, jobId);
+  if (!target || target <= calendarDateKey(now, SOCIAL_TIMEZONE)) return { throughDate };
+  return { fromDate: target, throughDate: throughDate === undefined ? undefined : throughDate > target ? throughDate : target };
+}
+
+/**
  * Book a render into the next free explainer window, or return its waiting
  * slot. `throughDate` (a New York day, YYYY-MM-DD) is the last day it may
  * book: Approve and the finish booking pass today (B1, B2); without it the
- * search runs two weeks ahead (the worker's scheduleApproved, the 2 AM fill).
+ * search runs two weeks ahead (the worker's scheduleApproved). `fromDate` is
+ * the first (the 2 AM fill passes the date it fills). A render the night made
+ * ahead books on its target date (bookingDays), never today's leftover window.
  */
 export async function scheduleJob(
   db: Queryable,
   jobId: string,
   source: 'auto' | 'user',
   now = new Date(),
-  throughDate?: string,
+  throughDateIn?: string,
   rng: (count: number) => number = uniformIndex,
+  fromDateIn?: string,
 ): Promise<ScheduleOutcome> {
   const itemId = await explainerItemId(db, jobId);
   if (!itemId) return { scheduled: false, note: 'The render is gone.' };
@@ -70,6 +125,7 @@ export async function scheduleJob(
     )).rows[0];
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
+  const { fromDate, throughDate } = await bookingDays(db, jobId, now, throughDateIn, fromDateIn);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
@@ -88,15 +144,18 @@ export async function scheduleJob(
       );
       const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
       const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
-      choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate);
+      choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate, fromDate);
     } else {
       // The calendar: its slots within the daily cap (not posts_per_day), at [slot, slot + 15]; Main slots spaced from feed posts.
-      const picked = await chooseTemplateSlot(spacing, plan, 'explainers', { now, busy, rng, throughDate });
+      const picked = await chooseTemplateSlot(spacing, plan, 'explainers', { now, busy, rng, throughDate, fromDate });
       choice = picked;
       feedMode = picked?.feedMode ?? null;
     }
     if (!choice) {
-      return { scheduled: false, note: throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.' };
+      const note = fromDate && throughDate === fromDate
+        ? `No explainer window is open on ${fromDate}.`
+        : throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.';
+      return { scheduled: false, note };
     }
     try {
       const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source, ...(feedMode ? { feedMode } : {}) });
@@ -111,12 +170,14 @@ export async function scheduleJob(
 }
 
 /**
- * B2: when the 2 AM run (trigger 'auto') finishes a render, it takes today's
- * next open window as a system slot (source 'auto'), unapproved: it still
+ * B2: when the 2 AM run (trigger 'auto') finishes a render, it takes a window
+ * on the date it was made for (Bald-Eagle D4: two days ahead; scheduleJob reads
+ * its target date) as a system slot (source 'auto'), unapproved: it still
  * needs Approve, and without one releaseDueSchedules cancels it at its time.
- * Today only; nothing left today books nothing. A person's render
- * (Regenerate, Make it) waits for Approve, which books it. Only while
- * publishing is live, like every other booking. Booking only, never
+ * That date only (a render with no target date: today only); nothing left
+ * there books nothing. A person's render
+ * (Regenerate, Make it) waits for Approve, which books it. Only in Approval
+ * or Live (holdsSlots), like every other booking. Booking only, never
  * queuePublish. Null: not booked by rule.
  */
 export async function bookFinishedRender(
@@ -126,7 +187,7 @@ export async function bookFinishedRender(
   rng?: (count: number) => number,
 ): Promise<ScheduleOutcome | null> {
   if (job.trigger !== 'auto') return null;
-  if (!(await publishingLive(db))) return null;
+  if (!(await explainersHoldsSlots(db))) return null;
   return scheduleJob(db, job.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
@@ -148,12 +209,15 @@ SELECT j.id, j.topic_id, f.created_at AS reviewed_at, j.finished_at
    AND f.verdict IS DISTINCT FROM 'rejected'
    AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
-   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
+   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
+   -- Back in Made (D17, D18): a render unslotted by Pause or a passed slot stays approved but is never re-slotted here.
+   AND NOT ${unslottedSql('ci.id')}`;
 
 /**
  * Finished, unposted, unscheduled renders with their video in Storage: the
  * approved ones, oldest approval first; with require_approval off, also the
- * ones nobody reviewed (never a rejected one).
+ * ones nobody reviewed (never a rejected one). A render made for a date still
+ * ahead books on that date or later (bookingDays).
  */
 export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
   const approvalNeeded = await requireApproval(db);
@@ -182,13 +246,13 @@ export type FillCandidate = { topicId: string; title: string; /** The surviving 
  * render instead of rendering its topic again.
  */
 export async function fillCandidates(db: Queryable, approvalNeeded: boolean, moves: readonly IdeaAdjustment[] = []): Promise<FillCandidate[]> {
-  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null; score: string | null; below_gate: boolean }>(
+  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null; score: string | null; syllabus_rank: number | null; below_gate: boolean }>(
     `WITH placeable AS (${PLACEABLE_RENDERS}),
      newest AS (
        SELECT DISTINCT ON (topic_id) id, topic_id FROM explainers.jobs
         WHERE status = 'ok'
         ORDER BY topic_id, finished_at DESC NULLS LAST, seq DESC)
-     SELECT c.id::text AS topic_id, c.title, c.job_id, c.weighted_score::text AS score,
+     SELECT c.id::text AS topic_id, c.title, c.job_id, c.weighted_score::text AS score, c.syllabus_rank,
             COALESCE(c.jev_notes->'seed_flags' @> '"below_gate"'::jsonb, false) AS below_gate FROM (
        SELECT t.*, n.id::text AS job_id
          FROM explainers.topics t
@@ -206,8 +270,11 @@ export async function fillCandidates(db: Queryable, approvalNeeded: boolean, mov
   // The queue decides (pool standard, 2026-10-21): pinned topics first, then by score or where a drag left them,
   // archived ones gone. The query's order (POOL_ORDER_BY) breaks ties.
   const items = rows.map((r) => ({ id: `explainers:topic:${r.topic_id}`, score: r.score == null ? null : Number(r.score), row: r }));
+  // Curriculum (2026-11-21): syllabus topics lead the unpinned queue in the query's order (syllabus first, as
+  // POOL_ORDER_BY), above the topics off the syllabus, which still go by score. Pins, drags and archives win as before.
+  const syllabusLead = items.filter((i) => i.row.syllabus_rank != null).map((i) => i.id);
   // A seed that fell below a quality gate is the person's to make (Make it, or a pin): the night skips it unless it is pinned.
-  return queueOrder(items, moves.filter((m) => m.vertical === 'explainers'))
+  return queueOrder(items, moves.filter((m) => m.vertical === 'explainers'), syllabusLead)
     .filter((q) => !q.item.row.below_gate || q.pinned)
     .map((q) => ({ topicId: q.item.row.topic_id, title: q.item.row.title, jobId: q.item.row.job_id }));
 }

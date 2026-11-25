@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { recreditCaption } from '@/lib/lfd/post';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { FitCheck } from '@/lib/social/render/fit-check';
@@ -24,7 +25,7 @@ import { generateBriefs } from './brief-from-body';
 import { openLocalMemesDb, type MemesDb } from './db';
 import type { MemeFill } from './fill';
 import { placeMemes, type Placement } from './lfd-placement';
-import { postWithMemes, type MemeImage, type SavedStory } from './lfd-sim/post';
+import { postWithMemes, readyFromSaved, type MemeImage, type SavedStory } from './lfd-sim/post';
 import { memeImageOf, trimLetterbox } from './lfd-sim/run';
 import { loadLabStory } from './lfd-source';
 import { fitOdds, gate, type OddsRow } from './odds';
@@ -48,6 +49,8 @@ export type PostMemesDeps = {
   fitCheck: FitCheck;
   /** Storage upload (the slide bucket), the same one the engine used for this post's slides. */
   upload: (objectPath: string, body: Buffer, contentType: string) => Promise<void>;
+  /** Storage download (the same bucket): a meme the run already placed is saved as `storage:<object>`, which a render can't load. */
+  download: (objectPath: string) => Promise<Buffer>;
   fetchBody: (url: string) => Promise<string | null>;
   storeSlides: (slug: string, render: unknown) => Promise<string[]>;
   now: () => Date;
@@ -102,7 +105,8 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
   const post = rows[0];
   if (!post || !Array.isArray(post.stories) || post.stories.length === 0) return { placed: 0, gated: 0, skipped: 'no post', costUsd: 0 };
   const stories = post.stories;
-  const pending = stories.filter((s) => !s.meme && s.photoSource !== 'meme');
+  // A video slide keeps its video (MD-LFD D19: video beats a meme that clears the gate).
+  const pending = stories.filter((s) => !s.meme && s.photoSource !== 'meme' && s.photoSource !== 'video');
   if (!pending.length) {
     d.log('lfd_memes_skipped', { postId, reason: 'already had memes' });
     return { placed: 0, gated: 0, costUsd: 0, skipped: 'already had memes' };
@@ -172,6 +176,16 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
     key: s.key,
     memeId: picks.get(s.key)?.memeId ?? s.meme?.memeId ?? (s.photoSource === 'meme' ? s.meme?.memeId ?? `engine:${s.key}` : null),
   })));
+  // A render can't load a saved `storage:` address (the run's own memes are saved that way): each one is read back
+  // from the bucket for the re-render, while the saved render keeps the address.
+  const stored = new Map<string, MemeImage>();
+  const fromStorage = async (src: string): Promise<MemeImage> => {
+    const object = src.slice('storage:'.length);
+    if (!stored.has(object)) stored.set(object, await memeImageOf(await d.download(object)));
+    return stored.get(object)!;
+  };
+  const isStored = (src: string | undefined): src is string => Boolean(src?.startsWith('storage:'));
+  const drawable = await Promise.all(stories.map(async (s) => (isStored(s.photo.src) ? { ...s, photo: { ...s.photo, src: (await fromStorage(s.photo.src)).url } } : s)));
   const images = new Map<string, MemeImage>();
   const objects = new Map<string, string>();
   const byKey = new Map(stories.map((s) => [s.key, s]));
@@ -186,11 +200,12 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
       continue;
     }
     const existing = byKey.get(p.key);
-    if (existing?.photoSource === 'meme' && existing.photo.src) images.set(p.memeId, { url: existing.photo.src });
-    if (existing?.meme?.object) objects.set(p.memeId, existing.meme.object);
+    const object = existing?.meme?.object ?? (isStored(existing?.photo.src) ? existing.photo.src.slice('storage:'.length) : undefined);
+    if (object) objects.set(p.memeId, object);
+    if (existing?.photoSource === 'meme' && existing.photo.src) images.set(p.memeId, isStored(existing.photo.src) ? await fromStorage(existing.photo.src) : { url: existing.photo.src });
   }
   fs.rmSync(renderDir, { recursive: true, force: true });
-  const render = postWithMemes(stories, placement, (id) => images.get(id) ?? { url: '' }, d.now());
+  const render = postWithMemes(drawable, placement, (id) => images.get(id) ?? { url: '' }, d.now());
   const slideObjects = await d.storeSlides(post.slug, render);
   // The saved render keeps each meme's storage object, not the image: the hub lists posts with their render.
   const savedRender = postWithMemes(stories, placement, (id) => ({ ...images.get(id), url: `storage:${objects.get(id) ?? ''}` }), d.now());
@@ -204,9 +219,12 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
     const meme: PostMeme = { templateId: pick.templateId, memeId: pick.memeId, rank: p.rank, role: p.role, position: p.position, object: objects.get(pick.memeId)!, text };
     return { ...s, meme };
   });
+  // Memes change the photos and order, never the words: keep the run's caption (model lines and Helios line)
+  // and rebuild only its credits. render.caption here is buildPost's template, so it must not overwrite a model caption.
+  const caption = recreditCaption(post.caption, stories.map(readyFromSaved), newStories.map(readyFromSaved)) ?? post.caption;
   await d.query(
     `UPDATE lfd.posts SET stories = $2::jsonb, render = $3::jsonb, caption = $4, slide_objects = $5::jsonb WHERE id = $1`,
-    [postId, JSON.stringify(newStories), JSON.stringify(savedRender), render.caption, JSON.stringify(slideObjects)],
+    [postId, JSON.stringify(newStories), JSON.stringify({ ...savedRender, caption }), caption, JSON.stringify(slideObjects)],
   );
   d.log('lfd_memes_placed', { postId, placed: placement.placed.map((p) => ({ story: p.key, rank: p.rank, role: p.role, position: p.position, template: picks.get(p.key)?.templateId })), costUsd });
   return { placed: placement.placed.length, gated: chosen.length, costUsd };

@@ -1,0 +1,35 @@
+{
+ "file": "bdbd97f6-06-example-props.js",
+ "job": "bdbd97f6-8fee-45b9-8f14-9a4536d1412d",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.390Z",
+ "from": "assets/frames/06-example.props.js",
+ "props": {
+  "browser window showing a news page": {
+   "source_name": "browser window showing a news page",
+   "tags": {
+    "is": "a browser window standing upright: a tall paper card with a title bar of three dots and an address pill above a blank light page",
+    "setting": "a screen where a person opens a news website; the page content is drawn live inside it",
+    "material": "paper-and-ink slab, paper tones with ink outline, thickness shown behind to the upper right",
+    "parts": [
+     "title bar",
+     "three window dots",
+     "address pill",
+     "blank page area",
+     "slab thickness",
+     "contact shadow"
+    ],
+    "not": [
+     "a phone",
+     "a tablet",
+     "a laptop",
+     "a poster",
+     "a book"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

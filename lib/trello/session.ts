@@ -8,12 +8,33 @@ export async function requireTrelloSession(): Promise<SessionPayload> {
   return session;
 }
 
+/**
+ * Default avatar hues. Neighboring slots are different colors (blue, green,
+ * orange, purple…), not adjacent degrees on the wheel. A raw `hash % 360`
+ * put Lucas and Tommy six degrees apart, so both circles read as orange.
+ * The slot is a pure function of the string, so a user's color stays put.
+ */
+export const AVATAR_HUES = [
+  210, // blue
+  142, // green
+  25, // orange
+  275, // purple
+  350, // rose
+  175, // teal
+  48, // gold
+  320, // magenta
+  230, // indigo
+  88, // lime
+  4, // red
+  125, // chartreuse — far from both red and the blue that wraps the list
+] as const;
+
 export function hueFromString(s: string) {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
     h = (h * 31 + s.charCodeAt(i)) >>> 0;
   }
-  return h % 360;
+  return AVATAR_HUES[h % AVATAR_HUES.length];
 }
 
 export function slugify(name: string, userId: string): string {

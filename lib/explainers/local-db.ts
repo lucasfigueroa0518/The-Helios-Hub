@@ -17,6 +17,10 @@ import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
 export const SCHEMA_PATH = path.join(process.cwd(), 'db', 'explainers_schema.sql');
 /** The lifecycle spine Explainers schedule and publish on (D36). Self-contained, so it applies here too. */
 export const SPINE_SCHEMA_PATH = path.join(process.cwd(), 'db', 'social_hub_schema.sql');
+/** Bald-Eagle D4: the render's target date (explainers.jobs.target_date); the same file production applies. */
+/** The Stories split (db/stories_split.sql): widens the spine's vertical CHECKs for ai_trivia and real_or_ai. */
+export const STORIES_SPLIT_SQL_PATH = path.join(process.cwd(), 'db', 'stories_split.sql');
+export const LEADTIME_SQL_PATH = path.join(process.cwd(), 'db', 'bald_eagle_2026_11_12_leadtime.sql');
 export const DEFAULT_LOCAL_DIR = path.join(process.cwd(), '.explainers-local', 'pgdata');
 
 /** A schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
@@ -52,6 +56,9 @@ export async function openLocalDb(dataDir?: string): Promise<{ db: ExplainersDb;
   if (dataDir) fs.mkdirSync(dataDir, { recursive: true });
   const pg = new PGlite(dataDir);
   await pg.exec(schemaSql());
+  // Bald-Eagle D4: the render's target date (db/bald_eagle_2026_11_12_leadtime.sql).
+  await pg.exec(schemaSql(LEADTIME_SQL_PATH));
   await pg.exec(schemaSql(SPINE_SCHEMA_PATH));
+  if (fs.existsSync(STORIES_SPLIT_SQL_PATH)) await pg.exec(schemaSql(STORIES_SPLIT_SQL_PATH));
   return { db: pgliteDb(pg), pg };
 }

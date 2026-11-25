@@ -1,8 +1,10 @@
-import { ContentTypePage } from '@/components/content-type/ContentTypePage';
+import { redirect } from 'next/navigation';
+
+import { withQuery } from '@/lib/content-type/redirect-query';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Stories', robots: { index: false, follow: false } };
 
-export default function Page() {
-  return <ContentTypePage vertical="stories" />;
+/** "IG Stories" became Morning Download (SS-1): the old page sends its links there, query kept. */
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  redirect(withQuery('/morning-download', await searchParams));
 }

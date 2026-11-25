@@ -1,21 +1,34 @@
 // lib/lfd/pick.ts
 /**
- * Picking (spec §3.2–3.4): two lanes. Major headlines (judged by Jev
- * major-news@2, bar 0.55) take up to 3 slots and lead; the rundown fills the
- * rest from the reels pool. One slide per event, at most 2 per company, no
- * repeats from earlier Last Few Days posts. A dropped story is replaced from
- * its own lane, then from the rundown.
+ * Picking. Production (wiring contract 2026-11-24, WC2): the run walks the news reranker's order with LineupWalk;
+ * candidates come from the lanes below (judgedPool, the rundown pool, withoutUsed), the last post's events are
+ * excluded with coveredBy, and the hub queue applies through applyLfdQueue. The Selector below is the old lane
+ * picker, kept for the intake replay (scripts/intake/replay.ts).
+ *
+ * Old lane picking (spec §3.2–3.4; builder lane, central intake Phase 1). Seeds first;
+ * then the lead queue, ordered by leadOf margin: major headlines (major-news,
+ * bar 0.55) take at most 3 slots, builder stories (story-builder@2, event in the
+ * last 7 days) are uncapped; the rundown fills the rest from the reels pool.
+ * One slide per event, at most 2 per company, no repeats from earlier Last Few
+ * Days posts. A dropped story is replaced from its own lane, then the lead
+ * queue, then the rundown. With no builder scores (legacy lanes) the lead queue
+ * is exactly today's major queue, so the lineup is unchanged.
  */
-import { mapPool } from '@/lib/async-pool';
-import { MAJOR_NEWS_BAR, SAME_EVENT_BAR, majorNewsScore, namesIn } from '@/lib/stories/build/morning-download';
-import { MAJOR_NEWS, SAME_EVENT } from '@/lib/stories/questions';
+import { fillInOrder, type MediaVerdict } from '@/lib/news-ranker/posts';
+import type { Graded } from '@/lib/news-ranker/rerank';
+import { askMajorNews } from '@/lib/news-ranker/major';
+import { SAME_EVENT } from '@/lib/news-ranker/questions';
+import { findSpinOffs } from '@/lib/news-ranker/repeats';
+import { leadOf, namesIn, SAME_EVENT_BAR } from '@/lib/news-ranker/scores';
 import { companyKey } from '@/lib/social/ingest/select/companies';
 import type { JevAsk } from '@/lib/social/jev/client';
+import { orderForNight, type NightQueue } from '@/lib/social-hub/queue';
 
 import type { Lane, LfdCandidate, Pick } from './types';
 
 export const MAX_STORIES = 6;
 export const MIN_STORIES = 5;
+/** Majors per post (builders are uncapped; round 3 Q3). */
 export const MAX_MAJOR = 3;
 /** Seeds one post may hold (design 2026-10-26): the rest wait for the next run. */
 export const MAX_SEEDS = 3;
@@ -23,8 +36,13 @@ export const PER_COMPANY = 2;
 export const JUDGED_MAX = 60;
 export const RUNDOWN_POOL = 20;
 const REELS_PER_NIGHT = 10;
-const BODY_CHARS = 9000;
 const MERGE_BODY_CHARS = 1200;
+
+/** The candidate's lead lane and margin (lib/stories/scores leadOf), or null: it is not a lead. */
+export function leadFor(c: { major: number | null; builder?: number | null; eventDate?: string | null }, now: Date): { lane: 'major' | 'builder'; margin: number } | null {
+  const at = c.eventDate ? new Date(c.eventDate) : null;
+  return leadOf({ major: c.major ?? null, builder: c.builder ?? null, eventDate: at && Number.isFinite(at.getTime()) ? at : null }, now);
+}
 
 /** Blockbusters first, then best net (spec §3.2 lane 2). */
 export function rundownOrder(a: LfdCandidate, b: LfdCandidate): number {
@@ -62,25 +80,6 @@ export function withoutUsed(list: LfdCandidate[], used: Set<string>): LfdCandida
   return list.filter((c) => !used.has(c.key) && !c.refs.some((r) => used.has(r)));
 }
 
-export const JEV_CONCURRENCY = 8;
-
-/**
- * major-news@2 for each candidate, up to 8 at once, in input order. `known`
- * holds scores already judged this run (the safety net's re-gather) so a
- * story is never judged twice.
- */
-export async function scoreMajor(list: LfdCandidate[], jev: JevAsk, known: ReadonlyMap<string, number> = new Map()): Promise<LfdCandidate[]> {
-  return mapPool(list, JEV_CONCURRENCY, async (c) => {
-    const hit = known.get(c.key);
-    if (hit !== undefined) return { ...c, major: hit };
-    const res = await jev(
-      { state: { headline: c.headline, outlets: [c.sourceName, ...c.alsoFrom], published: c.publishedAt, story: { untrusted_content: c.body.slice(0, BODY_CHARS) } }, questions: MAJOR_NEWS.questions },
-      { version: MAJOR_NEWS.version, subjectId: c.key },
-    );
-    return { ...c, major: majorNewsScore(res.answers as Record<string, { noul: number }>) };
-  });
-}
-
 /** Title-Case headline words that are not names: sharing only these never makes two stories a same-event pair. */
 const COMMON_HEADLINE_WORDS = new Set([
   'Launches', 'Launch', 'Model', 'Models', 'Says', 'Said', 'New', 'Just', 'Now', 'Will', 'Is', 'Here', 'Releases', 'Release',
@@ -88,7 +87,7 @@ const COMMON_HEADLINE_WORDS = new Set([
 ]);
 
 /** Proper names in a headline that can pair two stories (namesIn minus common headline words). */
-function pairNames(headline: string): Set<string> {
+export function pairNames(headline: string): Set<string> {
   return new Set([...namesIn(headline)].filter((n) => !COMMON_HEADLINE_WORDS.has(n)));
 }
 
@@ -117,6 +116,8 @@ function fold(into: LfdCandidate, from: LfdCandidate): LfdCandidate {
     net: max(into.net, from.net),
     blockbuster: Math.max(into.blockbuster, from.blockbuster),
     major: max(into.major, from.major),
+    builder: max(into.builder ?? null, from.builder ?? null),
+    eventDate: into.eventDate ?? from.eventDate ?? null,
     firstSeen: into.firstSeen ?? from.firstSeen,
     ...(into.yours || from.yours ? { yours: true, origin: 'seed' as const } : {}),
   };
@@ -139,33 +140,94 @@ export async function mergeSameEvent(list: LfdCandidate[], jev: JevAsk): Promise
   return kept;
 }
 
-/** Majors by score, then the rundown in rank order (spec §4.2: slides in rank order). */
-export function slideOrder(picks: Pick[]): Pick[] {
-  const majors = picks.filter((p) => p.lane === 'major').sort((a, b) => (b.major ?? 0) - (a.major ?? 0));
-  const rundown = picks.filter((p) => p.lane === 'rundown').sort(rundownOrder);
-  return [...majors, ...rundown];
+export type LeadEntry = { c: LfdCandidate; lane: 'major' | 'builder'; margin: number };
+
+/** The shared queue as the Selector reads it, by story key (lib/social-hub/queue.ts NightQueue, `last_few_days:story:` stripped). */
+export type LfdQueue = { pins: NightQueue['pins']; placed: NightQueue['placed']; archived: NightQueue['archived']; demoted?: ReadonlySet<string> };
+
+const named = (c: LfdCandidate, ids: ReadonlySet<string> | ReadonlyMap<string, unknown>) => ids.has(c.key) || c.refs.some((r) => ids.has(r));
+/** The queue id a candidate answers to: its key, or a source id the hub named it by. */
+const queueId = (c: LfdCandidate, ids: ReadonlySet<string> | ReadonlyMap<string, unknown>) => (ids.has(c.key) ? c.key : c.refs.find((r) => ids.has(r)) ?? c.key);
+
+/**
+ * The lanes in the shared queue's order (Tommy, 2026-11-16: Last Few Days follows the queue). Pins leave the lanes (the
+ * Selector takes them first, after seeds); archived stories are gone; a dragged story moves within its lane to where its
+ * key sorts. The hub's Ideas view scores the last run's queue by position (0, -1, -2, ... in post order, leads before the
+ * rundown: lib/social-hub/adapters/last-few-days.ts), so tonight's lanes are scored the same way to place a drag among them.
+ */
+export function applyLfdQueue(leads: LeadEntry[], rundown: LfdCandidate[], queue: LfdQueue): { leads: LeadEntry[]; rundown: LfdCandidate[]; pinned: Array<{ c: LfdCandidate; at: number }> } {
+  const pinSet = new Set(queue.pins);
+  const pinAt = new Map(queue.pins.map((id, i) => [id, i]));
+  const pinned: Array<{ c: LfdCandidate; at: number }> = [];
+  const keep = (c: LfdCandidate) => {
+    if (named(c, queue.archived)) return false;
+    if (named(c, pinSet)) {
+      if (!pinned.some((p) => p.c.key === c.key)) pinned.push({ c, at: pinAt.get(queueId(c, pinSet))! });
+      return false;
+    }
+    return true;
+  };
+  const liveLeads = leads.filter((x) => keep(x.c));
+  const liveRundown = rundown.filter(keep);
+  // Position scores over the combined list, leads first: the hub's scale.
+  const position = new Map<LfdCandidate, number>();
+  [...liveLeads.map((x) => x.c), ...liveRundown].forEach((c, i) => position.set(c, -i));
+  const placed = new Map<string, number>();
+  for (const c of [...liveLeads.map((x) => x.c), ...liveRundown]) if (named(c, queue.placed)) placed.set(c.key, queue.placed.get(queueId(c, queue.placed))!);
+  const night = { pins: [], placed, archived: new Set<string>(), demoted: new Set([...liveLeads.map((x) => x.c), ...liveRundown].filter((c) => queue.demoted && named(c, queue.demoted)).map((c) => c.key)) };
+  return {
+    leads: orderForNight(liveLeads, (x) => x.c.key, (x) => position.get(x.c)!, night),
+    rundown: orderForNight(liveRundown, (c) => c.key, (c) => position.get(c)!, night),
+    pinned: pinned.sort((a, b) => a.at - b.at),
+  };
 }
 
 export class Selector {
   readonly picks: Pick[] = [];
-  private readonly majors: LfdCandidate[];
+  /** Majors and builders together, by leadOf margin (a tie keeps input order). */
+  private readonly leads: LeadEntry[];
   private readonly rundown: LfdCandidate[];
   private readonly tried = new Set<string>();
   private readonly forced: LfdCandidate[];
+  /** Stories a person pinned in the hub's queue, in the order pinned: taken after the seeds, before the lanes. */
+  readonly pinned: LfdCandidate[] = [];
   /** Seeds taken that the last post already covered (they are taken anyway; the run records it). */
   readonly repeats = new Set<string>();
 
   constructor(
-    majors: LfdCandidate[],
+    /** Lead candidates: anything with a major-news or story-builder score (leadOf decides which clear). */
+    leads: LfdCandidate[],
     rundown: LfdCandidate[],
     private readonly previous: Array<{ headline: string; body: string }>,
     private readonly jev: JevAsk,
     /** A person's seeds, taken before the lanes (up to MAX_SEEDS), oldest first. They skip the company cap and the repeat check. */
     forced: LfdCandidate[] = [],
+    /** The builder window (7 days) is measured from here. */
+    private readonly now: Date = new Date(),
+    /** The hub's queue (pins, drags, archives) by story key. Absent: the lanes' own order, as before. */
+    queue?: LfdQueue,
   ) {
     this.forced = forced.slice(0, MAX_SEEDS);
-    this.majors = majors.filter((c) => (c.major ?? 0) >= MAJOR_NEWS_BAR).sort((a, b) => (b.major ?? 0) - (a.major ?? 0));
-    this.rundown = [...rundown].sort(rundownOrder);
+    const byMargin = leads
+      .map((c) => ({ c, lead: leadFor(c, now) }))
+      .filter((x): x is { c: LfdCandidate; lead: NonNullable<ReturnType<typeof leadFor>> } => x.lead !== null)
+      .map(({ c, lead }) => ({ c, lane: lead.lane, margin: lead.margin }))
+      .sort((a, b) => b.margin - a.margin);
+    const byNet = [...rundown].sort(rundownOrder);
+    if (queue && (queue.pins.length || queue.placed.size || queue.archived.size || queue.demoted?.size)) {
+      const q = applyLfdQueue(byMargin, byNet, queue);
+      this.leads = q.leads;
+      this.rundown = q.rundown;
+      this.pinned = q.pinned.map((p) => p.c);
+    } else {
+      this.leads = byMargin;
+      this.rundown = byNet;
+    }
+  }
+
+  /** The lane a seed takes: its lead lane, else the rundown. */
+  laneOf(c: LfdCandidate): Lane {
+    return leadFor(c, this.now)?.lane ?? 'rundown';
   }
 
   async fill(): Promise<Pick[]> {
@@ -173,10 +235,18 @@ export class Selector {
       if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) continue;
       this.tried.add(c.key);
       if (await this.coveredLastTime(c)) this.repeats.add(c.key);
-      this.picks.push({ ...c, lane: (c.major ?? 0) >= MAJOR_NEWS_BAR ? 'major' : 'rundown' });
+      this.picks.push({ ...c, lane: this.laneOf(c) });
     }
-    while (this.picks.filter((p) => p.lane === 'major').length < MAX_MAJOR) {
-      if (!(await this.take('major'))) break;
+    // Pins next, in the order pinned: a person's call, like a seed (no company cap; a repeat is taken and recorded).
+    for (const c of this.pinned) {
+      if (this.picks.length >= MAX_STORIES) break;
+      if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) continue;
+      this.tried.add(c.key);
+      if (await this.coveredLastTime(c)) this.repeats.add(c.key);
+      this.picks.push({ ...c, lane: this.laneOf(c) });
+    }
+    while (this.picks.length < MAX_STORIES) {
+      if (!(await this.take('lead'))) break;
     }
     while (this.picks.length < MAX_STORIES) {
       if (!(await this.take('rundown'))) break;
@@ -186,17 +256,17 @@ export class Selector {
 
   /** The head of a lane's queue, for the run record (spec §8 Ideas view). */
   top(lane: Lane, n: number): LfdCandidate[] {
-    return (lane === 'major' ? this.majors : this.rundown).slice(0, n);
+    return (lane === 'rundown' ? this.rundown : this.leads.filter((x) => x.lane === lane).map((x) => x.c)).slice(0, n);
   }
 
   /**
-   * Unused majors (by score) then unused rundown (by net), skipping `skip` keys and
+   * Unused leads (by margin) then unused rundown (by net), skipping `skip` keys and
    * shared refs. The meme-pool scan uses this when the lineup has no 92% story.
    */
   unused(n: number, skip: Iterable<string>): LfdCandidate[] {
     const blocked = new Set(skip);
     const out: LfdCandidate[] = [];
-    for (const c of [...this.majors, ...this.rundown]) {
+    for (const c of [...this.leads.map((x) => x.c), ...this.rundown]) {
       if (blocked.has(c.key) || c.refs.some((r) => blocked.has(r))) continue;
       blocked.add(c.key);
       c.refs.forEach((r) => blocked.add(r));
@@ -219,18 +289,30 @@ export class Selector {
     if (i !== -1) this.picks.splice(i, 1);
   }
 
-  /** The next story for a dropped slot: its own lane first, then the rundown. */
+  /** The next story for a dropped slot: its own lane first, then the lead queue, then the rundown. */
   async replace(lane: Lane): Promise<Pick | null> {
-    if (lane === 'major') {
-      const major = await this.take('major');
-      if (major) return major;
+    const order: Array<Lane | 'lead'> = lane === 'rundown' ? ['rundown', 'lead'] : [lane, 'lead', 'rundown'];
+    for (const from of order) {
+      const pick = await this.take(from);
+      if (pick) return pick;
     }
-    return this.take('rundown');
+    return null;
   }
 
-  private async take(lane: Lane): Promise<Pick | null> {
-    const queue = lane === 'major' ? this.majors : this.rundown;
-    for (const c of queue) {
+  private majorsFull(): boolean {
+    return this.picks.filter((p) => p.lane === 'major').length >= MAX_MAJOR;
+  }
+
+  private queue(from: Lane | 'lead'): Array<{ c: LfdCandidate; lane: Lane }> {
+    if (from === 'rundown') return this.rundown.map((c) => ({ c, lane: 'rundown' as const }));
+    const leads = from === 'lead' ? this.leads : this.leads.filter((x) => x.lane === from);
+    return leads.map(({ c, lane }) => ({ c, lane }));
+  }
+
+  private async take(from: Lane | 'lead'): Promise<Pick | null> {
+    for (const { c, lane } of this.queue(from)) {
+      // Majors stay capped at MAX_MAJOR (builders are not): a capped major stays eligible for a later replacement.
+      if (lane === 'major' && this.majorsFull()) continue;
       if (this.tried.has(c.key)) continue;
       if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) {
         this.tried.add(c.key);
@@ -253,10 +335,81 @@ export class Selector {
     return this.picks.filter((p) => companyKey(p.headline) === company).length >= PER_COMPANY;
   }
 
-  private async coveredLastTime(c: LfdCandidate): Promise<boolean> {
-    for (const prev of this.previous) {
-      if (await sameEvent(this.jev, prev, c, `prev|${c.key}`)) return true;
+  private coveredLastTime(c: LfdCandidate): Promise<boolean> {
+    return coveredBy(this.jev, this.previous, c);
+  }
+}
+
+/** A seed's text for its major-news call (the old scoreMajor's BODY_CHARS). */
+const SEED_BODY_CHARS = 9000;
+
+/**
+ * A seed with no stored score gets one major-news call (lib/news-ranker/major), so the lane bar (leadFor) decides its
+ * lane as before. A seed that carries a score (intake) makes no call. A failed call leaves it unscored (rundown).
+ */
+export async function scoreUnscoredSeeds(jev: JevAsk, seeds: LfdCandidate[], onError: (key: string, err: unknown) => void = () => {}): Promise<LfdCandidate[]> {
+  return Promise.all(seeds.map(async (s) => {
+    if (s.major !== null) return s;
+    try {
+      const r = await askMajorNews(jev, { key: s.key, headline: s.headline, text: s.body.slice(0, SEED_BODY_CHARS), outlets: [s.sourceName, ...s.alsoFrom], published: s.publishedAt });
+      return { ...s, major: r.major };
+    } catch (err) {
+      onError(s.key, err);
+      return s;
     }
-    return false;
+  }));
+}
+
+/** The last post already covered this story's event (spec §3.4, own-repeat exclusion; WC6). */
+export async function coveredBy(jev: JevAsk, previous: Array<{ headline: string; body: string }>, c: LfdCandidate): Promise<boolean> {
+  const { hits } = await findSpinOffs([{ id: c.key, headline: c.headline, text: c.body }], previous, { jev, component: 'prev', names: pairNames, bodyChars: MERGE_BODY_CHARS, concurrency: 1 });
+  return hits.size > 0;
+}
+
+/**
+ * WC2 (Last Few Days): walk the reranker's order, resolving each story's media `need` at a time (up to
+ * `concurrency` at once), and keep the ones with media in rank order (fillInOrder). A story without usable media is
+ * skipped and its slot is filled from further down the list. `claim` takes a story out of the walk (the meme scan).
+ */
+export class LineupWalk {
+  private next = 0;
+  private readonly claimed = new Set<string>();
+  readonly verdicts = new Map<string, MediaVerdict>();
+
+  constructor(
+    private readonly order: Graded[],
+    private readonly resolve: (g: Graded) => Promise<MediaVerdict>,
+    private readonly concurrency = 3,
+  ) {}
+
+  /** Up to `need` more story ids with media, best ranked first. Empty: the list is spent. */
+  async take(need: number): Promise<string[]> {
+    const out: string[] = [];
+    while (out.length < need && this.next < this.order.length) {
+      const batch: Graded[] = [];
+      while (batch.length < need - out.length && this.next < this.order.length) {
+        const g = this.order[this.next++]!;
+        if (!this.claimed.has(g.id)) batch.push(g);
+      }
+      let at = 0;
+      const worker = async () => {
+        while (at < batch.length) {
+          const g = batch[at++]!;
+          this.verdicts.set(g.id, await this.resolve(g));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.max(1, Math.min(this.concurrency, batch.length)) }, worker));
+      out.push(...fillInOrder(batch, (id) => this.verdicts.get(id) ?? 'none', { min: MIN_STORIES, max: need - out.length }));
+    }
+    return out;
+  }
+
+  /** The next `n` stories the walk has not reached, in rank order. */
+  upcoming(n: number): Graded[] {
+    return this.order.slice(this.next).filter((g) => !this.claimed.has(g.id)).slice(0, n);
+  }
+
+  claim(id: string): void {
+    this.claimed.add(id);
   }
 }

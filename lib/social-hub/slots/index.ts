@@ -1,5 +1,6 @@
 // lib/social-hub/slots/index.ts
 import { addCalendarDays } from '@/lib/instagram/window';
+import { STORY_VERTICALS } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { bySlotTime } from './book';
@@ -39,9 +40,14 @@ export function isAiEventsDay(plan: SlotPlan, nyDate: string): boolean {
   return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'ai_events');
 }
 
-/** Before the calendar: Text on Screen posts as trial reels, Explainers to the main feed. */
+/** Whether the calendar gives Field Notes a slot on this date. */
+export function isFieldNotesDay(plan: SlotPlan, nyDate: string): boolean {
+  return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'field_notes');
+}
+
+/** Before the calendar: Text on Screen posts as trial reels, Explainers and AI Drama Reels to the main feed. */
 export function legacyFeedMode(vertical: Vertical): FeedMode | null {
-  return vertical === 'reels' ? 'trial' : vertical === 'explainers' ? 'main' : null;
+  return vertical === 'reels' ? 'trial' : vertical === 'explainers' || vertical === 'reel_ai_drama' ? 'main' : null;
 }
 
 /**
@@ -49,7 +55,7 @@ export function legacyFeedMode(vertical: Vertical): FeedMode | null {
  * the type's old behavior (a force post with no slot, a booking from before
  * the column). Reel types only.
  */
-export async function bookingFeedMode(q: SlotQuery, itemId: string | null, vertical: 'reels' | 'explainers', ideaRef: string | null = null): Promise<FeedMode> {
+export async function bookingFeedMode(q: SlotQuery, itemId: string | null, vertical: 'reels' | 'explainers' | 'reel_ai_drama', ideaRef: string | null = null): Promise<FeedMode> {
   try {
     const { rows } = await q(
       `SELECT feed_mode FROM social_hub.schedule
@@ -68,20 +74,12 @@ export async function bookingFeedMode(q: SlotQuery, itemId: string | null, verti
 
 /**
  * A type's slots on a date split by the hidden daily cap: the first `cap` by
- * time are made, the rest are over. Stories pass the cap per series.
+ * time are made, the rest are over. Each Stories-format type holds one series
+ * (SS-1), so its cap is that series' cap.
  */
 export function slotsWithinCap(plan: SlotPlan, vertical: Vertical, nyDate: string, cap: number): { made: ResolvedSlot[]; over: ResolvedSlot[] } {
   const all = slotsOn(plan, vertical, nyDate).sort(bySlotTime);
-  if (vertical !== 'stories') return { made: all.slice(0, Math.max(0, cap)), over: all.slice(Math.max(0, cap)) };
-  const seen = new Map<string, number>();
-  const made: ResolvedSlot[] = [];
-  const over: ResolvedSlot[] = [];
-  for (const s of all) {
-    const n = seen.get(s.series ?? '') ?? 0;
-    seen.set(s.series ?? '', n + 1);
-    (n < cap ? made : over).push(s);
-  }
-  return { made, over };
+  return { made: all.slice(0, Math.max(0, cap)), over: all.slice(Math.max(0, cap)) };
 }
 
 /** A type's posts for a date in template mode (its slot count, capped); null while legacy, so the caller keeps posts_per_day. */
@@ -92,10 +90,14 @@ export async function quotaFromSlots(q: SlotQuery, vertical: Vertical, nyDate: s
   return slotsWithinCap(plan, vertical, nyDate, caps[vertical]).made.length;
 }
 
-/** Template mode: the Stories slots on `nyDate` within the per-series cap; null while legacy (the series' own days stand). */
+/**
+ * Template mode: every Stories-format type's slots on `nyDate` (Morning Download, Are you smarter than AI?,
+ * Real or AI?; SS-1), each within its own type's cap; null while legacy (the series' own days stand). The
+ * engine picks a series' slots by `series`: each slot keeps its own type in `vertical`.
+ */
 export async function storiesSlotsOn(q: SlotQuery, nyDate: string): Promise<ResolvedSlot[] | null> {
   const plan = await slotPlan(q, nyDate, 1);
   if (!plan) return null;
   const caps = await readCaps(q);
-  return slotsWithinCap(plan, 'stories', nyDate, caps.stories).made;
+  return STORY_VERTICALS.flatMap((v) => slotsWithinCap(plan, v, nyDate, caps[v]).made).sort(bySlotTime);
 }

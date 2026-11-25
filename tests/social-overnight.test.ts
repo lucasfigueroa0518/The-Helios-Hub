@@ -18,7 +18,7 @@ import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import { carouselCaption, claimAndPublish, queuePublish } from '@/lib/social/overnight/publish';
 import { claimRun, failRun, requestRun, releaseStaleRuns } from '@/lib/social/overnight/runs';
 import { finishRun } from '@/lib/social/store/pg';
-import { approveSchedule, releaseDueSchedules, scheduleRunPost, scheduleRunPosts } from '@/lib/social/overnight/schedule';
+import { approvePost, approveSchedule, CAROUSEL_APPROVED_PAUSED_NOTE, CAROUSEL_NOT_LIVE_NOTE, hardPublishPost, releaseDueSchedules, scheduleRunPost, scheduleRunPosts } from '@/lib/social/overnight/schedule';
 import { chooseCarouselSlot, chooseCarouselSlots, openMinuteRange } from '@/lib/social/overnight/slots';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -131,7 +131,7 @@ test('runs: a run running past the stale limit is released', async () => {
   const id = await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });
   await claimRun(query, new Date('2026-10-08T07:00:00Z'));
   await requestRun(query, 'manual', { capUsd: 2, hookPass: true });
-  const next = await claimRun(query, new Date('2026-10-08T09:00:00Z'));
+  const next = await claimRun(query, new Date('2026-10-08T20:00:00Z')); // past the 12 h hang backstop
   assert.ok(next && next.id !== id);
   assert.equal((await query(`SELECT status FROM social.runs WHERE id = $1`, [id])).rows[0].status, 'failed');
 });
@@ -326,4 +326,47 @@ test('insights: a fresh carousel is read and stored; blanks never overwrite a st
   assert.deepEqual([row.views, row.reach, row.saved, row.follows, row.profile_visits], [300, 120, 4, 3, 9]);
   // Within the 30-minute cooldown nothing is due.
   assert.equal((await pollCarouselInsights(query, client, new Date('2026-10-08T14:10:00Z'))).considered, 0);
+});
+
+/** The Carousels state (D16) as its two stored keys; `mismatch` is Generate off with Live on (reads as paused). */
+async function carouselState(query: Query, state: 'paused' | 'approval' | 'live' | 'mismatch') {
+  const set = (key: string, on: boolean) =>
+    query(`INSERT INTO social.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(on)]);
+  await set('auto_run', state === 'approval' || state === 'live');
+  await set('publishing_live', state === 'live' || state === 'mismatch');
+}
+
+test('approve follows the state: Paused (or a mismatch) approves without a slot; Approval and Live book one (contract §4.3)', async () => {
+  const now = new Date('2026-10-08T07:30:00Z');
+  for (const state of ['paused', 'mismatch', 'approval', 'live'] as const) {
+    const { query } = await scratchDb();
+    await carouselState(query, state);
+    const postId = await insertPost(query, { slug: `post-${state}` });
+    const out = await approvePost(query, postId, now);
+    const slots = (await query(`SELECT count(*)::int AS n FROM social_hub.schedule WHERE status = 'scheduled'`)).rows[0].n;
+    const approved = (await query(`SELECT decision FROM social_hub.approvals`)).rows.map((r) => r.decision);
+    assert.deepEqual(approved, ['approved'], state);
+    if (state === 'approval' || state === 'live') {
+      assert.equal(out.scheduled, true, state);
+      assert.equal(slots, 1, state);
+    } else {
+      assert.deepEqual(out, { scheduled: false, approved: true, note: CAROUSEL_APPROVED_PAUSED_NOTE }, state);
+      assert.equal(slots, 0, state);
+    }
+  }
+});
+
+test('Hard publish is refused unless Carousels is Live: nothing approved, closed or queued (D16)', async () => {
+  for (const state of ['paused', 'mismatch', 'approval'] as const) {
+    const { query } = await scratchDb();
+    await carouselState(query, state);
+    const postId = await insertPost(query, { slug: `post-${state}` });
+    assert.deepEqual(await hardPublishPost(query, postId), { queued: false, note: CAROUSEL_NOT_LIVE_NOTE, terminal: true }, state);
+    assert.equal((await query(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0, state);
+    assert.equal((await query(`SELECT count(*)::int AS n FROM social_hub.approvals`)).rows[0].n, 0, state);
+  }
+  const { query } = await scratchDb();
+  await carouselState(query, 'live');
+  const postId = await insertPost(query, { slug: 'post-live' });
+  assert.equal((await hardPublishPost(query, postId)).queued, true);
 });

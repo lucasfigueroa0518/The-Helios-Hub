@@ -1,6 +1,6 @@
 import { findPost, type HubDataset } from '@/lib/social-hub/dataset';
 import type { HubPost } from '@/lib/social-hub/types';
-import { createStoriesStorage } from '@/lib/stories/storage';
+import { createStoriesStorage, liveStorageConfig } from '@/lib/stories/storage';
 
 const FRAME_API = /^\/api\/stories\/frames\//;
 
@@ -9,15 +9,22 @@ export function storyFramePostIds(posts: readonly HubPost[]): Set<string> {
   const ids = new Set<string>();
   for (const post of posts) {
     if (post.media.kind !== 'frames') continue;
-    if (post.media.frames.some((frame) => frame.path && frame.src && FRAME_API.test(frame.src))) ids.add(post.id);
+    if (post.media.frames.some((frame) => (frame.path && frame.src && FRAME_API.test(frame.src)) || (frame.videoPath && frame.video && FRAME_API.test(frame.video)))) ids.add(post.id);
   }
   return ids;
 }
 
 type SignMany = (paths: string[]) => Promise<Array<string | null>>;
 
+/**
+ * Signing runs inside the page render, so it gets a short timeout: a slow Storage API
+ * must not hold the page (it used to wait up to the uploads' 60 s). On timeout the
+ * frames keep their route, exactly as on any other failed sign.
+ */
+export const RENDER_SIGN_TIMEOUT_MS = 1_500;
+
 async function liveSign(paths: string[]): Promise<Array<string | null>> {
-  return createStoriesStorage().signMany(paths, 3600);
+  return createStoriesStorage({ ...liveStorageConfig(), timeoutMs: RENDER_SIGN_TIMEOUT_MS }).signMany(paths, 3600);
 }
 
 /**
@@ -29,13 +36,18 @@ async function liveSign(paths: string[]): Promise<Array<string | null>> {
 export async function signVisibleStoryFrames<T extends { posts: HubPost[] }>(dataset: T, postIds: ReadonlySet<string>, signMany: SignMany = liveSign): Promise<T> {
   if (postIds.size === 0) return dataset;
   const paths: string[] = [];
-  const slots: Array<{ postIndex: number; frameIndex: number }> = [];
+  const slots: Array<{ postIndex: number; frameIndex: number; field: 'src' | 'video' }> = [];
   dataset.posts.forEach((post, postIndex) => {
     if (!postIds.has(post.id) || post.media.kind !== 'frames') return;
     post.media.frames.forEach((frame, frameIndex) => {
-      if (!frame.path || !frame.src || !FRAME_API.test(frame.src)) return;
-      paths.push(frame.path);
-      slots.push({ postIndex, frameIndex });
+      if (frame.path && frame.src && FRAME_API.test(frame.src)) {
+        paths.push(frame.path);
+        slots.push({ postIndex, frameIndex, field: 'src' });
+      }
+      if (frame.videoPath && frame.video && FRAME_API.test(frame.video)) {
+        paths.push(frame.videoPath);
+        slots.push({ postIndex, frameIndex, field: 'video' });
+      }
     });
   });
   if (paths.length === 0) return dataset;
@@ -53,7 +65,7 @@ export async function signVisibleStoryFrames<T extends { posts: HubPost[] }>(dat
     const current = touched.get(slot.postIndex) ?? posts[slot.postIndex]!;
     if (current.media.kind !== 'frames') return;
     const frames = current.media.frames.slice();
-    frames[slot.frameIndex] = { ...frames[slot.frameIndex]!, src: url };
+    frames[slot.frameIndex] = { ...frames[slot.frameIndex]!, [slot.field]: url };
     touched.set(slot.postIndex, { ...current, media: { ...current.media, frames } });
   });
   if (touched.size === 0) return dataset;

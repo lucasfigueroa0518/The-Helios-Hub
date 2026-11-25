@@ -267,7 +267,7 @@ function poolState(row: AiEventsPoolRow): { state: HubIdea['state']; why: string
   const partner = row.partner ? `Partner: ${row.partner}` : null;
   // A pin shows in the row's chip (In the post · pinned), so the line doesn't repeat it.
   if (row.picked) {
-    const where = row.pick_rank === 1 ? 'Ranked #1 (held for the site)' : `Ranked #${row.pick_rank ?? '?'} in the post`;
+    const where = row.pick_rank === 1 ? 'Ranked #1 (held for the site)' : `#${row.pick_rank ?? '?'} in the top 10 (badged on the site)`;
     return { state: 'content_ready', why: [where, partner].filter(Boolean).join(' · ') };
   }
   if (row.gate && !row.partner) return { state: 'retired', why: `Gated out: ${gateLabels(row.gate).join(', ')}` };

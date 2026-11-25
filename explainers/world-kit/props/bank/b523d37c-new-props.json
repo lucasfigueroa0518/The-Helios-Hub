@@ -1,0 +1,72 @@
+{
+ "file": "b523d37c-new-props.js",
+ "job": "b523d37c-3804-4123-8ecd-eb72b2d6ca49",
+ "topic": "vector database",
+ "added_at": "2026-11-17T02:00:18.388Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "library rubber stamp with lilac ink pad": {
+   "source_name": "library rubber stamp with lilac ink pad",
+   "tags": {
+    "is": "a library code rubber stamp: a lilac rubber pad under a honey-wood block, a short dark-wood neck and a squat rounded dark-wood handle",
+    "setting": [
+     "library circulation desk",
+     "library stamping desk",
+     "cataloguing books"
+    ],
+    "material": "wood block and handle, rubber pad, lilac ink",
+    "parts": [
+     "lilac rubber pad",
+     "honey-wood block",
+     "dark-wood neck",
+     "squat rounded handle"
+    ],
+    "not": [
+     "postage stamp",
+     "wax seal",
+     "notary seal",
+     "approve button",
+     "hammer",
+     "checkmark stamp",
+     "office approval stamp"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "library floor map lectern": {
+   "source_name": "library floor map lectern",
+   "tags": {
+    "is": "a tall wooden lectern holding a blue printed floor map of a library: ten shelf rows drawn as light strips above the entrance hall, one aisle lit warm white when lit",
+    "setting": [
+     "library entrance hall",
+     "head of the library aisles",
+     "finding a shelf"
+    ],
+    "material": "honey and dark wood, printed blue map board",
+    "parts": [
+     "wooden foot",
+     "column",
+     "framed map board",
+     "ten shelf rows",
+     "entrance-hall outline",
+     "one lit aisle"
+    ],
+    "not": [
+     "road map",
+     "treasure map",
+     "blueprint",
+     "whiteboard",
+     "screen",
+     "museum sign",
+     "menu board",
+     "mall directory with text"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

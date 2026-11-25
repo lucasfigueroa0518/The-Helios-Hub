@@ -25,12 +25,12 @@ import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
 import { priceCall, type CallUsage } from '@/lib/stories/cost';
 
 import { contactSheetJpeg, type RenderResult } from './render';
-import { BACKDROPS, GTN_FAMILIES, framePhoto, type Backdrop, type Frame, type GtnFamily } from './types';
+import { BACKDROPS, VIDEO_SERIES, framePhoto, type Backdrop, type Frame } from './types';
 
 export const REVIEW_ID = 'stories-render-review@1';
 export const REVIEW_MODEL = 'claude-haiku-5-5';
 
-export const CHANGES = ['none', 'backdrop', 'crop', 'family', 'drop_photo'] as const;
+export const CHANGES = ['none', 'backdrop', 'crop', 'drop_photo'] as const;
 export type Change = (typeof CHANGES)[number];
 
 export const REVIEW_SYSTEM = `You check how a finished Instagram Story set LOOKS before it is posted. You get one contact sheet: every frame of the set, numbered left to right, top to bottom, starting at 1, and a list saying what each frame is. Judge only the look. The words were written and checked already: never judge or ask to change any text, and never judge whether a fact is right.
@@ -48,7 +48,6 @@ For each frame answer these questions:
 For a frame with any "yes", pick ONE change from this menu, the one most likely to fix it:
 - backdrop: put the frame on another background colour (give backdrop: black, white, orange or green)
 - crop: move the photo's crop (give crop_x and crop_y, 0 to 1: where the photo's centre of interest should sit; 0.5 0.3 moves a face up)
-- family: a Guess the Number frame only: use another layout (give family: photo, marquee or type)
 - drop_photo: show the frame without its photo
 - none: nothing on the menu helps
 
@@ -74,7 +73,6 @@ export const SUBMIT_REVIEW_TOOL = {
         change: { type: 'string', enum: [...CHANGES] },
         // Strict tools reject a union type with an enum holding null; anyOf keeps null out of the string enum.
         backdrop: { anyOf: [{ type: 'string', enum: [...BACKDROPS] }, { type: 'null' }] },
-        family: { anyOf: [{ type: 'string', enum: [...GTN_FAMILIES] }, { type: 'null' }] },
         crop_x: { type: ['number', 'null'] },
         crop_y: { type: ['number', 'null'] },
         reason: { type: 'string' },
@@ -93,7 +91,6 @@ export type FrameFlag = {
   broken: boolean;
   change: Change;
   backdrop: Backdrop | null;
-  family: GtnFamily | null;
   crop_x: number | null;
   crop_y: number | null;
   reason: string;
@@ -108,7 +105,8 @@ export function frameList(frames: Frame[]): string {
   return frames
     .map((f, i) => {
       const d = f.data;
-      const variant = d.role === 'question' || d.role === 'answer' ? `, ${d.family} layout` : '';
+      // AI Trivia: the sheet shows each clip's poster (a still of the finished video).
+      const variant = VIDEO_SERIES.has(f.series) ? ', a still from its 5-second video' : '';
       const p = framePhoto(d);
       const photo = p ? (p.kind === 'logo' ? ', a logo' : p.kind === 'person' ? ', photo of a person' : ', scene photo') : ', no photo';
       return `${i + 1}. ${d.role}, ${f.style ?? 'polished'}, ${f.backdrop} background${variant}${photo}`;
@@ -116,12 +114,9 @@ export function frameList(frames: Frame[]): string {
     .join('\n');
 }
 
-/** The roles a family change applies to together: a question and its answer share a layout. */
-const PAIRED = new Set(['question', 'answer']);
-
 /**
  * Apply one menu change to a set: the new frames, or why it doesn't apply.
- * Only settings move (backdrop, crop, layout family, whether the photo shows);
+ * Only settings move (backdrop, crop, whether the photo shows);
  * `copy` text is never touched.
  */
 export function applyChange(frames: Frame[], f: FrameFlag): { frames: Frame[]; note: string } | { frames: null; note: string } {
@@ -142,16 +137,6 @@ export function applyChange(frames: Frame[], f: FrameFlag): { frames: Frame[]; n
       const clamp = (v: number) => Math.min(1, Math.max(0, v));
       const focus = { x: clamp(f.crop_x), y: clamp(f.crop_y) };
       return { frames: put({ ...frame, data: { ...d, photo: { ...photo, focus } } } as Frame), note: `crop → ${focus.x.toFixed(2)} ${focus.y.toFixed(2)}` };
-    }
-    case 'family': {
-      if (!PAIRED.has(d.role)) return { frames: null, note: 'family: only Guess the Number frames have layouts' };
-      if (!f.family || !(GTN_FAMILIES as readonly string[]).includes(f.family)) return { frames: null, note: 'family: no layout given' };
-      const family = f.family;
-      // The question and its answer change together.
-      return {
-        frames: frames.map((x) => (x.data.role === 'question' || x.data.role === 'answer' ? ({ ...x, data: { ...x.data, family } } as Frame) : x)),
-        note: `layout → ${family} (question and answer)`,
-      };
     }
     case 'drop_photo': {
       if (!photo || d.role === 'paid' || d.role === 'free' || d.role === 'closer' || d.role === 'intro') return { frames: null, note: 'drop_photo: no photo to drop' };

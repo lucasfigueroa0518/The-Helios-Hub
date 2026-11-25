@@ -1,4 +1,5 @@
 import { zonedTime } from '@/lib/instagram/clock';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 
@@ -11,7 +12,10 @@ import type { HubPost, Vertical } from '@/lib/social-hub/types';
 
 /** Each type's posting windows, New York (docs/social-overnight.md, the clock). */
 export const WINDOWS: Record<Vertical, { first: [number, number]; lastEnd: [number, number] }> = {
+  // The Stories-format types (SS-1), each on its one series' 8:30–10:00 AM window.
   stories: { first: [8, 30], lastEnd: [10, 0] },
+  ai_trivia: { first: [8, 30], lastEnd: [10, 0] },
+  real_or_ai: { first: [8, 30], lastEnd: [10, 0] },
   reels: { first: [8, 45], lastEnd: [21, 0] },
   carousels: { first: [9, 0], lastEnd: [15, 30] },
   explainers: { first: [13, 0], lastEnd: [17, 0] },
@@ -19,6 +23,10 @@ export const WINDOWS: Record<Vertical, { first: [number, number]; lastEnd: [numb
   last_few_days: { first: [9, 0], lastEnd: [10, 0] },
   // lib/ai-events/config.ts AI_EVENTS_WINDOW (6:00–7:00 PM, Sunday).
   ai_events: { first: [18, 0], lastEnd: [19, 0] },
+  // lib/field-notes/config.ts FIELD_NOTES_WINDOW (2:30–3:30 PM, its calendar days).
+  field_notes: { first: [14, 30], lastEnd: [15, 30] },
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS (8:00–8:45 PM).
+  reel_ai_drama: { first: [20, 0], lastEnd: [20, 45] },
 };
 
 /** When the type's last window closes today; null once it has. Stories: 10 AM, after which a set is never scheduled. */
@@ -52,7 +60,7 @@ export function approvalAlertLines(posts: readonly HubPost[], now: Date, label: 
   const first = firstDeadline(posts, now);
   const lines = [`${posts.length} to approve in today's lineup${first ? `; the first deadline is ${clock(first)}` : ''}.`];
   for (const { post, deadline } of rows) {
-    const what = post.status === 'scheduled' ? 'its slot is cancelled' : post.vertical === 'stories' ? 'the set is never scheduled' : "it misses today's windows";
+    const what = post.status === 'scheduled' ? 'its slot is cancelled' : isStoryVertical(post.vertical) ? 'the set is never scheduled' : "it misses today's windows";
     lines.push(deadline ? `⚠ ${label(post.vertical)} · by ${clock(deadline)} or ${what}: ${post.name.slice(0, 70)}` : `✖ ${label(post.vertical)} · missed: ${post.name.slice(0, 70)}`);
   }
   return lines;

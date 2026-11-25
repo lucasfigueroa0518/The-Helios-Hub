@@ -27,6 +27,8 @@ export type LfdPostRow = {
   fit_problems: unknown;
   render_problems: unknown;
   short: boolean;
+  /** Why the post kept today's cover instead of the AI cover (its run record's cover.fallback); null when it had one or never tried. */
+  cover_fallback?: string | null;
 };
 
 export type LfdAttemptRow = {
@@ -107,14 +109,15 @@ SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.slug, p.ny_date::text 
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
        p.slide_objects,
-       p.fit_problems, p.render_problems, p.short
+       p.fit_problems, p.render_problems, p.short,
+       (SELECT r.record->'cover'->>'fallback' FROM lfd.runs r WHERE r.id = p.run_id) AS cover_fallback
   FROM lfd.posts p
  ORDER BY p.created_at DESC`;
 
 /** One queue row as the Ideas view reads it, in the stored order. */
 function lfdQueue(path: string): string {
   return `(SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
-    'key', e->'key', 'headline', e->'headline', 'lane', e->'lane', 'major', e->'major',
+    'key', e->'key', 'headline', e->'headline', 'lane', e->'lane', 'major', e->'major', 'builder', e->'builder',
     'net', e->'net', 'reason', e->'reason', 'detail', e->'detail'
   )) ORDER BY ord), '[]'::jsonb)
   FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${path}) = 'array' THEN ${path} ELSE '[]'::jsonb END) WITH ORDINALITY AS t(e, ord))`;
@@ -127,7 +130,8 @@ SELECT id::text AS id, status, trigger, requested_at::text AS requested_at, star
          'window', jsonb_strip_nulls(jsonb_build_object('after', record->'window'->'after', 'through', record->'window'->'through')),
          'picks', ${lfdQueue(`record->'picks'`)},
          'drops', ${lfdQueue(`record->'drops'`)},
-         'queues', jsonb_build_object('major', ${lfdQueue(`record->'queues'->'major'`)}, 'rundown', ${lfdQueue(`record->'queues'->'rundown'`)})
+         'queues', jsonb_build_object('major', ${lfdQueue(`record->'queues'->'major'`)}, 'builder', ${lfdQueue(`record->'queues'->'builder'`)}, 'rundown', ${lfdQueue(`record->'queues'->'rundown'`)}),
+         'intake', record->'intake'
        )) END AS record
   FROM lfd.runs
  WHERE status IN ('ok', 'partial')

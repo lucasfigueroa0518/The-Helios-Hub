@@ -14,15 +14,15 @@ import path from 'node:path';
 import type { Queryable } from '@/lib/explainers/db';
 import { pollExplainerInsights, type ExplainerInsightsClient } from '@/lib/explainers/publish/insights';
 import { explainerItemId } from '@/lib/explainers/publish/items';
-import { saveFeedback } from '@/lib/explainers/repository';
+import { productionSpendForDay, saveFeedback } from '@/lib/explainers/repository';
 import type { ReelMetaClient } from '@/lib/explainers/publish/meta';
-import { claimAndPublish, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
-import { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved } from '@/lib/explainers/publish/schedule';
+import { claimAndPublish, EXPLAINERS_NOT_LIVE_NOTE, hardPublishJob, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
+import { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved, scheduleJob } from '@/lib/explainers/publish/schedule';
 import { bucketArtifactStore, localArtifactStore } from '@/lib/explainers/storage';
 
 import { scratchExplainersDb } from './explainers-pglite';
 
-async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'rejected' | null; location?: 'local' | 'bucket'; caption?: string | null; title?: string; trigger?: 'click' | 'auto' } = {}) {
+async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'rejected' | null; location?: 'local' | 'bucket'; caption?: string | null; title?: string; trigger?: 'click' | 'auto'; target?: string } = {}) {
   const { rows: t } = await db.query<{ id: string }>(
     `INSERT INTO explainers.topics (title, origin, status) VALUES ($1, 'manual', 'rendered') RETURNING id`,
     [opts.title ?? 'What is an API?'],
@@ -33,6 +33,7 @@ async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'reject
     [t[0]!.id, opts.trigger ?? 'click'],
   );
   const jobId = j[0]!.id;
+  if (opts.target) await db.query(`UPDATE explainers.jobs SET target_date = $2::date WHERE id = $1`, [jobId, opts.target]);
   await db.query(
     `INSERT INTO explainers.artifacts (job_id, kind, storage_path, bytes, storage_location) VALUES ($1, 'video', $2, 5000000, $3)`,
     [jobId, `jobs/${jobId}/video.mp4`, opts.location ?? 'bucket'],
@@ -75,13 +76,15 @@ test('approval gate: unreviewed, rejected, local-only, or captionless renders ne
   assert.equal(await notes(await renderedJob(db, { title: 'e' })), 'ok');
 });
 
-test('require_approval off: unreviewed renders may go, rejected ones never', async () => {
+test('a stored require_approval false is never read as false: unreviewed and rejected renders never go (D16)', async () => {
   const { db } = await scratchExplainersDb();
   await db.query(`UPDATE explainers.settings SET value = 'false'::jsonb WHERE key = 'require_approval'`);
   const unreviewed = await renderedJob(db, { verdict: null, title: 'u' });
   await renderedJob(db, { verdict: 'rejected', title: 'r' });
-  assert.equal((await publishReadiness(db, unreviewed)).ok, true);
-  assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
+  const ready = await publishReadiness(db, unreviewed);
+  assert.equal(ready.ok, false);
+  assert.match((ready as { note: string }).note, /approved/);
+  assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 0);
 });
 
 test('publishing_live is off by default; approved renders take two windows a day (1:00–2:30, 3:30–5:00 PM)', async () => {
@@ -136,19 +139,19 @@ test('end to end: a due slot is released, published as a feed reel, and marked; 
   const out = await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
   assert.equal(calls[0], `reel https://signed/jobs/${jobId}/video.mp4 feed=true`);
-  assert.equal(calls[1], 'caption AI Brain Break Episode 1:\n\nThe door between two programs.');
+  assert.equal(calls[1], 'caption The door between two programs.');
   const attempt = (await db.query<{ status: string; media_id: string; caption: string }>(`SELECT status, media_id, caption FROM social_hub.publish_attempts`)).rows[0]!;
-  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI Brain Break Episode 1:\n\nThe door between two programs.']);
+  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'The door between two programs.']);
   assert.equal((await db.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
   const again = await queuePublish(db, jobId, 'force');
   assert.equal(again.queued, false);
   assert.equal(await scheduleApproved(db, new Date(), () => 0), 0);
 });
 
-test('the episode number is how many explainers have published, stamped on the way out', async () => {
+test('captions post as written: no episode line, and an old baked-in one is dropped (caption voice)', async () => {
   const { db } = await scratchExplainersDb();
   const first = await renderedJob(db, { title: 'first', caption: 'First body.' });
-  const second = await renderedJob(db, { title: 'second', caption: 'Second body.' });
+  const second = await renderedJob(db, { title: 'second', caption: 'AI 101 Episode 4:\n\nSecond body.' });
   const captions: string[] = [];
   const meta = stubMeta({
     async createReel(input) {
@@ -160,10 +163,7 @@ test('the episode number is how many explainers have published, stamped on the w
   assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
   await queuePublish(db, second, 'approve');
   assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
-  assert.deepEqual(captions, [
-    'AI Brain Break Episode 1:\n\nFirst body.',
-    'AI Brain Break Episode 2:\n\nSecond body.',
-  ]);
+  assert.deepEqual(captions, ['First body.', 'Second body.']);
 });
 
 test('publish: an EXPIRED container and a near-full account quota both fail without posting', async () => {
@@ -227,8 +227,9 @@ test('a rejection in the review wins even when the spine still says approved (a 
   assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 0);
 });
 
+/** The Live state (D16): Generate (auto_render) and publishing_live both on. */
 const liveOn = (db: Queryable) =>
-  db.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  db.query(`INSERT INTO explainers.settings (key, value) VALUES ('auto_render', 'true'::jsonb), ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
 const explainerSlots = async (db: Queryable) =>
   (await db.query<{ d: string; slot: string; source: string; status: string }>(`SELECT ny_date::text AS d, slot, source, status FROM social_hub.schedule WHERE vertical = 'explainers'`)).rows;
 const FINISHED_3AM = new Date('2026-10-08T07:10:00Z'); // 3:10 AM New York
@@ -255,12 +256,80 @@ test('B2: a person’s render (Regenerate, Make it) is not booked at finish; App
   assert.deepEqual(await explainerSlots(db), []);
 });
 
-test('B2: nothing is booked while publishing is off, or once today’s windows are over (never tomorrow)', async () => {
+test('B2: nothing is booked while Paused (or a mismatch), or once today’s windows are over (never tomorrow)', async () => {
   const { db } = await scratchExplainersDb();
   const jobId = await renderedJob(db, { verdict: null, trigger: 'auto' });
-  assert.equal(await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0), null, 'publishing_live is off by default');
+  assert.equal(await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0), null, 'Paused by default (auto_render and publishing_live off)');
+  // Generate off with Live on reads as paused (contract §3): nothing is booked either.
+  await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.equal(await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0), null, 'paused: no booking');
   await liveOn(db);
   const late = await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, new Date('2026-10-08T21:30:00Z'), () => 0); // 5:30 PM New York
   assert.equal(late?.scheduled, false);
   assert.deepEqual(await explainerSlots(db), []);
+});
+
+// ── Lead time (Bald-Eagle D4, D8): made two days ahead ──────────────────────
+
+test('lead time: a night render books on its target date when it finishes and when approved, never today’s leftover window', async () => {
+  const { db } = await scratchExplainersDb();
+  await liveOn(db);
+  // Made Thursday night (Oct 8) for Saturday (Oct 10); Thursday's and Friday's windows are open, and it books Saturday.
+  const jobId = await renderedJob(db, { verdict: null, trigger: 'auto', target: '2026-10-10' });
+  const out = await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0);
+  assert.equal(out?.scheduled, true);
+  assert.deepEqual((await explainerSlots(db)).map((s) => [s.d, s.slot, s.source]), [['2026-10-10', 'afternoon', 'auto']]);
+  // Approve (the hub passes today as the bound) keeps its slot.
+  assert.deepEqual(await scheduleJob(db, jobId, 'auto', FINISHED_3AM, '2026-10-08', () => 0), out);
+
+  // Unbooked: Approve books the target date only; both of Saturday's windows taken means nothing, not Thursday.
+  const second = await renderedJob(db, { verdict: null, trigger: 'auto', target: '2026-10-10', title: 'Second' });
+  assert.equal((await scheduleJob(db, second, 'auto', FINISHED_3AM, '2026-10-08', () => 0)).scheduled, true);
+  const third = await renderedJob(db, { trigger: 'auto', target: '2026-10-10', title: 'Third' });
+  const refused = await scheduleJob(db, third, 'auto', FINISHED_3AM, '2026-10-08', () => 0);
+  assert.equal(refused.scheduled, false);
+  if (!refused.scheduled) assert.match(refused.note, /2026-10-10/);
+  // The worker's booking of approved renders: the target date or later, never before it.
+  assert.equal(await scheduleApproved(db, FINISHED_3AM, () => 0), 1);
+  const slots = await db.query<{ d: string }>(
+    `SELECT s.ny_date::text AS d FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1`, [third]);
+  assert.deepEqual(slots.rows.map((r) => r.d), ['2026-10-11']);
+
+  // A person's render (no target date) books today, as before.
+  const mine = await renderedJob(db, { trigger: 'click', title: 'Mine' });
+  assert.equal((await scheduleJob(db, mine, 'auto', FINISHED_3AM, '2026-10-08', () => 0)).scheduled, true);
+  const own = await db.query<{ d: string }>(
+    `SELECT s.ny_date::text AS d FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1`, [mine]);
+  assert.deepEqual(own.rows.map((r) => r.d), ['2026-10-08']);
+});
+
+test('lead time: the daily spend cap counts a cost against its render’s target date (else its idea cycle’s date, else the day spent)', async () => {
+  const { db } = await scratchExplainersDb();
+  const night = await renderedJob(db, { trigger: 'auto', target: '2026-10-10' });
+  const click = await renderedJob(db, { trigger: 'click', title: 'Click' });
+  const { rows: [cycle] } = await db.query<{ id: string }>(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'production', '2026-10-09') RETURNING id`);
+  const cost = (fields: { job?: string; cycle?: string }, usd: number) =>
+    db.query(`INSERT INTO explainers.cost_events (job_id, idea_cycle_id, mode, vendor, component, usd, created_at) VALUES ($1, $2, 'production', 'anthropic', 'render', $3, '2026-10-08T12:00:00Z')`,
+      [fields.job ?? null, fields.cycle ?? null, usd]);
+  await cost({ job: night }, 4);
+  await cost({ job: click }, 2);
+  await cost({ cycle: cycle!.id }, 1);
+  await cost({}, 0.5);
+  assert.equal(await productionSpendForDay(db, '2026-10-10'), 4);
+  assert.equal(await productionSpendForDay(db, '2026-10-09'), 1);
+  assert.equal(await productionSpendForDay(db, '2026-10-08'), 2.5);
+});
+
+test('B2 in Approval (Generate on, Live off): a night render books its window (contract §4.3); Hard publish is refused and records nothing (Live only)', async () => {
+  const { db } = await scratchExplainersDb();
+  await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('auto_render', 'true'::jsonb), ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  const jobId = await renderedJob(db, { verdict: null, trigger: 'auto' });
+  const booked = await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0);
+  assert.equal(booked?.scheduled, true);
+  assert.equal((await explainerSlots(db)).length, 1);
+  const refused = await hardPublishJob(db, jobId, 'tommy');
+  assert.deepEqual(refused, { queued: false, note: EXPLAINERS_NOT_LIVE_NOTE, terminal: false });
+  assert.equal((await db.query(`SELECT 1 FROM explainers.feedback WHERE job_id = $1`, [jobId])).rows.length, 0, 'no approval recorded');
+  assert.equal((await db.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0, 'nothing queued');
+  assert.equal((await explainerSlots(db)).length, 1, 'its slot stays');
 });

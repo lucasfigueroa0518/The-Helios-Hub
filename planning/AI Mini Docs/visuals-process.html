@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reel Visuals Pipeline</title>
+<style>
+:root{--bg:#faf8f5;--ink:#1d1b18;--muted:#6b665e;--line:#d9d3c9;--card:#fff;--accent:#e8611a;--accent-soft:#fdeee4;--green:#2f7d4f;--green-soft:#e6f2ea;--blue:#2f5f9e;--blue-soft:#e7eef8;--warn:#a2461b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161513;--ink:#ece8e1;--muted:#a39d93;--line:#3a3631;--card:#201e1b;--accent:#f0803f;--accent-soft:#3a2416;--green:#6cc08f;--green-soft:#17291f;--blue:#7fa8e0;--blue-soft:#1a2433;--warn:#f0a070}}
+:root[data-theme="dark"]{--bg:#161513;--ink:#ece8e1;--muted:#a39d93;--line:#3a3631;--card:#201e1b;--accent:#f0803f;--accent-soft:#3a2416;--green:#6cc08f;--green-soft:#17291f;--blue:#7fa8e0;--blue-soft:#1a2433;--warn:#f0a070}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:28px 16px 60px}
+h1{font-size:26px;margin:0 0 4px}
+h2{font-size:19px;margin:36px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:18px 0 6px}
+.sub{color:var(--muted);margin:0 0 20px}
+.verdict{background:var(--accent-soft);border-left:4px solid var(--accent);padding:14px 16px;border-radius:6px}
+.verdict b{color:var(--accent)}
+.flow{display:flex;flex-direction:column;gap:0}
+.stage{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:start}
+.stage .phase{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:12px;text-align:right}
+.steps{display:flex;flex-direction:column;gap:8px;padding:8px 0 8px 16px;border-left:2px solid var(--line)}
+.step{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.step.dir{border:2px solid var(--accent);background:var(--accent-soft)}
+.step.check{border-color:var(--blue);background:var(--blue-soft)}
+.step.write{border-color:var(--green);background:var(--green-soft)}
+.step .t{font-weight:600}
+.step .m{font-size:12px;color:var(--muted);margin-left:6px;font-weight:400}
+.step .d{font-size:13.5px;margin-top:3px}
+.step .io{font-size:12.5px;color:var(--muted);margin-top:4px}
+.loop{font-size:12.5px;color:var(--warn);margin-top:4px}
+.par{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:10px 0 18px}
+.legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:2px solid var(--line)}
+.legend .l-dir::before{border-color:var(--accent);background:var(--accent-soft)}
+.legend .l-check::before{border-color:var(--blue);background:var(--blue-soft)}
+.legend .l-write::before{border-color:var(--green);background:var(--green-soft)}
+blockquote{margin:8px 0;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:6px;font-size:13.5px}
+blockquote .src{display:block;font-size:11.5px;color:var(--muted);margin-top:6px;font-family:ui-monospace,Menlo,monospace}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:10px;margin-right:6px;vertical-align:1px}
+.tag.same{background:var(--accent-soft);color:var(--accent)}
+.tag.comp{background:var(--green-soft);color:var(--green)}
+.tag.diff{background:var(--blue-soft);color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+@media (max-width:640px){.stage{grid-template-columns:1fr}.stage .phase{text-align:left;padding:0}.par{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>How the visuals of a Reel AI Drama get built</h1>
+<p class="sub">From pitch to rendered frame, as the code runs today (2026-11-03). Prompts quoted verbatim from <code>explainers/reel-ai-drama/</code>.</p>
+
+<div class="verdict"><b>Short answer: the director shows what the line says.</b> Its only hard rule about the relationship is that “the line over an image is a claim about it”, so the picture must be what the narration names: the person, the place, the event, the date. Complementing the line is a small, secondary layer: marks, a document the viewer reads, a bridging shot, an inner state. Showing something different from the line is forbidden. Meanwhile the <i>writer</i> is told the opposite: “never narrate what the picture already shows; add context, meaning or consequence.” The two halves don’t agree on whose job is to add and whose is to match.</div>
+
+<h2>The pipeline</h2>
+<div class="legend"><span class="l-write">writer / words</span><span class="l-dir">director (Opus 5.5)</span><span class="l-check">checks and fixes</span><span>pictures, building, rendering</span></div>
+
+<div class="flow">
+  <div class="stage"><div class="phase">Finding</div><div class="steps">
+    <div class="step check"><span class="t">Visuals check</span><span class="m">Haiku, <code>visuals-look.md</code></span><div class="d">Before a pitch is pooled: do real pictures of these people and this moment exist? This feeds the pitch's rank.</div></div>
+  </div></div>
+
+  <div class="stage"><div class="phase">Gathering</div><div class="steps">
+    <div class="par">
+      <div class="step"><span class="t">Reporting</span><span class="m">Sonnet + search</span><div class="d">The fact sheet, with artifacts (posts, pages, headlines) quoted word for word.</div></div>
+      <div class="step"><span class="t">Photo harvest</span><span class="m">search + Haiku <code>harvest-look.md</code></span><div class="d">Gathers candidates from photo sources, then screens each one: who it shows, watermarks, AI-made, whether it's about this story.</div><div class="io">→ <b>visual inventory</b> (V1…): what each shows, who, date, credit, flags</div></div>
+    </div>
+  </div></div>
+
+  <div class="stage"><div class="phase">Words</div><div class="steps">
+    <div class="step write"><span class="t">Writer → blind editor → rewrite</span><span class="m">Opus</span><div class="d">Writes toward pictures that exist. Each line carries <code>must_show</code> (an asset it depends on, or a plain description) and an optional label.</div><div class="io">principle 37: “Write toward pictures that exist: favor moments the visual inventory can show, and never narrate what the picture already shows; add context, meaning or consequence.”</div></div>
+    <div class="step"><span class="t">Cutouts</span><span class="m">code (rembg)</span><div class="d">The script's central people are cut out of their photos, becoming “character images” the director can move through scenes.</div></div>
+  </div></div>
+
+  <div class="stage"><div class="phase">Directing</div><div class="steps">
+    <div class="step dir"><span class="t">Director</span><span class="m">Opus 5.5 · <code>director.md</code> + <code>director-craft.md</code> + <code>story-timing.md</code> + kit guide (<code>FRAME.md</code>)</span>
+      <div class="d">Reads the locked script, the inventory and the fact sheet. First plans the best shot per moment as if any real picture existed, then casts each shot from the inventory, a <b>wish</b> (a targeted search), a seeded tool, or a <b>make</b> (drawn or code-built). Composes frames: treatment, assets, motion, marks, sound, music cue, who's shown, labels to drop.</div>
+      <div class="io">→ <b>plan</b>: frames · makes · wishes · lines_back</div>
+      <div class="loop">↺ lines back: at most one round to the writer when no picture can support a line, then the director re-plans</div></div>
+    <div class="step"><span class="t">Wish search</span><span class="m">search + look</span><div class="d">Searches for the shots the director wished for; each wish resolves to the found photo or its fallback.</div></div>
+    <div class="step check"><span class="t">Facts check · variety check</span><span class="m">Jev, code</span><div class="d">If the script changes or the same person repeats the same way too often, the director re-plans with the problems.</div></div>
+    <div class="step"><span class="t">Makes</span><span class="m">drawing / code / image model</span><div class="d">Builds what no camera took: reconstructed scenes, expressions, collages, drawings.</div></div>
+  </div></div>
+
+  <div class="stage"><div class="phase">Building</div><div class="steps">
+    <div class="step"><span class="t">Storyboard + voice</span><span class="m">code + TTS</span><div class="d">The plan becomes <code>STORYBOARD.md</code>, one section per frame with each line's label. The narration is voiced and timed word by word.</div></div>
+    <div class="step check"><span class="t">Integrity check</span><span class="m">vision, <code>integrity.md</code></span><div class="d">Looks at each image against the line over it (right person, right era, real artifact). Problems → the director re-plans once.</div></div>
+    <div class="step"><span class="t">Frame workers</span><span class="m">Sonnet 5.5, one per frame, <code>frame-worker.md</code> + <code>FRAME.md</code></span><div class="d">Each builds exactly its storyboard frame in code with the kit: images, cutouts, camera moves, marks drawn as the voice says their words, labels on their lines.</div></div>
+    <div class="step"><span class="t">Sound design → assemble → render</span><span class="m"><code>sound-designer.md</code></span><div class="d">Foley and music cued to the frames; the frames are stitched and rendered to video.</div></div>
+  </div></div>
+
+  <div class="stage"><div class="phase">Watching</div><div class="steps">
+    <div class="step check"><span class="t">First viewer</span><span class="m">vision, <code>first-viewer.md</code></span><div class="d">A stranger watches the contact sheet with the voice: when did the hook land, could they follow it on mute, did the hook pull. Picture problems get one fix session (<code>fix.md</code>).</div></div>
+    <div class="step"><span class="t">Deliver</span><div class="d">The post is written and the pictures used are recorded.</div></div>
+  </div></div>
+</div>
+
+<h2>The director's prompt logic on picture vs. narration</h2>
+
+<h3><span class="tag same">MATCH</span>The rule that governs: the picture is what the line says</h3>
+<blockquote>“<b>Images show what the line claims, and are what they are used as.</b> The line over an image is a claim about it: the person, the place, the event, the date must be what the image's <code>shows</code> says it shows…”<span class="src">director-craft.md · HARD CONSTRAINT 1</span></blockquote>
+<blockquote>“Check every frame against its lines: does each image (or wish) show what the line claims (the asset's <code>shows</code>, its people, its date)?”<span class="src">director.md · How to work, step 5</span></blockquote>
+<blockquote>“<b>When the narration names a person, show them in that beat</b> (face clear when it's a photo) — because the viewer shouldn't meet a character without looking them in the eye; this holds for every named person, main or not”<span class="src">director-craft.md · §3 Faces and people</span></blockquote>
+<blockquote>“Crop and frame without changing what the picture says, and <b>treat the line over an image as its caption</b>: date, place and event exactly right.”<span class="src">director-craft.md · §9 Image ethics</span></blockquote>
+<blockquote>“For each rung, know what the viewer must see for the rung's purpose to land, and who is in it.”<span class="src">director.md · How to work, step 1</span></blockquote>
+
+<h3><span class="tag comp">ADD</span>Where the picture complements the line</h3>
+<blockquote>“<b>Choose the primary artifact over an illustration of it, and let it carry the narrative</b> — because a real post, page or document is closer to direct experience than any description”<span class="src">director-craft.md · §1</span></blockquote>
+<blockquote>“never a label that repeats what a document in shot visibly says: let the viewer read it (mark, highlight, push in) or add what it doesn't say.”<span class="src">director-craft.md · on-screen words</span></blockquote>
+<blockquote>“<b>Show inner states</b> when the line is about what someone feared, wanted or argued: a real photo where their face carries it… or expression marks drawn around their face.”<span class="src">director.md · Composing the shots</span></blockquote>
+<blockquote>“<b>Bridge pieces of evidence with quiet establishing images</b> — a place, a building, a skyline — so the voice can carry the story across.”<span class="src">director-craft.md · §2 Stills as scenes</span></blockquote>
+<blockquote>“Make abstract claims concrete with an image of the physical thing; show change over time with matched before-and-after frames”<span class="src">director-craft.md · §1</span></blockquote>
+
+<h3><span class="tag diff">FORBIDDEN</span>A picture that says something different</h3>
+<blockquote>“<b>Don't let juxtaposition assert what the evidence doesn't</b> — never cut to an unrelated image that implies guilt or causation.”<span class="src">director-craft.md · §9 Image ethics</span></blockquote>
+<blockquote>“A generic or mismatched image is never passed off as evidence of the moment”<span class="src">director-craft.md · HARD CONSTRAINT 1</span></blockquote>
+
+<h3>How the story drives the shot (not the inventory)</h3>
+<blockquote>“<b>Plan the shots first.</b> In script order, decide the best shot for each moment… as if any real photo or document of the record could be had. The story chooses the shot; what the inventory happens to hold never does.”<span class="src">director.md · How to work, step 2</span></blockquote>
+<blockquote>“<b>Build scenes, not slides.</b> A reel of single photos with a push and a label is a slideshow. Give each frame a staging type, and let the type follow the moment”<span class="src">director.md · Composing the shots</span></blockquote>
+
+<h3>What the frame workers may do with it</h3>
+<blockquote>“<b>Build the storyboard's frame, exactly.</b> … Don't add a beat, an image or a word it doesn't name.”<span class="src">frame-worker.md · HARD CONSTRAINT 1</span></blockquote>
+
+<h2>Where the two halves disagree</h2>
+<table>
+<tr><th>Writer is told</th><th>Director is told</th><th>Result</th></tr>
+<tr><td>“never narrate what the picture already shows; add context, meaning or consequence” — but it writes before any frame exists, from an inventory list.</td><td>The line is the image's caption; show exactly what it names, and every named person in that beat.</td><td>Neither side owns the gap between voice and picture: the writer can't see the frame, and the director's main test is literal match. Complementary pictures happen only through artifacts, marks, bridges and inner states.</td></tr>
+<tr><td><code>must_show</code>: an asset id or description when a line “depends on seeing it”.</td><td>Plan the best shot as if any picture could be had, then cast it.</td><td>The writer's <code>must_show</code> and the director's shot plan are two separate guesses at the same picture.</td></tr>
+</table>
+</main>
+</body>
+</html>

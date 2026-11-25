@@ -66,7 +66,20 @@ export const BOX_HINTS: Record<Vertical, BoxHints> = {
       { kind: 'layout', text: 'a scene’s layout' },
     ],
   },
+  reel_ai_drama: {
+    example: 'The caption names the wrong company',
+    can: [{ kind: 'wording', text: 'the post caption' }],
+  },
+  // Trivia and Real or AI? frames are made together (a rendered video pair, a screened image and its answer):
+  // a frame is never revised on its own, so the box lists nothing and the reply points to Regenerate.
+  ai_trivia: { example: 'Question 2’s answer is wrong', can: [] },
+  real_or_ai: { example: 'The answer on frame 3 is wrong', can: [] },
+  // Field Notes takes no revisions yet (no description in the registry).
+  field_notes: { example: 'The caption is too long', can: [] },
 };
+
+/** Content types whose box lists nothing they can change, even though a description exists: every frame fix is refused. */
+export const MADE_TOGETHER: ReadonlySet<Vertical> = new Set<Vertical>(['ai_trivia', 'real_or_ai']);
 
 /** "a slide’s photo, a headline or sentence, a slide’s background and a slide’s layout". */
 export function canChangeText(vertical: Vertical): string {

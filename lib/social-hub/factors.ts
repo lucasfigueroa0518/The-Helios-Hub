@@ -20,6 +20,17 @@ export const SHARED_FACTORS: FactorDef[] = [
   { id: 'slot', label: 'Posting slot' },
 ];
 
+/** A Stories-format type's native factors (lib/social-hub/adapters/stories.ts factorValues). */
+const STORY_FACTORS: FactorDef[] = [
+  { id: 'style', label: 'Style' },
+  { id: 'frames', label: 'Frame count' },
+  { id: 'backdrop', label: 'Backdrop of frame 1' },
+  { id: 'origins', label: 'Candidate origin' },
+  { id: 'weekday', label: 'Weekday' },
+  { id: 'flagged', label: 'Flagged by review' },
+  { id: 'trigger', label: 'Trigger' },
+];
+
 /** Native factors unlock when one vertical is picked (SH-04, SH-05). Spec §5.4 lists. */
 export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
   reels: [
@@ -50,6 +61,16 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'reviewTags', label: 'Review tags' },
     { id: 'spend', label: 'Render spend' },
   ],
+  reel_ai_drama: [
+    { id: 'storyType', label: 'Story type' },
+    { id: 'era', label: 'Era' },
+    { id: 'visualsGrade', label: 'Visuals grade' },
+    { id: 'dramaScore', label: 'Drama score' },
+    { id: 'seconds', label: 'Length (seconds)' },
+    { id: 'slot', label: 'Posting slot' },
+    { id: 'reviewTags', label: 'Review tags' },
+    { id: 'spend', label: 'Production spend' },
+  ],
   carousels: [
     { id: 'hook', label: 'Hook pass' },
     { id: 'slides', label: 'Slide count' },
@@ -58,16 +79,14 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'slot', label: 'Posting slot' },
     { id: 'approval', label: 'Approval' },
   ],
+  // The Stories-format types (SS-1). Each holds one series now; Morning Download keeps `series`, since its
+  // history holds the retired Guess the Number and Free vs. Paid sets.
   stories: [
     { id: 'series', label: 'Series' },
-    { id: 'style', label: 'Style' },
-    { id: 'frames', label: 'Frame count' },
-    { id: 'backdrop', label: 'Backdrop of frame 1' },
-    { id: 'origins', label: 'Candidate origin' },
-    { id: 'weekday', label: 'Weekday' },
-    { id: 'flagged', label: 'Flagged by review' },
-    { id: 'trigger', label: 'Trigger' },
+    ...STORY_FACTORS,
   ],
+  ai_trivia: STORY_FACTORS,
+  real_or_ai: STORY_FACTORS,
   last_few_days: [
     { id: 'stories', label: 'Story count' },
     { id: 'short', label: 'Short post' },
@@ -79,6 +98,12 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'events', label: 'Event count' },
     { id: 'look', label: 'Look' },
     { id: 'hook', label: 'Hook' },
+    { id: 'slot', label: 'Posting slot' },
+    { id: 'approval', label: 'Approval' },
+  ],
+  field_notes: [
+    { id: 'branch', label: 'Kind of tip' },
+    { id: 'slides', label: 'Slide count' },
     { id: 'slot', label: 'Posting slot' },
     { id: 'approval', label: 'Approval' },
   ],

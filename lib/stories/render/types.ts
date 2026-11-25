@@ -12,19 +12,20 @@ export const SAFE_TOP = 250;
 export const SAFE_BOTTOM = 340;
 /** Image stories: JPEG, 8 MB max (plan §1, verified facts). */
 export const MAX_JPEG_BYTES = 8 * 1024 * 1024;
+/** Video stories (AI Trivia): MP4, at most 60 s; Meta's cap on a Story video file is 100 MB. */
+export const MAX_MP4_BYTES = 100 * 1024 * 1024;
 
 export const BACKDROPS = ['black', 'white', 'orange', 'green'] as const;
 export type Backdrop = (typeof BACKDROPS)[number];
 
-export type Series = 'morning_download' | 'guess_the_number' | 'free_vs_paid';
+import type { RoaQuestionData, RoaRevealData } from '@/lib/stories/roa/types';
 
 /**
- * Guess the Number layout families (S-13). Every photo is a bleed fade (S-44):
- * photo-led (the photo bleeds from the top), marquee (the game line on top,
- * the photo fading in below it), type-led (no photo).
+ * `guess_the_number` is retired (AI Trivia AT-14) and `free_vs_paid` is retired (Real or AI? replaces it,
+ * planning/Real or AI/CONTRACT.md §1): both stay in the union and the SQL CHECKs so their history still loads, and
+ * nothing new is requested, built or rendered for them.
  */
-export const GTN_FAMILIES = ['photo', 'marquee', 'type'] as const;
-export type GtnFamily = (typeof GTN_FAMILIES)[number];
+export type Series = 'morning_download' | 'guess_the_number' | 'free_vs_paid' | 'ai_trivia' | 'real_or_ai';
 
 export type Photo = {
   /** http(s) URL, or a path inside the repo (served locally by the renderer). */
@@ -34,24 +35,66 @@ export type Photo = {
   kind: 'person' | 'scene' | 'logo';
   /** Crop centre as object-position fractions (0–1). */
   focus?: { x: number; y: number };
+  /**
+   * The image already places a short photo in the middle of the band over its own blur fill (Morning Download band
+   * fit, 2026-11-23): the photo stays at full opacity and only the fill fades out above the copy.
+   */
+  contained?: boolean;
+  /**
+   * The image's own URL when `src` is a copy we made (Morning Download's band fit uploads the fitted JPEG and `src`
+   * is its signed storage URL). The used-photo ledger and the pending hold (WC12) key on this, so a picture stays
+   * held by its source URL, the one the photo finder sees.
+   */
+  sourceUrl?: string;
 };
+
+/** The URL a frame's photo is recorded and held under (WC12): its source when `src` is our own copy. */
+export const photoLedgerUrl = (p: Pick<Photo, 'src' | 'sourceUrl'>): string => p.sourceUrl || p.src;
 
 /** "via The Verge", "reported by Reuters", "from OpenAI's blog" (S-15). */
 export type SourceTag = { verb: 'via' | 'reported by' | 'from'; name: string };
 
-export type OpenerData = { role: 'opener'; /** e.g. "Wednesday, October 8" */ date: string; storyCount: number; photo?: Photo };
-export type StoryData = { role: 'story'; /** One or two full sentences (S-15). */ headline: string; source: SourceTag; photo?: Photo };
-export type CloserData = { role: 'closer' };
-/** Guess the Number's intro (S-49): today's game, its difficulty and topic. */
-export const DIFFICULTIES = ['low', 'medium', 'high'] as const;
-export type Difficulty = (typeof DIFFICULTIES)[number];
+export type OpenerData = {
+  role: 'opener';
+  /** e.g. "Wednesday, October 8" */
+  date: string;
+  storyCount: number;
+  /** The cover's three-line headline (copy.ts OPENER_PROMISES); sets without one show the first. */
+  promise?: readonly string[];
+  /** The story frames' photos in order (null where a story has none), shown blurred under question marks (MC14, 2026-11-23). */
+  peek?: Array<Photo | null>;
+  /** Sets built before the peek cover carried an opener photo; it is no longer drawn. */
+  photo?: Photo;
+};
 /**
- * Series intro slide (S-49, S-50). Guess the Number's carries the difficulty
- * and the model-written topic; Free vs. Paid's is fixed copy.
+ * A story's clip (MD-LFD D16, 2026-11-24): already fitted to the photo band (lib/video-finder/band.ts) and stored in
+ * the stories bucket at `path`. The frame's `photo` is its poster, so the JPEG, the review and the hub show a still;
+ * the render stage turns the frame into an MP4 with the clip playing in the band.
  */
-export type IntroData = { role: 'intro'; difficulty?: Difficulty; topic?: string };
-export type QuestionData = { role: 'question'; family: GtnFamily; question: string; photo?: Photo };
-export type AnswerData = { role: 'answer'; family: GtnFamily; number: string; label: string; meaning: string; source: SourceTag; photo?: Photo };
+export type StoryVideo = { path: string; seconds: number; tier: 'golden' | 'good'; sourceUrl: string; fit: 'crop' | 'blur' | 'vertical' };
+export type StoryData = { role: 'story'; /** One or two full sentences (S-15). */ headline: string; source: SourceTag; photo?: Photo; video?: StoryVideo };
+export type CloserData = { role: 'closer' };
+/** Series intro slide (S-50): Free vs. Paid's, fixed copy. */
+export type IntroData = { role: 'intro' };
+/** AI Trivia: the writer always gives three options (AT-54); the renderer lays out two to four. */
+export type TriviaLetter = 'A' | 'B' | 'C' | 'D';
+export type TriviaCopy = {
+  question: string;
+  options: Array<{ letter: TriviaLetter; text: string }>;
+  correct: TriviaLetter;
+  /** Why the answer matters to the viewer. */
+  answerLine: string;
+  /** "Are you smarter than AI?": the critter's direction (lib/stories/trivia/render/critter.ts). */
+  critter?: import('@/lib/stories/trivia/render/critter').CritterDirection;
+  /** "Are you smarter than AI?": the opponent model and the option it picked (AT-74); right when it is `correct`. */
+  opponent?: { label: string; picked: TriviaLetter };
+};
+/**
+ * AI Trivia's two slides, each a 5-second video (lib/stories/trivia/render): the question, then the answer (the
+ * correct option lights). Both carry the whole question; "AI TRIVIA" and "Tap to reveal" are the renderer's (AT-25).
+ */
+export type QuestionData = { role: 'question'; photo?: Photo } & TriviaCopy;
+export type AnswerData = { role: 'answer'; photo?: Photo } & TriviaCopy;
 export type PaidData = { role: 'paid'; tool: string; price: string; period: string; tease: string; logo?: Photo };
 export type FreeData = {
   role: 'free';
@@ -68,7 +111,10 @@ export type FreeData = {
   logo?: Photo;
 };
 
-export type FrameData = OpenerData | StoryData | CloserData | IntroData | QuestionData | AnswerData | PaidData | FreeData;
+/** Real or AI? (planning/Real or AI/CONTRACT.md §3): per round a question still, then its reveal still. */
+export type { RoaQuestionData, RoaRevealData };
+
+export type FrameData = OpenerData | StoryData | CloserData | IntroData | QuestionData | AnswerData | PaidData | FreeData | RoaQuestionData | RoaRevealData;
 export type FrameRole = FrameData['role'];
 
 /**
@@ -79,12 +125,17 @@ export type FrameRole = FrameData['role'];
 export const STYLES = ['polished', 'homemade'] as const;
 export type Style = (typeof STYLES)[number];
 
-/** The style each series ships in (S-54): Morning Download polished, the two games homemade. */
+/** The style each series ships in (S-54): Morning Download, AI Trivia and Real or AI? polished, Free vs. Paid homemade. */
 export const SERIES_STYLE: Record<Series, Style> = {
   morning_download: 'polished',
   guess_the_number: 'homemade',
   free_vs_paid: 'homemade',
+  ai_trivia: 'polished',
+  real_or_ai: 'polished',
 };
+
+/** Series whose frames are videos (MP4 + a poster JPEG), not images. Real or AI? is stills (RA-8), so not here. */
+export const VIDEO_SERIES: ReadonlySet<Series> = new Set<Series>(['ai_trivia']);
 
 export type Frame = {
   series: Series;

@@ -1,0 +1,118 @@
+{
+ "title": "The dinner (smoke fixture; mock lines, never published)",
+ "engine": "how did we get here",
+ "hook": {
+  "on_screen": "$4M",
+  "line_id": "L1"
+ },
+ "rungs": [
+  {
+   "id": "R1",
+   "purpose": "hook: the money and the fight",
+   "lines": [
+    {
+     "id": "L1",
+     "text": "A founder put four million dollars into a lab he helped start.",
+     "on_screen": "$4M",
+     "fact_ids": [
+      "F1"
+     ],
+     "must_show": "V1",
+     "pause_after": null
+    }
+   ]
+  },
+  {
+   "id": "R2",
+   "purpose": "ladder: where it began",
+   "lines": [
+    {
+     "id": "L2",
+     "text": "It began at a dinner by the bay, one summer.",
+     "on_screen": "One summer",
+     "fact_ids": [
+      "F2"
+     ],
+     "must_show": "V6",
+     "pause_after": null
+    },
+    {
+     "id": "L3",
+     "text": "Across the table sat the lab's future chief.",
+     "on_screen": "The co-founder",
+     "fact_ids": [
+      "F3"
+     ],
+     "must_show": "V2",
+     "pause_after": null
+    }
+   ]
+  },
+  {
+   "id": "R3",
+   "purpose": "turn: the fight",
+   "lines": [
+    {
+     "id": "L4",
+     "text": "Years later, the two of them were fighting over the company.",
+     "on_screen": null,
+     "fact_ids": [
+      "F4"
+     ],
+     "must_show": null,
+     "pause_after": 0.4
+    },
+    {
+     "id": "L5",
+     "text": "Meanwhile, one research paper had changed what these labs could build.",
+     "on_screen": null,
+     "fact_ids": [
+      "F5"
+     ],
+     "must_show": "V5",
+     "pause_after": null
+    },
+    {
+     "id": "L6",
+     "text": "And the chips to train it came from one company.",
+     "on_screen": "The chipmaker",
+     "fact_ids": [
+      "F6"
+     ],
+     "must_show": "V7",
+     "pause_after": null
+    }
+   ]
+  },
+  {
+   "id": "R4",
+   "purpose": "landing: the board meets",
+   "lines": [
+    {
+     "id": "L7",
+     "text": "Then the board met.",
+     "on_screen": null,
+     "fact_ids": [
+      "F7"
+     ],
+     "must_show": null,
+     "pause_after": null
+    },
+    {
+     "id": "L8",
+     "text": "It asked for damages in the millions.",
+     "on_screen": "$12M",
+     "fact_ids": [
+      "F8"
+     ],
+     "must_show": null,
+     "pause_after": null
+    }
+   ]
+  }
+ ],
+ "turn_rung_id": "R3",
+ "landing_rung_id": "R4",
+ "close_question": "Would you have taken the deal?",
+ "word_count": 73
+}

@@ -1,3 +1,4 @@
+import type { PhotoHashDeps } from '@/lib/photos/published-posts';
 import { AI_EVENTS_SPINE_VERTICAL, AI_EVENTS_VERTICAL } from '@/lib/ai-events/config';
 import { carryAiEventsAttempt, failStaleAiEventsAttempts, type SnapshotPublisher } from '@/lib/ai-events/publish';
 import { releaseDueAiEvents } from '@/lib/ai-events/schedule';
@@ -5,6 +6,7 @@ import { readAiEventsSettings } from '@/lib/ai-events/settings';
 import { createCarouselInsightsClient, pollCarouselInsights } from '@/lib/social/overnight/insights';
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import type { Query } from '@/lib/social/store/pg';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 
 import type { PublishDriver } from './types';
 
@@ -18,6 +20,8 @@ export function aiEventsDriver(deps: {
   query: Query;
   meta: () => CarouselMetaClient;
   signImage: (objectPath: string, expiresIn: number) => Promise<string>;
+  /** The publish-time used-photo write's reader (CI-32); `{}` = live. Absent: no download. */
+  photoHashes?: PhotoHashDeps;
   token: () => string;
   snapshot?: SnapshotPublisher;
   log?: (message: string, fields?: Record<string, unknown>) => void;
@@ -26,12 +30,17 @@ export function aiEventsDriver(deps: {
   const driver: PublishDriver = {
     vertical: AI_EVENTS_SPINE_VERTICAL,
     refusesAtRelease: 'cancel',
-    live: async () => (await settings())?.publishingLive === true,
-    requireApproval: async () => (await settings())?.requireApproval !== false,
+    // Live only when the state is Live (D16): Generate (auto_run) and publishing_live both on.
+    live: async () => {
+      const s = await settings();
+      return s !== null && postsToInstagram(stateOf(s.autoRun, s.publishingLive).state);
+    },
+    // Every post needs a person's approval (D16): require_approval is never read as false.
+    requireApproval: async () => true,
     failStale: () => failStaleAiEventsAttempts(deps.query),
     releaseDue: async () => releaseDueAiEvents(deps.query, { requireApproval: await driver.requireApproval() }),
     carry: (id) =>
-      carryAiEventsAttempt({ query: deps.query, meta: deps.meta(), signImage: deps.signImage }, id, { snapshot: deps.snapshot, log: deps.log }),
+      carryAiEventsAttempt({ query: deps.query, meta: deps.meta(), signImage: deps.signImage, photoHashes: deps.photoHashes }, id, { snapshot: deps.snapshot, log: deps.log }),
     pollInsights: () => pollCarouselInsights(deps.query, createCarouselInsightsClient({ token: deps.token() }), new Date(), 200, AI_EVENTS_VERTICAL),
   };
   return driver;

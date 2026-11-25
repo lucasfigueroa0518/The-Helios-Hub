@@ -3,7 +3,7 @@
  * its own rows to `HubPost`; native metadata stays per vertical (SH-04).
  */
 
-export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days' | 'ai_events';
+export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama' | 'ai_trivia' | 'real_or_ai';
 
 export type Format = 'reel' | 'feed' | 'story';
 
@@ -69,7 +69,7 @@ export type HubMedia =
       /** Rendered JPEG when a route serves it (OUT_OF_SCOPE #3); else the slide outline from `render`. */
       slides: Array<{ src: string | null; alt: string; photo: string | null; layout: string | null; headline: string | null; body: string | null }>;
     }
-  | { kind: 'frames'; frames: Array<{ src: string | null; label: string; /** Private bucket path. Signed at render, never stored in the shared cache as a URL. */ path?: string | null }> }
+  | { kind: 'frames'; frames: Array<{ src: string | null; label: string; /** Private bucket path. Signed at render, never stored in the shared cache as a URL. */ path?: string | null; /** A video frame's MP4 (frame route `?media=video`, signed at render like `src`); `src` is then its poster. */ video?: string | null; /** Private bucket path of the MP4. */ videoPath?: string | null }> }
   | { kind: 'none'; note: string };
 
 export type Approval = {
@@ -151,6 +151,8 @@ export type ScoreBreakdown = { formula: string; parts: ScorePart[]; note?: strin
 export type IdeaState ='idea_only' | 'content_ready' | 'on_deck' | 'published' | 'retired' | 'skipped';
 
 export type HubIdea = {
+  /** Teaching order on a curriculum (Explainers' syllabus rank), when the vertical has one: it outranks the score. */
+  curriculumRank?: number | null;
   id: string;
   vertical: Vertical;
   title: string;

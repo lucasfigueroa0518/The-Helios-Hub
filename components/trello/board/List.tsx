@@ -31,7 +31,10 @@ type Props = {
   onOpenCard: (id: string) => void;
   onArchiveCard?: (id: string) => void;
   onToggleCompleteCard?: (id: string) => void;
-  onAddCard: (listId: string, title: string) => void;
+  onToggleAssignee?: (cardId: string, userId: string) => void;
+  freshCardIds?: ReadonlySet<string>;
+  members?: User[];
+  onAddCard: (listId: string, title: string) => string | null | void;
   onRenameList: (listId: string, name: string) => void;
   onDeleteList: (listId: string) => void;
   onSortCards: (listId: string, by: "title" | "due") => void;
@@ -48,6 +51,9 @@ export function List({
   onOpenCard,
   onArchiveCard,
   onToggleCompleteCard,
+  onToggleAssignee,
+  freshCardIds,
+  members,
   onAddCard,
   onRenameList,
   onDeleteList,
@@ -75,6 +81,8 @@ export function List({
     setDropRef(node);
   };
   const [draft, setDraft] = useState("");
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState(list.name);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -90,10 +98,20 @@ export function List({
     if (!renaming) setRenameDraft(list.name);
   }, [list.name, renaming]);
 
-  function commit() {
+  function commit(keepOpen: boolean) {
     const t = draft.trim();
     if (t) onAddCard(list.id, t);
     setDraft("");
+    if (keepOpen) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          draftRef.current?.focus();
+          const scroller = cardsRef.current;
+          if (scroller) scroller.scrollTop = scroller.scrollHeight;
+        });
+      });
+      return;
+    }
     setDraftOpen(false);
   }
 
@@ -174,7 +192,7 @@ export function List({
       </div>
 
       {/* Cards — scroll when list overflows */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-1">
+      <div ref={cardsRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-1">
         <SortableContext
           items={cards.map((c) => c.id)}
           strategy={verticalListSortingStrategy}
@@ -198,6 +216,13 @@ export function List({
                     onOpen={() => onOpenCard(card.id)}
                     onArchive={() => onArchiveCard?.(card.id)}
                     onToggleComplete={() => onToggleCompleteCard?.(card.id)}
+                    quickAssign={freshCardIds?.has(card.id) ?? false}
+                    members={members}
+                    onToggleAssignee={
+                      onToggleAssignee
+                        ? (userId) => onToggleAssignee(card.id, userId)
+                        : undefined
+                    }
                   />
                 </motion.li>
               ))}
@@ -211,20 +236,21 @@ export function List({
         {isDraftOpen ? (
           <div className="surface-card rounded-[8px] p-3 shadow-card">
             <textarea
+              ref={draftRef}
               autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  commit();
+                  commit(true);
                 }
                 if (e.key === "Escape") {
                   setDraft("");
                   setDraftOpen(false);
                 }
               }}
-              onBlur={commit}
+              onBlur={() => commit(false)}
               placeholder="Enter a title…"
               rows={2}
               className="w-full resize-none bg-transparent text-[14px] leading-[1.4] text-ink-hi placeholder:text-ink-mute outline-none"

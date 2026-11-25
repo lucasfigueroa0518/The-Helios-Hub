@@ -1,0 +1,37 @@
+{
+ "file": "29d0cda4-new-props.js",
+ "job": "29d0cda4-222c-44b5-b3a0-26fe698eec66",
+ "topic": "reinforcement learning",
+ "added_at": "2026-11-17T02:00:18.383Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "tan bone-shaped dog treat": {
+   "source_name": "tan bone-shaped dog treat",
+   "tags": {
+    "is": "a small dog biscuit shaped like a bone: a short shaft with two round lobes at each end, baked warm tan, lying flat",
+    "setting": [
+     "dog training",
+     "living room",
+     "reward",
+     "pet shop"
+    ],
+    "material": "baked biscuit, soft matte",
+    "parts": [
+     "four round end lobes",
+     "short straight shaft",
+     "two baked dimples"
+    ],
+    "not": [
+     "real bone",
+     "skeleton",
+     "dumbbell",
+     "cookie",
+     "chew toy"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

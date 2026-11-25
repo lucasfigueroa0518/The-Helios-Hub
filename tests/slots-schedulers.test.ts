@@ -152,8 +152,15 @@ test('reels template: windowsStillOpen counts only today\'s slots', async () => 
 
 // ---- Explainers: scheduleJob takes the injected handle ----
 
+/** The Explainers scratch DB loads the spine without db/stories_split.sql; the template seed writes the split's types (SS-21). */
+async function splitExplainersDb() {
+  const out = await scratchExplainersDb();
+  await out.pg.exec(fs.readFileSync(path.join(process.cwd(), 'db', 'stories_split.sql'), 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n'));
+  return out;
+}
+
 async function explainersDb(): Promise<{ db: Queryable; q: never; jobId: string }> {
-  const { db } = await scratchExplainersDb();
+  const { db } = await splitExplainersDb();
   const { rows: t } = await db.query<{ id: string }>(`INSERT INTO explainers.topics (title, origin, status) VALUES ('What is an API?', 'manual', 'rendered') RETURNING id`);
   const { rows: j } = await db.query<{ id: string }>(
     `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, finished_at)
@@ -238,7 +245,7 @@ test('explainers template: a started slot still takes a post today', async () =>
 });
 
 test('explainersQuota: legacy is posts_per_day; template is the day\'s explainers slot count', async () => {
-  const { db } = await scratchExplainersDb();
+  const { db } = await splitExplainersDb();
   const q = ((text: string, params?: unknown[]) => db.query(text, params)) as never;
   await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '1'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   assert.equal(await explainersQuota(db, '2026-10-21'), 1, 'legacy: posts_per_day');
@@ -302,6 +309,12 @@ const wednesdayLfd = [
   { scope: 'date', op: 'put', nyDate: WED, vertical: 'last_few_days', startMinute: 540, series: null, action: 'add', feedMode: null },
 ] as const;
 
+/** Carousels are opt-in (the seed has none): Wednesday gets its two old routine windows, 9:00 AM and 2:30 PM, added by hand. */
+const wednesdayCarousels = [
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'add', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 870, series: null, action: 'add', feedMode: null },
+] as const;
+
 async function carouselDb(): Promise<{ q: never; postId: string }> {
   const { query } = await openHubTestDb();
   const { rows } = await query<{ id: string }>(
@@ -328,6 +341,7 @@ test('carousels legacy: unchanged booking (the first open window)', async () => 
 test('carousels template: a removed window is never booked', async () => {
   const { q, postId } = await carouselDb();
   await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [...wednesdayCarousels], { by: 't', now: LATE_TUESDAY });
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY });
   const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
   assert.ok(out.scheduled);
@@ -347,6 +361,7 @@ test('carousels template: the day\'s quota is its slot count (2, 1, 0)', async (
   const { q } = await carouselDb();
   await (q as (t: string) => Promise<unknown>)(`INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '5'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [...wednesdayCarousels], { by: 't', now: LATE_TUESDAY });
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 2, 'posts_per_day no longer counts');
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY });
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 1);
@@ -415,6 +430,8 @@ test('carousel health: a failed slot read falls back to legacy (ruling P2)', asy
 
 const THU = '2026-10-08';
 const THU_NOW = new Date('2026-10-08T05:00:00Z'); // 1:00 AM New York, Thursday Oct 8
+/** Guess the Number and Free vs. Paid are made 2 days ahead (Bald-Eagle D4): Tuesday's night fills Tue through Thu. */
+const TUE_NOW = new Date('2026-10-06T05:00:00Z');
 
 /** Which series have a Stories slot on one date (the Run now list's rule). */
 const dueFrom = (slots: Awaited<ReturnType<typeof storiesSlotsOn>>, date: string) => (series: string, nyDate: string) =>
@@ -424,26 +441,27 @@ test('stories legacy: storiesSlotsOn is null and auto sets follow the series\' o
   const { db } = await harnessDb();
   const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
   assert.equal(await storiesSlotsOn(q, THU), null);
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
-  await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['guess_the_number']);
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveSeriesSetting(db, 'real_or_ai', { auto: true });
+  // Thursday's night covers Thu–Sat: Trivia's Thursday and Real or AI?'s Saturday (SS-1 days).
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['ai_trivia', 'real_or_ai']);
 });
 
 test('stories template: a series has slots on its dates only, and auto sets follow the calendar', async () => {
   const { db } = await harnessDb();
   const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
-  await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveSeriesSetting(db, 'real_or_ai', { auto: true });
   await setSlotSource(q, 'template', 't');
   let dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
-  assert.equal(dueOn('guess_the_number', THU), true, 'seeded from the series\' own days');
-  assert.equal(dueOn('free_vs_paid', THU), false);
+  assert.equal(dueOn('ai_trivia', THU), true, 'seeded from the series\' own days');
+  assert.equal(dueOn('real_or_ai', THU), false);
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'guess_the_number', action: 'remove', feedMode: null },
-    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'free_vs_paid', action: 'add', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'ai_trivia', startMinute: 510, series: 'ai_trivia', action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'real_or_ai', startMinute: 510, series: 'real_or_ai', action: 'add', feedMode: null },
   ], { by: 't', now: THU_NOW });
   dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
-  assert.equal(dueOn('guess_the_number', THU), false, 'removed for the day');
-  assert.equal(dueOn('free_vs_paid', THU), true, 'added for the day');
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { slots: await storiesSlotsOn(q, THU) }), ['free_vs_paid']);
+  assert.equal(dueOn('ai_trivia', THU), false, 'removed for the day');
+  assert.equal(dueOn('real_or_ai', THU), true, 'added for the day');
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { slots: await storiesSlotsOn(q, THU) }), ['real_or_ai']);
 });

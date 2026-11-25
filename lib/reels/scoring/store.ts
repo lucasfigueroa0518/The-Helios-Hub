@@ -30,6 +30,8 @@ export type StoredScore = {
   confidence: number | null;
   components: InterpretedScore;
   headlines: string[];
+  /** A seed: the person typed this idea in (a source marked adapter 'seed'). Set by loadSlates; absent elsewhere. */
+  yours?: boolean;
 };
 
 export type StoredSlate = {
@@ -77,10 +79,40 @@ export async function slateIdeaIds(nyDate: string): Promise<string[]> {
          WHERE ny_date = $1::date
          ORDER BY scored_at DESC
          LIMIT 1
-      )`,
+      )
+        -- A rerun for the same date must not rescore a person's seed as a timely idea and so make it unprompted.
+        AND NOT EXISTS (
+          SELECT 1 FROM reels.idea_sources_v m
+           WHERE m.post_idea_id = s.post_idea_id AND m.seeded
+        )`,
     [nyDate],
   );
   return rows.map((row) => row.post_idea_id);
+}
+
+/**
+ * Ideas already committed to a posting day, so a slate for `target` must not offer them again (Bald-Eagle D4: Text
+ * on Screen is made 2 days ahead, and the cutover night makes two slates). Committed: a waiting or posting Text on
+ * Screen booking (any date, the target's own included: its slot already counts toward the quota), or selected on
+ * the newest slate of another date whose day has not passed (`ny_date >= runDay`).
+ */
+export async function ideasCommittedElsewhere(target: string, runDay: string): Promise<Set<string>> {
+  const { rows } = await dbQuery<{ id: string }>(
+    `SELECT s.idea_ref AS id
+       FROM social_hub.schedule s
+      WHERE s.vertical = 'reels' AND s.status IN ('scheduled', 'publishing')
+        AND s.idea_ref IS NOT NULL
+     UNION
+     SELECT sc.post_idea_id::text AS id
+       FROM reels.idea_scores sc
+       JOIN (SELECT DISTINCT ON (ny_date) id
+               FROM reels.score_slates
+              WHERE ny_date >= $2::date AND ny_date <> $1::date
+              ORDER BY ny_date, scored_at DESC) latest ON latest.id = sc.slate_id
+      WHERE sc.selected`,
+    [target, runDay],
+  );
+  return new Set(rows.map((row) => row.id));
 }
 
 /** Yesterday's scored ideas, in the shape the carryover rule ranks. */
@@ -119,7 +151,12 @@ export async function loadSlateRanked(
          WHERE ny_date = $1::date
          ORDER BY scored_at DESC
          LIMIT 1
-      )`,
+      )
+        -- A person's seed is never a carryover: the night does not make it unprompted (a pin or Run now does).
+        AND NOT EXISTS (
+          SELECT 1 FROM reels.idea_sources_v m
+           WHERE m.post_idea_id = s.post_idea_id AND m.seeded
+        )`,
     [nyDate],
   );
   return rows.map((row) => ({
@@ -146,10 +183,9 @@ export async function loadIdeaMaterial(ids: readonly string[]): Promise<IdeaMate
     headline: string;
     body: string;
   }>(
-    `SELECT i.id, i.last_joined, m.role, s.source_name, s.headline, s.body
+    `SELECT i.id, i.last_joined, m.role, m.source_name, m.headline, m.body
        FROM reels.post_ideas i
-       JOIN reels.post_idea_members m ON m.post_idea_id = i.id
-       JOIN reels.sources s ON s.id = m.source_id
+       JOIN reels.idea_sources_v m ON m.post_idea_id = i.id
       WHERE i.id = ANY($1::uuid[])
       ORDER BY i.id,
                CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
@@ -184,6 +220,24 @@ export type ScoreInsert = {
 };
 
 export async function insertSlate(input: {
+  runId: string;
+  nyDate: string;
+  pass1Version: string;
+  pass2Version: string;
+  scores: readonly ScoreInsert[];
+}): Promise<string> {
+  try {
+    return await insertSlateRows(input);
+  } catch (error) {
+    // One run makes two slates on the cutover night (Bald-Eagle D8); before the SQL is applied the database allows one.
+    if ((error as { constraint?: string })?.constraint === 'idx_reels_score_slates_run' || String((error as Error)?.message).includes('idx_reels_score_slates_run')) {
+      throw new Error(`This run already has a slate, and the database allows one slate per run: apply db/bald_eagle_2026_11_12_leadtime_reels.sql so one run can make the ${input.nyDate} slate too.`);
+    }
+    throw error;
+  }
+}
+
+async function insertSlateRows(input: {
   runId: string;
   nyDate: string;
   pass1Version: string;
@@ -333,21 +387,32 @@ export async function loadSlates(
       confidence: number | null;
       components: InterpretedScore;
       headlines: string[] | null;
+      yours: boolean;
     }>(
-      `SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected,
-              s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
-              s.value_score, s.blockbuster, s.confidence, s.components,
-              (
-                SELECT jsonb_agg(src.headline ORDER BY
-                         CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
-                         m.joined_at)
-                  FROM reels.post_idea_members m
-                  JOIN reels.sources src ON src.id = m.source_id
-                 WHERE m.post_idea_id = s.post_idea_id
-              ) AS headlines
-         FROM reels.idea_scores s
-        WHERE s.slate_id = ANY($1::uuid[])
-          AND ($2::boolean = false OR s.selected)
+      // idea_sources_v resolves intake merges with a recursive CTE, so it is read
+      // once for every idea on these slates and grouped, not once per score row
+      // (two correlated reads per row cost ~0.6 s, almost all of it JIT, on 130 rows).
+      `WITH scores AS (
+         SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected,
+                s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
+                s.value_score, s.blockbuster, s.confidence, s.components
+           FROM reels.idea_scores s
+          WHERE s.slate_id = ANY($1::uuid[])
+            AND ($2::boolean = false OR s.selected)
+       ),
+       members AS (
+         SELECT m.post_idea_id,
+                jsonb_agg(m.headline ORDER BY
+                  CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
+                  m.joined_at) AS headlines,
+                COALESCE(bool_or(m.seeded), false) AS yours
+           FROM reels.idea_sources_v m
+          WHERE m.post_idea_id IN (SELECT post_idea_id FROM scores)
+          GROUP BY m.post_idea_id
+       )
+       SELECT s.*, m.headlines, COALESCE(m.yours, false) AS yours
+         FROM scores s
+         LEFT JOIN members m ON m.post_idea_id = s.post_idea_id
         ORDER BY s.rank NULLS LAST, s.net DESC NULLS LAST`,
       [slateIds, options?.selectedOnly === true],
     ),
@@ -380,6 +445,7 @@ export async function loadSlates(
       confidence: row.confidence,
       components: row.components,
       headlines: row.headlines ?? [],
+      yours: row.yours,
     });
   }
   return out;

@@ -1,8 +1,10 @@
 /**
- * Trial Reels auto-publish path, offline (PGlite + stub Meta, no Claude, no
- * Instagram): with require_approval off, a selected reel on a slate becomes a
- * scheduled slot and posts with no human approval; one bounded retry for a
- * clean failure; which finished videos the nightly fill may reuse (D55).
+ * Text on Screen's night booking and publish path, offline (PGlite + stub
+ * Meta, no Claude, no Instagram): in the Live state a selected reel on a slate
+ * becomes a scheduled slot, and it posts only once a person approves it (every
+ * post needs approval, settings standard D16: a stored require_approval false
+ * is never read as false); one bounded retry for a clean failure; which
+ * finished videos the nightly fill may reuse (D55).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -12,7 +14,7 @@ import type { PGlite } from '@electric-sql/pglite';
 import { reusableVideos } from '@/lib/reels/pipeline/fill';
 import type { MetaClient } from '@/lib/reels/music/meta';
 import { claimAndPublish } from '@/lib/reels/music/publish';
-import { releaseDueSchedules, retryFailedSlots, retryableError, scheduleSelectedSlate } from '@/lib/reels/publish/schedule';
+import { forcePost, publishingLive, releaseDueSchedules, REELS_NOT_LIVE_NOTE, retryFailedSlots, retryableError, scheduleSelectedSlate } from '@/lib/reels/publish/schedule';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -54,9 +56,17 @@ async function seed(pg: PGlite, opts: { madeOn?: string; slateDay?: string; orig
   await pg.exec(`INSERT INTO reels.idea_scores (slate_id, post_idea_id, origin, net, rank, selected, components)
                  VALUES ('${onSlate}', '${IDEA}', '${opts.origin ?? 'timely'}', 1, 1, true, '{}'::jsonb)`);
   if (opts.settings !== false) {
-    await pg.exec(`INSERT INTO reels.settings (key, value) VALUES ('publishing_live', 'true'::jsonb), ('require_approval', 'false'::jsonb)
+    // The Live state (D16): Generate (auto_run) and publishing_live both on. The stored require_approval false is
+    // left in on purpose: it must never let a reel post without a person's approval.
+    await pg.exec(`INSERT INTO reels.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', 'true'::jsonb), ('require_approval', 'false'::jsonb)
                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   }
+}
+
+/** A person approves the reel at 8:00 AM, before its 8:45 window opens: the booked slot is approved, not rebooked. */
+async function approve(): Promise<void> {
+  const { schedulePostIdea } = await import('@/lib/reels/publish/schedule');
+  assert.ok((await schedulePostIdea(IDEA, 'user', VIDEO, new Date('2026-10-08T12:00:00Z'))).scheduled);
 }
 
 function stubMeta(opts: { failSign?: boolean } = {}) {
@@ -76,7 +86,7 @@ function stubMeta(opts: { failSign?: boolean } = {}) {
   return { meta, signVideo, sleep: async () => undefined };
 }
 
-test('require_approval off: a selected reel gets an auto slot in the first open window and posts with no human approval', async () => {
+test('Live: a selected reel gets an auto slot in the first open window; with no approval it never posts, even with require_approval stored false (D16)', async () => {
   const pg = await db();
   await seed(pg);
   // 1 AM run: the slot is booked while the video is still being made, so it has no item or approval.
@@ -89,23 +99,39 @@ test('require_approval off: a selected reel gets an auto slot in the first open 
   assert.ok(at >= new Date('2026-10-08T12:45:00Z').getTime() && at <= new Date('2026-10-08T14:00:00Z').getTime(), 'inside 8:45-10:00 AM ET');
 
   await pg.exec(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
-  assert.equal(await releaseDueSchedules(), 1, 'released without any approval');
-  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals`)).rows.length, 0, 'no human approval was written');
-  const out = await claimAndPublish(stubMeta());
-  assert.equal(out?.status, 'published');
-  assert.equal((await pg.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
-  assert.equal((await pg.query<{ trigger: string }>(`SELECT trigger FROM social_hub.publish_attempts`)).rows[0]!.trigger, 'auto');
+  assert.equal(await releaseDueSchedules(), 0, 'not released without an approval');
+  const row = (await pg.query<{ status: string; error: string }>(`SELECT status, error FROM social_hub.schedule`)).rows[0]!;
+  assert.deepEqual([row.status, row.error], ['cancelled', 'Nobody approved this reel before its slot, so it was not posted.']);
+  assert.equal(await claimAndPublish(stubMeta()), null, 'nothing to post');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0);
 });
 
-test('publishing_live off: the nightly run books nothing', async () => {
+test('Paused: the nightly run books nothing (no settings, or Generate off with publishing on); a paused type holds no slots (D17)', async () => {
   const pg = await db();
   await seed(pg, { settings: false });
   assert.deepEqual(await scheduleSelectedSlate(SLATE, ONE_AM), { scheduled: 0 });
+  // Generate off with Live on is not a state: it reads as paused (contract §3).
+  await pg.exec(`INSERT INTO reels.settings (key, value) VALUES ('auto_run', 'false'::jsonb), ('publishing_live', 'true'::jsonb)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.deepEqual(await scheduleSelectedSlate(SLATE, ONE_AM), { scheduled: 0 });
+});
+
+test('Approval: the nightly run books the selected reel’s slot (contract §4.3), but nothing posts and Force is refused (Live only)', async () => {
+  const pg = await db();
+  await seed(pg, { settings: false });
+  await pg.exec(`INSERT INTO reels.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', 'false'::jsonb)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.deepEqual(await scheduleSelectedSlate(SLATE, ONE_AM), { scheduled: 1 });
+  assert.equal(await publishingLive(), false, 'the worker releases and posts only while Live');
+  assert.deepEqual(await forcePost(VIDEO), { queued: false, status: 409, note: REELS_NOT_LIVE_NOTE });
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0, 'nothing queued');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals`)).rows.length, 0, 'a refused Force approves nothing');
 });
 
 async function failedSlot(pg: PGlite, failedMinutesBefore: number, overrides: { containerId?: string; error?: string } = {}): Promise<void> {
   await seed(pg);
   await scheduleSelectedSlate(SLATE, ONE_AM);
+  await approve();
   await pg.exec(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
   await releaseDueSchedules();
   const failed = await claimAndPublish(stubMeta({ failSign: true }));
@@ -184,7 +210,7 @@ test('reuse (D55): a carryover idea whose finished video is from an earlier day 
   assert.equal((await reusableVideos(NEXT_SLATE, [IDEA])).size, 0, 'a rejected video is never reused');
 });
 
-test('require_approval ON: an unapproved auto slot is cancelled at its window; approving first posts it', async () => {
+test('approval is always on: an unapproved auto slot is cancelled at its window; approving first posts it', async () => {
   const nobody = await db();
   await seed(nobody);
   await nobody.exec(`UPDATE reels.settings SET value = 'true'::jsonb WHERE key = 'require_approval'`);
@@ -199,9 +225,7 @@ test('require_approval ON: an unapproved auto slot is cancelled at its window; a
   await approved.exec(`UPDATE reels.settings SET value = 'true'::jsonb WHERE key = 'require_approval'`);
   await scheduleSelectedSlate(SLATE, ONE_AM);
   // The owner approves at 8:00 AM, before the 8:45 window opens: the booked slot is approved, not rebooked.
-  const { schedulePostIdea } = await import('@/lib/reels/publish/schedule');
-  const out = await schedulePostIdea(IDEA, 'user', VIDEO, new Date('2026-10-08T12:00:00Z'));
-  assert.ok(out.scheduled);
+  await approve();
   assert.equal((await approved.query(`SELECT 1 FROM social_hub.schedule WHERE approved_at IS NOT NULL`)).rows.length, 1);
   await approved.exec(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
   assert.equal(await releaseDueSchedules(), 1);

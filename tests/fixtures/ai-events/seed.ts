@@ -37,10 +37,20 @@ async function allowAiEventsOnSpine(pg: PGlite): Promise<void> {
   `);
 }
 
-export async function openAiEventsDb(o: { publishingLive?: boolean } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
+/**
+ * `publishingLive`: only the raw publishing_live key (with the seeded auto_run false that is the Generate off + Live on
+ * mismatch, which reads as paused). `state`: the type's state (D16) written as both keys, auto_run and publishing_live.
+ */
+export async function openAiEventsDb(o: { publishingLive?: boolean; state?: 'paused' | 'approval' | 'live' } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
   const { pg, query } = await openHubTestDb();
   await allowAiEventsOnSpine(pg);
   if (o.publishingLive) await query(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  if (o.state) {
+    const set = (key: string, on: boolean) =>
+      query(`INSERT INTO ai_events.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(on)]);
+    await set('auto_run', o.state !== 'paused');
+    await set('publishing_live', o.state === 'live');
+  }
   return { pg, query };
 }
 

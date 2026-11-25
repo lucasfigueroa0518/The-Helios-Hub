@@ -5,14 +5,18 @@
  * sources for the ones the policy keeps.
  *
  *   lane       from the row's source (stock → openverse, or stocksnap when
- *              the credit says so; commons → headshot; the rest as named)
+ *              the credit says so; commons → headshot; stories and lfd →
+ *              their own lanes; the rest as named)
+ *   subject    a Stories credit names the photo's subject ("Name, Role ·
+ *              author · host"): it becomes the request words, so the photo's
+ *              tags carry it (unverified: no QID, never a verified subject)
  *   vision     a carousel's stock or Commons-search photo passed its
  *              close-up check to be published: vision_pass is inferred
  *              (vision.inferred = true). Stories never ran that check.
  *   licence    the same pass as live offers, with the row's verified subject
  *              (and an official image's company, from its "Image: X" credit)
- *              as the brief; an article photo credited to a company the row
- *              doesn't name is not stored
+ *              as the brief; a credit it doesn't clear is stored as `unknown`
+ *              (reuse_ok false). An LFD meme is not a photo: never stored.
  *   watermark  media_library.settings.used_photos_after_id: the last row
  *              imported, so the next import starts after it (rows chosen by
  *              --since don't move it)
@@ -20,7 +24,7 @@
  * Idempotent: sightings and sources are upserts. The bank's drain() runs
  * the same import (passive), a bounded batch at a time.
  */
-import { laneForUsedSource, licenceOf, shouldStore } from './policy';
+import { laneForUsedSource, licenceOf, storedLicence, subjectInCredit } from './policy';
 import { writeRows } from './store';
 import type { BankRows, Query, SightingRow, SourceRow } from './types';
 
@@ -56,13 +60,20 @@ export function planUsedRows(rows: UsedRow[]): PlannedUsed {
     const at = r.used_at instanceof Date ? r.used_at.toISOString() : new Date(r.used_at).toISOString();
     const lane = laneForUsedSource(r.source, r.credit);
     const carousel = !isStories(r.story_id);
-    const scene = r.scene?.trim() || null;
+    // Stories and LFD record a frame role or a photo kind ("story", "opener", "scene") as the scene: not words about the photo.
+    const ownLane = r.source === 'stories' || r.source === 'lfd';
+    const scene = ownLane ? null : r.scene?.trim() || null;
+    const named = r.subject?.trim() || (ownLane ? subjectInCredit(r.credit) : null);
+    if (r.source === 'lfd' && /^meme$/i.test(r.credit?.trim() ?? '')) {
+      out.skipped.push({ url: r.url, reason: 'an LFD meme, not a photo' });
+      continue;
+    }
     const sighting: SightingRow = {
       url: r.url,
       run_kind: 'backfill',
       run_ref: r.story_id,
       slide: Number(r.slide) || 0,
-      request_query: scene ?? r.subject?.trim() ?? '',
+      request_query: scene ?? named ?? '',
       request_kind: null,
       request_qid: r.qid ?? null,
       qid: r.qid ?? null,
@@ -81,12 +92,9 @@ export function planUsedRows(rows: UsedRow[]): PlannedUsed {
     // The official image's company, from the credit code wrote ("Image: <Company>"); otherwise only the row's subject.
     const official = r.source === 'official' ? /^Image:\s*(.+)$/.exec(credit)?.[1]?.trim() : undefined;
     const subjects = [r.subject, official].filter((s): s is string => !!s);
-    const licence = licenceOf({ url: r.url, credit, source: r.source && lane ? r.source : 'stock' }, subjects);
-    if (!shouldStore('used', { lane, verified: Boolean(r.qid) }, licence) || !licence.licence) {
-      out.skipped.push({ url: r.url, reason: licence.reason });
-      continue;
-    }
-    const src: SourceRow = { url: r.url, source: r.source ?? null, lane, title: scene ?? r.subject ?? null, date: null, credit, licence: licence.licence, reuse_ok: licence.reuseOk };
+    // Stories and LFD aren't finder sources: their credits are checked as a stock photo's (an allowed licence in the credit).
+    const licence = storedLicence(licenceOf({ url: r.url, credit, source: r.source && lane && !ownLane ? r.source : 'stock' }, subjects));
+    const src: SourceRow = { url: r.url, source: r.source ?? null, lane, title: scene ?? named ?? null, date: null, credit, licence: licence.licence, reuse_ok: licence.reuseOk };
     out.sources.push(src);
   }
   return out;

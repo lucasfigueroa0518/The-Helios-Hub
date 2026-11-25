@@ -29,7 +29,7 @@ away.
 | Rule | Value |
 |---|---|
 | Machine | `e2-standard-2` (not free-tier) |
-| Region | `us-west1-a` |
+| Region | `northamerica-northeast1-a` (Montreal, next to Supabase ca-central-1; moved from us-west1-a 2026-11-24) |
 | Memory | 8 GB; systemd `MemoryMax=7G` |
 | Disk | Keep boot disk ≤ 30 GB standard persistent disk |
 
@@ -120,7 +120,7 @@ chmod +x scripts/gcp/provision-e2-micro-worker.sh
 Defaults / current prod worker:
 
 - Project: `helios-influencer-network` (billing already linked; `helios-hub` hit billing-project quota)
-- Zone: `us-west1-a`
+- Zone: `northamerica-northeast1-a`
 - Name: `helios-orch-worker`
 - Machine: `e2-standard-2`
 - Installs Node 22, 2 GB swap, copies app, systemd unit `helios-worker`
@@ -137,7 +137,7 @@ That also installs `scripts/gcp/helios-worker.service` (memory limits).
 ### 4. Verify
 
 ```bash
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
+gcloud compute ssh helios-orch-worker --zone=northamerica-northeast1-a \
   --command='sudo systemctl status helios-worker --no-pager'
 ```
 
@@ -156,17 +156,17 @@ In the app: Hub → **Queue**. Overdue badges should clear once the worker is he
 
 ```bash
 # Logs
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
+gcloud compute ssh helios-orch-worker --zone=northamerica-northeast1-a \
   --command='sudo journalctl -u helios-worker -f'
 
 # Restart
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
+gcloud compute ssh helios-orch-worker --zone=northamerica-northeast1-a \
   --command='sudo systemctl restart helios-worker'
 
 # Update env on the VM
 gcloud compute scp scripts/gcp/worker.env \
-  helios-orch-worker:/tmp/worker.env --zone=us-west1-a
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
+  helios-orch-worker:/tmp/worker.env --zone=northamerica-northeast1-a
+gcloud compute ssh helios-orch-worker --zone=northamerica-northeast1-a \
   --command='sudo mv /tmp/worker.env /opt/helios-worker/worker.env && sudo systemctl restart helios-worker'
 ```
 

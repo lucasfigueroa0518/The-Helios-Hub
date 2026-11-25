@@ -12,7 +12,7 @@ if [[ -f scripts/gcp/.deploy-env ]]; then
 fi
 
 PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
-ZONE="${GCP_ZONE:-us-west1-a}"
+ZONE="${GCP_ZONE:-northamerica-northeast1-a}"
 INSTANCE="${GCP_INSTANCE:-helios-orch-worker}"
 MACHINE_TYPE="${GCP_MACHINE_TYPE:-e2-standard-2}"
 

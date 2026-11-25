@@ -138,8 +138,8 @@ async function main() {
   for (const [text, stat] of slowest) {
     rows.push({ label: `    sql ${Math.round(stat.ms)}ms x${stat.n}`, ms: 0, queries: stat.n, note: squash(text) });
   }
-  const verticals = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'] as const;
-  await timed('  readOne x6, one shared spine', () => withSharedSpine(liveHubQuery, () => Promise.all(verticals.map((vertical) => readOne(liveHubQuery, vertical)))));
+  const verticals = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes'] as const;
+  await timed('  readOne x7, one shared spine', () => withSharedSpine(liveHubQuery, () => Promise.all(verticals.map((vertical) => readOne(liveHubQuery, vertical)))));
   for (const vertical of verticals) await timed(`  readOne ${vertical}`, () => readOne(liveHubQuery, vertical));
   for (const [type, value] of Object.entries(reads)) {
     rows.push({ label: `    ${type} size`, ms: 0, queries: 0, note: value instanceof Error ? `ERROR ${value.message}` : kb(JSON.stringify(value)) });

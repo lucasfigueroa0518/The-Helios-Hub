@@ -227,3 +227,43 @@ sustained beds (the longest continuous stretch, up to 10s) by the Explainers 3.1
 | typewriter | [Typewriter BELL.wav](https://freesound.org/people/mincedbeats/sounds/433596/) | mincedbeats |
 | typewriter | [OLD_Typewriter_ALL.wav](https://freesound.org/people/Spring_Tide/sounds/259498/) | Spring_Tide |
 | typewriter | [Typing on a typewriter](https://freesound.org/people/videog/sounds/240839/) | videog |
+| magnet | [Magnet on refrigerator.wav](https://freesound.org/people/SpliceSound/sounds/260129/) | SpliceSound |
+| magnet | [magnets clicking together.wav](https://freesound.org/people/Eneasz/sounds/176918/) | Eneasz |
+| magnet | [11 Magnet on whiteboard.wav](https://freesound.org/people/15FPanska_Hecl_Filip/sounds/461145/) | 15FPanska_Hecl_Filip |
+| magnet | [Putting magnets on a fridge Added a low shelf.wav](https://freesound.org/people/GH0STY_XD/sounds/594451/) | GH0STY_XD |
+| cord-taut | [ROPE_GOES_TIGHT.WAV](https://freesound.org/people/dansotak/sounds/137711/) | dansotak |
+| cord-taut | [rope twist,old rope being twisted in hands, tightaning rope.recorded on  H6Zoom XY capsule](https://freesound.org/people/Rinaldobowles56/sounds/708114/) | Rinaldobowles56 |
+| cord-taut | [Rope - leash - medium - stretched - tighten - whoosh.wav](https://freesound.org/people/ValentinPetiteau/sounds/624485/) | ValentinPetiteau |
+| whiteboard-squeak | [marker-whiteboard-squeak01](https://freesound.org/people/newagesoup/sounds/335956/) | newagesoup |
+| whiteboard-squeak | [short squeaky sharpie edding pen.wav](https://freesound.org/people/swantje14/sounds/544843/) | swantje14 |
+
+## Ambience beds (Reel AI Drama)
+
+Steady 25s beds cut from Freesound recordings released under Creative Commons 0 (public domain),
+by explainers/reel-ai-drama/tools/ambience-import.mjs.
+
+| Place | Source | Author | License |
+|---|---|---|---|
+| room-tone | [House Room Tone](https://freesound.org/people/aleclubin/sounds/641306/) | aleclubin | CC0 |
+| office | [Office Ambience.wav](https://freesound.org/people/DiArchangeli/sounds/108695/) | DiArchangeli | CC0 |
+| server | [Object_Fan_Server_Room.wav](https://freesound.org/people/Nox_Sound/sounds/465613/) | Nox_Sound | CC0 |
+| street | [citystreet3.wav](https://freesound.org/people/moxobna/sounds/36734/) | moxobna | CC0 |
+| crowd | [conference chatter 3.aif](https://freesound.org/people/reecord2/sounds/85040/) | reecord2 | CC0 |
+| hall | [people ambience large hall 02.wav](https://freesound.org/people/klankbeeld/sounds/171462/) | klankbeeld | CC0 |
+| wind | [Wind__Artic__Cold.wav](https://freesound.org/people/cobratronik/sounds/117136/) | cobratronik | CC0 |
+| rain | [AMB_M_City_Rain_Light.wav](https://freesound.org/people/conleec/sounds/171980/) | conleec | CC0 |
+| cafe | [restaurant2.wav](https://freesound.org/people/moxobna/sounds/28204/) | moxobna | CC0 |
+| keyboards | [Mechanical Keyboard Typing (Treble Version)](https://freesound.org/people/stu556/sounds/450282/) | stu556 | CC0 |
+| night | [Night city atmosphere](https://freesound.org/people/Soundkrampf/sounds/237329/) | Soundkrampf | CC0 |
+| newsroom | [Office ambience - call center 3](https://freesound.org/people/leonelmail/sounds/579568/) | leonelmail | CC0 |
+| fireplace | [fire crackles](https://freesound.org/people/florianreichelt/sounds/563766/) | florianreichelt | CC0 |
+| car | [Car interior](https://freesound.org/people/Kukensius/sounds/320228/) | Kukensius | CC0 |
+| train | [Empty train moving slowly (recorded inside passenger car)](https://freesound.org/people/avakas/sounds/197124/) | avakas | CC0 |
+| airplane | [Plane Interior](https://freesound.org/people/Vurca/sounds/341591/) | Vurca | CC0 |
+| factory | [Industrial ambience](https://freesound.org/people/Lewente/sounds/393398/) | Lewente | CC0 |
+| forest | [forest with small river birds and nature field recording](https://freesound.org/people/Garuda1982/sounds/577623/) | Garuda1982 | CC0 |
+| shore | [Big waves hit land.wav](https://freesound.org/people/straget/sounds/412308/) | straget | CC0 |
+| camera-shutter | [Vintage Camera Flash Powder and Shutter](https://freesound.org/people/Werra/sounds/232130/) | Werra |
+| camera-shutter | [Camera Focusing and Shutter](https://freesound.org/people/uEffects/sounds/207865/) | uEffects |
+| camera-shutter | [Camera shutter and flash combined](https://freesound.org/people/montclairguy/sounds/353044/) | montclairguy |
+| camera-shutter | [DSLR Camera Click](https://freesound.org/people/akonze/sounds/157812/) | akonze |

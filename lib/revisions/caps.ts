@@ -16,6 +16,9 @@ const RENDER_ONLY = c(0.05, 0.1);
 export const CAPS: CapsConfig = {
   carousels: { photo: c(0.15, 0.4), wording: c(0.4, 1.0), color: RENDER_ONLY, layout: RENDER_ONLY },
   stories: { photo: c(0.2, 0.5), wording: c(0.15, 0.4), color: RENDER_ONLY, layout: RENDER_ONLY },
+  // SS-1: Trivia and Real or AI? sets were revised under the Stories caps; split out, they keep them.
+  ai_trivia: { photo: c(0.2, 0.5), wording: c(0.15, 0.4), color: RENDER_ONLY, layout: RENDER_ONLY },
+  real_or_ai: { photo: c(0.2, 0.5), wording: c(0.15, 0.4), color: RENDER_ONLY, layout: RENDER_ONLY },
   last_few_days: { photo: c(0.15, 0.4), wording: c(0.4, 1.0), layout: RENDER_ONLY },
   ai_events: { photo: c(0.15, 0.4), wording: c(0.1, 0.3), layout: RENDER_ONLY },
   reels: { wording: c(0.15, 0.4), photo: c(0.5, 1.25), motion: c(0.75, 1.5), color: c(0.75, 1.5) },

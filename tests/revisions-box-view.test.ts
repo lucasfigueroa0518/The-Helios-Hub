@@ -144,7 +144,7 @@ test('the stateful box renders its first paint from rows it is given', () => {
   assert.match(loading, /Loading changes…/);
 });
 
-test('the post view leaves the box out while the revise flag is off', async () => {
+test('the post view shows the revise box now that the flag is on', async () => {
   const { PostView } = await import('@/components/social-hub/post/PostView');
   const { offerer } = await import('@/lib/social-hub/views/offer');
   const { previewDataset } = await import('./fixtures/social-hub/preview-dataset');
@@ -154,7 +154,7 @@ test('the post view leaves the box out while the revise flag is off', async () =
     createElement(AppRouterContext.Provider, { value: router as never }, createElement(PostView, { post, o: offerer(dataset, NOW), dataset })),
   );
   assert.ok(html.includes('sh-post'));
-  assert.doesNotMatch(html, /sh-revise/);
+  assert.match(html, /sh-revise/);
 });
 
 test('Restore original asks for a second click before it discards the part\'s changes', () => {

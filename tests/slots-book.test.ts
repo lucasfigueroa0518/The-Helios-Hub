@@ -62,15 +62,16 @@ test('slots differ by date: LFD on Tue only never books Wed; an override slot is
   assert.deepEqual([got.nyDate, got.slot], [DAY, 't1100']);
 });
 
-test('slotsWithinCap: 4 explainer slots, cap 3 -> first 3 by time made, 1 over; Stories cap is per series', () => {
+test('slotsWithinCap: 4 explainer slots, cap 3 -> first 3 by time made, 1 over; each Stories-format type has its own cap (SS-1)', () => {
   const plan: SlotPlan = { from: DAY, to: DAY, byDate: new Map([[DAY, [
     slot('explainers', 1000, 'main'), slot('explainers', 780, 'main'), slot('explainers', 900, 'main'), slot('explainers', 600, 'main'),
-    slot('stories', 510, null, 'morning_download'), slot('stories', 600, null, 'morning_download'), slot('stories', 700, null, 'morning_download'), slot('stories', 520, null, 'free_vs_paid'),
+    slot('stories', 510, null, 'morning_download'), slot('stories', 600, null, 'morning_download'), slot('stories', 700, null, 'morning_download'), slot('real_or_ai', 520, null, 'real_or_ai'),
   ]]]) };
   const e = slotsWithinCap(plan, 'explainers', DAY, 3);
   assert.deepEqual(e.made.map((s) => s.startMinute), [600, 780, 900]);
   assert.deepEqual(e.over.map((s) => s.startMinute), [1000]);
   const st = slotsWithinCap(plan, 'stories', DAY, 2);
-  assert.equal(st.made.length, 3);
+  assert.deepEqual(st.made.map((s) => s.startMinute), [510, 600]);
   assert.deepEqual(st.over.map((s) => s.startMinute), [700]);
+  assert.deepEqual(slotsWithinCap(plan, 'real_or_ai', DAY, 2).made.map((s) => s.startMinute), [520]);
 });

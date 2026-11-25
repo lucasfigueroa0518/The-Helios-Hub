@@ -1,6 +1,7 @@
 /**
  * Stories frame storage (plan §2): a private Supabase Storage bucket
- * `stories`. Frames are uploaded after render; Instagram fetches each one
+ * `stories`. Frames (JPEGs; AI Trivia's MP4s and their poster JPEGs) are
+ * uploaded after render; Instagram fetches each one
  * from a short-lived signed URL when the worker creates its container.
  * Modeled on lib/reels/visual/storage.ts (copied, not imported), over fetch
  * with normal TLS verification.
@@ -10,7 +11,14 @@ import { serviceHeaders } from '@/lib/supabase-service-headers';
 
 export const STORIES_BUCKET = 'stories';
 
-export type StorageConfig = { baseUrl: string; serviceRole: string; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> };
+export type StorageConfig = {
+  baseUrl: string;
+  serviceRole: string;
+  fetch?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  /** Per-request timeout. Uploads from the workers keep the 60 s default; page renders pass a short one. */
+  timeoutMs?: number;
+};
 
 export type StoriesStorage = {
   upload(objectPath: string, body: Buffer, contentType?: string): Promise<void>;
@@ -22,10 +30,14 @@ export type StoriesStorage = {
   remove(objectPaths: string[]): Promise<void>;
 };
 
-/** Where a frame's JPEG lives: one folder per set. */
-export function frameObjectPath(setId: string, seq: number, role: string): string {
+/** A frame file's kind: the JPEG (an image frame, or a video frame's poster) or a video frame's MP4. */
+export type FrameFileExt = 'jpg' | 'mp4';
+
+/** Where a frame's file lives: one folder per set, `NN-role.jpg` (image or poster) or `NN-role.mp4` (video). */
+export function frameObjectPath(setId: string, seq: number, role: string, ext: FrameFileExt = 'jpg'): string {
   if (!/^[0-9a-f-]{36}$/i.test(setId)) throw new Error(`bad set id: ${setId}`);
-  return `sets/${setId}/${String(seq).padStart(2, '0')}-${role.replace(/[^a-z_]/g, '')}.jpg`;
+  if (ext !== 'jpg' && ext !== 'mp4') throw new Error(`bad frame file type: ${String(ext)}`);
+  return `sets/${setId}/${String(seq).padStart(2, '0')}-${role.replace(/[^a-z_]/g, '')}.${ext}`;
 }
 
 const encodePath = (p: string) => p.split('/').map(encodeURIComponent).join('/');
@@ -56,7 +68,7 @@ export function createStoriesStorage(cfg: StorageConfig = liveStorageConfig()): 
       method,
       headers: { ...serviceHeaders(cfg.serviceRole), ...headers },
       body: body as BodyInit | undefined,
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(cfg.timeoutMs ?? 60_000),
     });
   const json = (o: unknown) => ({ body: JSON.stringify(o), headers: { 'content-type': 'application/json' } });
 

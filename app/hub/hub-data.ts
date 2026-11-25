@@ -28,6 +28,11 @@ export async function hubGetJson<T>(url: string, options?: { force?: boolean }):
   return request;
 }
 
+/** Seed the cache with data the server already sent (same shape as the GET), so the first view needs no request. */
+export function primeHubCache(url: string, data: unknown): void {
+  cache.set(url, { at: Date.now(), data });
+}
+
 /** Prefetch a single hub API; never fan out many session-pool connections at once. */
 export function prefetchHubJson(url: string): void {
   void hubGetJson(url).catch(() => undefined);

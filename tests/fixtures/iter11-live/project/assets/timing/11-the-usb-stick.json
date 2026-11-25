@@ -1,0 +1,108 @@
+{
+ "frame": 11,
+ "id": "11-the-usb-stick",
+ "duration": 5.365,
+ "voice_end": 5.085,
+ "hold": 0.28,
+ "words": [
+  {
+   "text": "That",
+   "start": 0.02,
+   "end": 0.133
+  },
+  {
+   "text": "Thursday,",
+   "start": 0.204,
+   "end": 0.633
+  },
+  {
+   "text": "at",
+   "start": 0.812,
+   "end": 0.847
+  },
+  {
+   "text": "an",
+   "start": 0.919,
+   "end": 0.99
+  },
+  {
+   "text": "intern",
+   "start": 1.169,
+   "end": 1.347
+  },
+  {
+   "text": "Q&A",
+   "start": 1.419,
+   "end": 1.74
+  },
+  {
+   "text": "in",
+   "start": 1.776,
+   "end": 1.847
+  },
+  {
+   "text": "Redmond,",
+   "start": 1.919,
+   "end": 2.276
+  },
+  {
+   "text": "an",
+   "start": 2.466,
+   "end": 2.466
+  },
+  {
+   "text": "employee",
+   "start": 2.67,
+   "end": 2.884
+  },
+  {
+   "text": "handed",
+   "start": 2.956,
+   "end": 3.17
+  },
+  {
+   "text": "Nadella",
+   "start": 3.206,
+   "end": 3.563
+  },
+  {
+   "text": "the",
+   "start": 3.598,
+   "end": 3.634
+  },
+  {
+   "text": "petition",
+   "start": 3.67,
+   "end": 4.098
+  },
+  {
+   "text": "on",
+   "start": 4.17,
+   "end": 4.241
+  },
+  {
+   "text": "a",
+   "start": 4.277,
+   "end": 4.313
+  },
+  {
+   "text": "USB",
+   "start": 4.384,
+   "end": 4.741
+  },
+  {
+   "text": "stick.",
+   "start": 4.813,
+   "end": 5.035
+  }
+ ],
+ "lines": [
+  {
+   "id": "L11",
+   "start": 0.02,
+   "end": 5.035,
+   "label": "Microsoft HQ, Redmond",
+   "label_kind": null
+  }
+ ]
+}

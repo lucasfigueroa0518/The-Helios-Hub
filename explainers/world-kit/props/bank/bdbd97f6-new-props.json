@@ -1,0 +1,72 @@
+{
+ "file": "bdbd97f6-new-props.js",
+ "job": "bdbd97f6-8fee-45b9-8f14-9a4536d1412d",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.389Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "vacuum flask with a screw-on cup lid": {
+   "source_name": "vacuum flask with a screw-on cup lid",
+   "tags": {
+    "is": "a thermos vacuum flask: a tall steel cylinder with a screw-on cup lid, a pouring stopper and a band of orange",
+    "setting": [
+     "kitchen counter",
+     "table",
+     "picnic",
+     "office"
+    ],
+    "material": "brushed steel body with an orange band, black plastic cup lid, flat tones with ink seams and riso grain",
+    "parts": [
+     "tall steel cylinder",
+     "orange band",
+     "screw-on cup lid with grip ribs",
+     "pouring stopper button",
+     "pour lip",
+     "water-level window"
+    ],
+    "not": [
+     "water bottle",
+     "drinks can",
+     "coffee pot",
+     "beaker",
+     "candle"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "stovetop kettle on a one-ring hob": {
+   "source_name": "stovetop kettle on a one-ring hob",
+   "tags": {
+    "is": "a stovetop kettle on a one-ring hob: squat steel body, curved spout, arched handle, knob lid, a small flame under it",
+    "setting": [
+     "kitchen counter",
+     "table",
+     "kitchen"
+    ],
+    "material": "light steel kettle on a dark hob slab, flat tones with ink seams and riso grain",
+    "parts": [
+     "squat steel body",
+     "curved spout",
+     "arched handle",
+     "knob lid",
+     "one-ring hob slab",
+     "control knob",
+     "small flame",
+     "steam"
+    ],
+    "not": [
+     "saucepan",
+     "teapot",
+     "electric kettle",
+     "watering can",
+     "oil lamp"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

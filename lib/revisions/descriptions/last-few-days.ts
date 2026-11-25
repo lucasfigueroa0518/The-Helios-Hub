@@ -17,10 +17,13 @@
  * caption is saved in `before.derived` and comes back on undo while the stories match it again.
  *
  *   layout   the photo's crop (photo.focus): render only, 0 model calls
- *   wording  the writer's limits and normalize() → Jev grounding over the whole slide; a miss gets ONE
- *            Sonnet rewrite (REWRITE_NOTE, as the run does) whose targeted field must pass again
- *   photo    the Stories finder (findPhotos) for that story, never a photo already in the post, in
- *            the 7-day used_photos set or in the last two posts → render → the Haiku vision check
+ *   wording  the news writer's caps and normalize() → the news writer's Haiku fact check (lib/news-writer
+ *            checkFacts) over the slide's words; a miss gets ONE news-writer rewrite (writeStories('lfd'), the
+ *            run's writer, with the person's request as an added instruction) whose targeted field must pass again
+ *   photo    the run's photo rung (lib/lfd/run.ts lfdPhotoRung: findStoryPhoto with the lead image and, for a
+ *            builder story, the harvest as extra candidates; a hint adds one image search), never a photo already in
+ *            the post, in the used-photo ledger (CI-32: published in the last 20 days) or in the last two posts →
+ *            render → the Haiku vision check
  *
  * Parts: `{ kind: 'story', key: '<1-based story number>' }` (story n is slide n + 1) and the cover
  * `{ kind: 'story', key: 'cover' }`. The cover refuses every fix: its words are the fixed hook, its
@@ -30,11 +33,14 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Pick as LfdPick, StoryCopy, StoryPhotoRequest } from '@/lib/lfd/types';
+import { readUsedLedger, type UsedLedger } from '@/lib/photos/used';
 import type { SlideStory, SlideVerdict } from '@/lib/lfd/vision';
 import type { SavedStory } from '@/lib/memes/lfd-sim/post';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Post as RenderPost, SlideCopy } from '@/lib/social/render/types';
 import type { Query } from '@/lib/social/store/pg';
+import type { PhotoResult } from '@/lib/news-photos';
+import type { PhotoBankSink } from '@/lib/news-photos/bank-offer';
 import type { Photo } from '@/lib/stories/render/types';
 
 import type { ContentTypeDescription, FixKind, PartRef, PartState, PostSnapshot } from '../types';
@@ -48,19 +54,23 @@ export type { Metered };
 export const LFD_STAGE_TAGS = ['pick', 'write', 'ground', 'photo', 'meme', 'render'] as const;
 
 /**
- * A wording fix's worst case: one Sonnet rewrite after a grounding miss, priced at the pipeline's
- * per-call reserve for a Claude call (lib/social/pipeline/live-stages.ts CALL_RESERVE_USD, kept as a
- * literal so the registry does not import the live pipeline; a test pins it). The two Jev grounding
- * calls cost fractions of a cent (JEV_INPUT_USD_PER_MTOK) and are inside it.
+ * A wording fix's worst case: one news-writer rewrite of one story after a fact-check miss (Opus 5.5, up to three
+ * turns ≈ $0.10) and its Haiku checks, plus the fact checks before and after (Haiku, about a cent each), held at
+ * the pipeline's per-call reserve (lib/social/pipeline/live-stages.ts CALL_RESERVE_USD; a test pins it).
  */
 export const LFD_WORDING_ESTIMATE_USD = 0.2;
 
 /**
- * One photo search for one story (Stories finder: Jev picks + Haiku photo vision) plus one Haiku
- * slide vision check. No constant exists for it (the run records only whole-run totals); Carousels
- * prices one slide's photo chain at $0.05. NEEDS TOMMY'S CONFIRMATION before caps are approved.
+ * One run of the photo rung for one story (findStoryPhoto: Haiku brief + AI check, Jev grades, Serper) plus one
+ * Haiku slide vision check. A builder story's harvest can add up to BUILDER_HARVEST_CAP_USD ($0.15) on top, still
+ * under the $0.40 ceiling. Under the approved $0.15 Last Few Days photo cap for a non-builder story.
  */
-export const LFD_PHOTO_SWAP_ESTIMATE_USD = 0.05;
+export const LFD_PHOTO_SWAP_ESTIMATE_USD = 0.1;
+
+/** The person's request, added to the news writer's conversation (writeStories `instruction`); the W12 text is unchanged. */
+export function lfdRewriteInstruction(field: string, value: string): string {
+  return `A person reviewing this Last Few Days slide asked for this change to the story's ${field}: "${value}". Keep that change as far as the source supports it.`;
+}
 
 /** Crop positions for a story photo (photo.focus as object-position fractions, lib/stories/render/types.ts). */
 const CROPS = {
@@ -87,12 +97,28 @@ export type LastFewDaysDeps = {
   renderSlides: (input: { slug: string; post: RenderPost; slides: Array<{ slide: number; key: string }> }) => Promise<RenderedSlide[]>;
   /** The story's article text (the run's fullText rule), or null when it can't be read. Free. */
   sourceText: (story: { url: string; body: string }) => Promise<string | null>;
-  /** The run's Jev grounding check (lib/lfd/ground.ts) on the story copy. Charges `meter` as it pays. */
-  grounded: (copy: StoryCopy, source: string, meter: Metered) => Promise<boolean>;
-  /** ONE Sonnet rewrite of the story (lib/lfd/write.ts writeStories with `note`), or null. Charges `meter`. */
-  rewrite: (input: { pick: LfdPick; body: string; note: string }, meter: Metered) => Promise<StoryCopy | null>;
-  /** The Stories finder for one story (lib/lfd/photos.ts findPhotos), never a URL in `exclude`. Charges `meter`. */
-  findPhoto: (input: { pick: LfdPick; copy: StoryCopy; exclude: ReadonlySet<string> }, meter: Metered) => Promise<{ photo: Photo | null; trace: string[] }>;
+  /**
+   * The news writer's Haiku fact check (lib/news-writer checkFacts) on the slide's words against the article: `ok`
+   * when every claim is supported, else the failing claims in `why`. Charges `meter` as it pays.
+   */
+  factCheck: (copy: StoryCopy, source: string, meter: Metered) => Promise<{ ok: boolean; why: string }>;
+  /**
+   * ONE news-writer rewrite of the story (writeStories('lfd'), the run's writer) with the person's request as an
+   * added instruction: the new copy, or `dropped` with the reason when its own fact check still failed. Charges `meter`.
+   */
+  rewrite: (input: { pick: LfdPick; source: string; instruction: string }, meter: Metered) => Promise<StoryCopy | { dropped: string }>;
+  /**
+   * The run's photo rung for one story (lib/lfd/run.ts lfdPhotoRung: findStoryPhoto with the lead image and, for a
+   * builder story, the harvest), never a URL in `exclude` nor one `ledger` names; `hint` adds one image search's
+   * results as candidates. Charges `meter`.
+   */
+  findPhoto: (input: { pick: LfdPick; exclude: ReadonlySet<string>; ledger: UsedLedger; hint?: string }, meter: Metered) => Promise<{ photo: Photo | null; trace: string[]; source?: 'lead' | 'harvest' | 'finder'; result?: PhotoResult | null }>;
+  /**
+   * The photo bank (D49): the finder's `result` (pick and runner-ups) is offered with run ref
+   * `lfd-revision:<story key>:<iso>` at the story's slide (lib/news-photos/bank-offer.ts). Absent, or null: nothing
+   * is offered. Never fails a revision.
+   */
+  photoBank?: () => Promise<PhotoBankSink | null>;
   /** The run's Haiku vision check (lib/lfd/vision.ts checkSlide) on the rendered story slide. Charges `meter`. */
   vision: (png: Buffer, story: SlideStory, meter: Metered) => Promise<SlideVerdict>;
   unschedule: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
@@ -284,14 +310,16 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
 
   /** The words a fix wants, checked like the writer's output (write.ts LIMITS, normalize, MAX_SETUPS). */
   async function newWords(post: PostRow, i: number, field: WordingField, raw: string): Promise<{ copy: StoryCopy } | { refuse: ReturnType<typeof blocked> | ReturnType<typeof failed> }> {
-    const { LIMITS, MAX_SETUPS, normalize } = await import('@/lib/lfd/write');
+    const [{ LIMITS, MAX_SETUPS, normalize }, { namesFor }] = await Promise.all([import('@/lib/lfd/write'), import('@/lib/news-writer')]);
     const s = post.stories[i]!;
     const n = i + 1;
     let value = raw.trim();
     if (field === 'setup' && !value.endsWith(':')) value = `${value.replace(/[.\s]+$/, '')}:`;
     const base: StoryCopy = { key: s.key, setup: s.setup, headline: s.headline, highlight: s.highlight, names: s.names, body: s.body, photo: s.photoAsk ?? { kind: '', query: '', subjects: [], alts: [] } };
     // normalize() drops a highlight no longer in the headline and strips the dash and final period, as the run does.
-    const copy = normalize([{ ...base, [field]: value }], [s.key])[0]!;
+    const normal = normalize([{ ...base, [field]: value }], [s.key])[0]!;
+    // Names come from code (WC10, the run's copyOf): new headline or body words get their names again.
+    const copy = field === 'headline' || field === 'body' ? { ...normal, names: namesFor(normal.headline, normal.body) } : normal;
     const got = copy[field];
     if (field === 'highlight' && got !== value) return { refuse: failed(`"${value}" is not words from story ${n}'s headline, so it can't be highlighted; nothing was changed.`) };
     if (same(got, base[field])) return { refuse: failed(`Story ${n}'s ${field} already says that, so nothing was changed.`) };
@@ -323,8 +351,10 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       const parts: Array<PostSnapshot['parts'][number]> = [
         {
           ref: { kind: 'story', key: 'cover' },
-          text: `Cover: the fixed "Do you realize what just happened in AI" hook, over ${cover?.lfdCover?.meme ? 'a meme' : 'a mosaic of the story photos'}.`,
-          layout: cover?.lfdCover?.meme ? 'meme cover' : 'photo mosaic',
+          text: cover?.lfdCover?.image
+            ? `Cover: the hook "${cover.lfdCover.hook?.text ?? ''}", under an AI-made image.`
+            : `Cover: the fixed "Do you realize what just happened in AI" hook, over ${cover?.lfdCover?.meme ? 'a meme' : 'a mosaic of the story photos'}.`,
+          layout: cover?.lfdCover?.image ? 'ai image' : cover?.lfdCover?.meme ? 'meme cover' : 'photo mosaic',
         },
       ];
       post.stories.forEach((s, i) => {
@@ -390,20 +420,21 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
         if (field !== 'highlight') {
           const source = await deps.sourceText({ url: cur.url, body: cur.body });
           if (!source) return failed(`I could not re-read story ${no}'s article to fact-check the new words, so nothing was changed.`);
-          const ok = await deps.grounded(copy, source, m);
+          const first = await deps.factCheck(copy, source, m);
           m.check();
-          if (!ok) {
-            // The run's rule: a grounding miss gets ONE rewrite, which must pass again.
-            const [{ REWRITE_NOTE }, { readyFromSaved }] = await Promise.all([import('@/lib/lfd/ground'), import('@/lib/memes/lfd-sim/post')]);
+          if (!first.ok) {
+            // The run's writer, once: the person's request rides along as an instruction; the field it rewrote must
+            // then pass the fact check with the rest of the slide.
+            const { readyFromSaved } = await import('@/lib/memes/lfd-sim/post');
             const pick = { ...readyFromSaved(cur).pick, body: source };
-            const note = `${REWRITE_NOTE}\n\nA person asked for this change to the story's ${field}: "${args.value.trim()}". Keep that change as far as the source supports it.`;
-            const retry = await deps.rewrite({ pick, body: source, note }, m);
+            const retry = await deps.rewrite({ pick, source, instruction: lfdRewriteInstruction(field, args.value.trim()) }, m);
             m.check();
-            const again = retry && typeof retry[field] === 'string' && retry[field].trim() ? await newWords(post, i, field, retry[field]) : null;
-            const passed = again && 'copy' in again ? await deps.grounded(again.copy, source, m) : false;
+            const words = 'dropped' in retry ? '' : retry[field];
+            const again = typeof words === 'string' && words.trim() ? await newWords(post, i, field, words) : null;
+            const passed = again && 'copy' in again ? (await deps.factCheck(again.copy, source, m)).ok : false;
             m.check();
             if (!again || !('copy' in again) || !passed) {
-              return blocked(`The fact check could not match the new ${field} of story ${no} to its article, even after one rewrite, so it was not changed. Try words the article states.`);
+              return blocked(`The fact check could not match the new ${field} of story ${no} to its article (${first.why}), even after one rewrite, so it was not changed. Try words the article states.`);
             }
             copy = again.copy;
           }
@@ -418,9 +449,9 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
           for (const t of sl.lfdCover?.photos ?? []) exclude.add(t.url);
           if (sl.lfdCover?.meme?.url) exclude.add(sl.lfdCover.meme.url);
         }
-        // The shared 7-day rule (store.ts recentPhotoUrls) and the repeat check's last two posts.
-        const recent = await q(`SELECT DISTINCT url FROM social.used_photos WHERE used_at > now() - make_interval(days => 7)`);
-        for (const r of recent.rows) exclude.add(r.url as string);
+        // The used-photo ledger (CI-32: published in the last 20 days) and the repeat check's last two posts.
+        const ledger = await readUsedLedger(q, new Date());
+        for (const url of ledger.urls) exclude.add(url);
         const prev = await q(
           `SELECT p.stories FROM lfd.posts p WHERE p.status <> 'rejected' AND p.id <> $1::uuid ORDER BY p.ny_date DESC, p.created_at DESC LIMIT 2`,
           [post.id],
@@ -428,17 +459,27 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
         for (const r of prev.rows) for (const s of (r.stories as Array<{ photo?: { src?: string } }>) ?? []) if (s?.photo?.src) exclude.add(s.photo.src);
         const { readyFromSaved } = await import('@/lib/memes/lfd-sim/post');
         const ready = readyFromSaved(cur);
-        const ask: StoryPhotoRequest = cur.photoAsk ?? { kind: 'thematic', query: cur.headline, subjects: [], alts: [] };
+        // The photo brief reads the article: the story's saved text (the run's fullText rule), else the slide's words.
+        const text = (await deps.sourceText({ url: cur.url, body: cur.body })) ?? cur.body;
         const hint = args.hint?.trim();
-        const photoReq: StoryPhotoRequest = hint ? { ...ask, kind: 'thematic', query: hint, alts: [{ kind: ask.kind, query: ask.query }, ...ask.alts] } : ask;
-        const found = await deps.findPhoto({ pick: ready.pick, copy: { ...ready.copy, photo: photoReq }, exclude }, m);
+        const found = await deps.findPhoto({ pick: { ...ready.pick, body: text }, exclude, ledger, ...(hint ? { hint } : {}) }, m);
+        // The photo bank (D49): what the finder found, the swapped-in pick as `picked` at this story's slide. Best effort.
+        if (found.result && deps.photoBank) {
+          try {
+            const [bank, { offerToBank }] = await Promise.all([deps.photoBank(), import('@/lib/news-photos/bank-offer')]);
+            const at = new Date();
+            offerToBank(bank, found.result, { runRef: `lfd-revision:${ready.pick.key}:${at.toISOString()}`, slide: i + 2, posted: Boolean(found.photo && found.result.pick && found.photo.src === found.result.pick.src), headline: ready.pick.headline, at });
+          } catch {
+            /* the bank never fails a revision */
+          }
+        }
         m.check();
         const photo = found.photo;
         if (!photo || !photo.src || exclude.has(photo.src) || !photo.credit?.trim()) {
-          return failed(`I searched for another photo for story ${no} and couldn't find a different usable one (not already in this post, the last two posts, or used in the last 7 days), so the original was kept.`);
+          return failed(`I searched for another photo for story ${no} and couldn't find a different usable one (not already in this post, the last two posts, or published in the last 20 days), so the original was kept.`);
         }
         next.photo = photo;
-        next.photoSource = 'finder';
+        next.photoSource = found.source ?? 'finder';
         next.photoTrace = [...found.trace, 'revision: a person asked for a different photo'];
       } else {
         return blocked(`${it.fixKind} fixes are not available for Last Few Days.`);
@@ -449,7 +490,8 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       const caption = built.caption.caption;
       const id = newId();
       const want = [{ slide: i + 2, key: slideKey(post.slug, i + 2, id) }];
-      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme) want.unshift({ slide: 1, key: slideKey(post.slug, 1, id) });
+      // An AI cover does not show the story photos, so a photo change leaves it as it is.
+      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme && !coverOf(built.render)?.lfdCover?.image) want.unshift({ slide: 1, key: slideKey(post.slug, 1, id) });
       let out: RenderedSlide[];
       try {
         out = await deps.renderSlides({ slug: post.slug, post: built.render, slides: want });
@@ -505,7 +547,7 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       const objects = [...(post.slide_objects ?? [])];
       if (s.files[0]) objects[i + 1] = s.files[0];
       const tiles = coverOf(built.render)?.lfdCover?.photos ?? null;
-      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme) {
+      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme && !coverOf(built.render)?.lfdCover?.image) {
         if (s.files[1] && same(tiles, s.derived?.coverTiles)) objects[0] = s.files[1];
         else {
           // No saved cover image shows this mix of photos: draw the cover alone (a render, no model call, no cost).

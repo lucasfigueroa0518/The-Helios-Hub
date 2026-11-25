@@ -1,0 +1,3 @@
+show-master.flac (AT-46/47, CONTRACT-2 §1): the "Are you smarter than AI?" show sound, 15.0 s, 48 kHz stereo, about -13.4 LUFS. Synthesized locally by scripts/trivia_show_sound.cjs (no samples, no third-party audio): a 120 BPM theme, the countdown clock (tick on each whole second, tock on each half, beeps on seconds 7, 8, 9) for clip 1 (0–10 s), and the drumroll reveal for clip 2 (10–15 s: drumroll to +0.5 s, crash + ding on the hit, applause after). Made once; the renderer only slices it (audio.ts).
+
+Fonts (lib/stories/render/assets/): Pragmatica Extended Bold (PragmaticaExtended-Bold.otf, the Helios headline face, used hub-wide) for the sign; Roboto 400/500/700 (Roboto-*.woff2, SIL Open Font License, Roboto-LICENSE-OFL.txt) for everything else.

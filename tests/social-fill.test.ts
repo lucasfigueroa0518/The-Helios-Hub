@@ -49,6 +49,7 @@ import { loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 import { scratchExplainersDb } from './explainers-pglite';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { harnessDb } from './stories-harness';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const TODAY = '2026-10-08';
 const TOMORROW = '2026-10-09';
@@ -105,12 +106,14 @@ test('userPlaced counts only a person’s waiting, posting or posted slots for t
   await slot(q, { vertical: 'carousels', nyDate: TODAY, slot: 'afternoon', source: 'user', status: 'failed' });
   await slot(q, { vertical: 'carousels', nyDate: TOMORROW, slot: 'morning', source: 'user' });
   await slot(q, { vertical: 'explainers', nyDate: TODAY, slot: 'afternoon', source: 'user' });
-  await slot(q, { vertical: 'stories', nyDate: TODAY, slot: 'guess_the_number', source: 'user' });
+  await slot(q, { vertical: 'ai_trivia', nyDate: TODAY, slot: 'ai_trivia', source: 'user' });
   assert.equal(await userPlaced(q, 'carousels', TODAY), 2, 'scheduled + published; cancelled and failed never count');
   assert.equal(await userPlaced(q, 'carousels', TOMORROW), 1);
   assert.equal(await userPlaced(q, 'explainers', TODAY), 1);
   assert.equal(await userPlaced(q, 'reels', TODAY), 0);
-  assert.equal(await userPlaced(q, 'stories', TODAY, { slot: 'guess_the_number' }), 1);
+  // SS-1: Trivia's slot is its own type's; the engine's ('stories', series) ask still finds it.
+  assert.equal(await userPlaced(q, 'ai_trivia', TODAY), 1);
+  assert.equal(await userPlaced(q, 'stories', TODAY, { slot: 'ai_trivia' }), 1);
   assert.equal(await userPlaced(q, 'stories', TODAY, { slot: 'morning_download' }), 0);
 
   const fill = await dailyFill(q, 'carousels', TODAY, 2);
@@ -356,6 +359,9 @@ const jobsFor = async (db: ExplainersDb, topicId: string) =>
 async function explainersOn(): Promise<ExplainersDb> {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
+  // Lead time (Bald-Eagle D4): a night fills today through day+2. These tests check one date's fill rules, so the
+  // later two dates already ran and the night fills TODAY only (the lead-time tests cover the multi-date night).
+  await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date, finished_at) VALUES ('ok', 'development', $1, now()), ('ok', 'development', $2, now())`, [TOMORROW, '2026-10-10']);
   return db;
 }
 
@@ -370,7 +376,7 @@ test('explainers: posts_per_day less the day’s placements is how many renders 
   await slot(spine, { vertical: 'carousels', nyDate: TODAY, slot: 'morning', source: 'user' });
 
   const { log, lines } = capture();
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, log });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, log, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual([result.fill.quota, result.fill.userPlaced, result.fill.making], [2, 1, 1]);
@@ -380,7 +386,7 @@ test('explainers: posts_per_day less the day’s placements is how many renders 
   assert.deepEqual(lines.map((l) => [l.message, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 1, 1]]);
 });
 
-test('explainers: people placed the whole day: the cycle is skipped before any idea call or render', async () => {
+test('explainers: people placed the whole day: nothing is made, and only the pool refill runs (D3: the quota never stops a refill)', async () => {
   const db = await explainersOn();
   const spine = spineOf(db);
   const a = await poolTopic(db, 'A', 90);
@@ -388,12 +394,15 @@ test('explainers: people placed the whole day: the cycle is skipped before any i
   await slot(spine, { vertical: 'explainers', nyDate: TODAY, slot: 'late', source: 'user', status: 'published' });
   const ideas = stubIdeas();
   const { log, lines } = capture();
-  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, log });
-  assert.equal(result.status, 'skipped');
-  assert.equal(result.status === 'skipped' && result.reason, 'quota_filled');
-  assert.equal(ideas.calls, 0, 'no idea call: no spend');
-  assert.equal(await jobsFor(db, a), 0);
-  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.cost_events`)).rows[0]!.n), 0);
+  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, log, totalQuery: fakeTotalLedger().q });
+  assert.equal(result.status, 'refilled');
+  if (result.status !== 'refilled') return;
+  assert.equal(result.reason, 'nothing_to_make');
+  assert.ok(result.dates?.some((d) => d.status === 'skipped' && d.reason === 'quota_filled'), 'the make step is skipped for the full day');
+  assert.ok(result.dates?.every((d) => d.status === 'skipped'), 'no date makes anything');
+  assert.ok(ideas.calls >= 1, 'the refill ran');
+  assert.equal(await jobsFor(db, a), 0, 'nothing is rendered');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0);
   assert.equal(lines[0]?.fields.making, 0);
 });
 
@@ -409,7 +418,7 @@ test('explainers: an approved, unposted render whose topic ranks first is placed
   const ranked = await fillCandidates(db, true);
   assert.deepEqual(ranked.map((c) => [c.title, c.jobId ? 'render' : 'topic']), [['Survivor', 'render'], ['A', 'topic'], ['B', 'topic']], 'one ranking; rejected and unreviewed renders never compete');
 
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.allocated.map((x) => x.jobId), [survivor.jobId]);
@@ -425,12 +434,12 @@ test('explainers: an approved, unposted render whose topic ranks first is placed
   assert.deepEqual([placed.source, placed.ny_date], ['auto', TODAY]);
 });
 
-test('explainers: a surviving render below the cut is not placed by the night; publishing off, a ranked one counts without a slot', async () => {
+test('explainers: a surviving render below the cut is not placed by the night; in Approval, a ranked one takes its slot (contract §4.3)', async () => {
   const db = await explainersOn();
   const survivor = await renderedTopic(db, 'Survivor', 50);
   const a = await poolTopic(db, 'A', 90);
   const b = await poolTopic(db, 'B', 80);
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.allocated, []);
@@ -438,18 +447,21 @@ test('explainers: a surviving render below the cut is not placed by the night; p
   assert.equal(await jobsFor(db, survivor.topicId), 1, 'below the cut: neither placed nor rendered again');
   assert.equal((await db.query(`SELECT 1 FROM social_hub.schedule`)).rows.length, 0, 'the night placed nothing');
 
-  // Next night, ranked first while publishing is off: it takes a place, gets no render, and no slot yet.
+  // Next night, ranked first in Approval (Generate on, Live off): it takes a place and its slot, gets no render, and
+  // nothing posts (only Live releases a due slot, D16).
   const db2 = await explainersOn();
   const top = await renderedTopic(db2, 'Top', 95);
   const c = await poolTopic(db2, 'C', 90);
-  const second = await runIdeaCycle({ db: db2, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+  const second = await runIdeaCycle({ db: db2, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.equal(second.status, 'ok');
   if (second.status !== 'ok') return;
-  assert.deepEqual(second.allocated.map((x) => [x.jobId, x.scheduled]), [[top.jobId, null]]);
+  assert.deepEqual(second.allocated.map((x) => [x.jobId, x.scheduled?.scheduled]), [[top.jobId, true]]);
   assert.deepEqual(second.renders, [c]);
   assert.equal(await jobsFor(db2, top.topicId), 1);
-  // scheduleApproved (the regular path, once publishing is on) still places it.
-  assert.equal(await scheduleApproved(db2, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
+  assert.equal((await db2.query(`SELECT 1 FROM social_hub.schedule WHERE status = 'scheduled'`)).rows.length, 1, 'the night placed it');
+  assert.equal((await db2.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0, 'booking only');
+  // scheduleApproved (the regular path) has nothing left to place.
+  assert.equal(await scheduleApproved(db2, new Date('2026-10-08T12:00:00Z'), () => 0), 0);
 });
 
 // ── Trial Reels (the 1 AM run) ──────────────────────────────────────────────
@@ -622,7 +634,8 @@ test('trial reels: the nightly generation reuses the carried video (no copy, no 
 
 // ── IG Stories (4 AM auto sets) ─────────────────────────────────────────────
 
-const STORIES_AT = new Date('2026-10-08T08:00:00Z'); // 4:00 AM New York, Thursday
+/** Guess the Number is made 2 days ahead (Bald-Eagle D4): Tuesday's night fills Thursday (TODAY); Morning Download fills Tuesday. */
+const STORIES_RUN = new Date('2026-10-06T08:00:00Z');
 
 async function storySet(db: Awaited<ReturnType<typeof harnessDb>>['db'], series: string, nyDate: string, status: string, trigger: 'click' | 'auto' = 'click') {
   await db.query(`INSERT INTO stories.sets (series, ny_date, status, trigger, style) VALUES ($1, $2, $3, $4, 'polished')`, [series, nyDate, status, trigger]);
@@ -630,40 +643,40 @@ async function storySet(db: Awaited<ReturnType<typeof harnessDb>>['db'], series:
 
 test('stories: a set a person approved or scheduled fills its series’ day; no auto set, one fill_reduced line', async () => {
   const { db } = await harnessDb();
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await saveSeriesSetting(db, 'morning_download', { auto: true });
-  await storySet(db, 'guess_the_number', TODAY, 'scheduled');
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 1);
+  await storySet(db, 'ai_trivia', TODAY, 'scheduled');
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 1);
   assert.equal(await seriesDayPlaced(db, 'morning_download', TODAY), 0, 'per series');
   const { log, lines } = capture();
   const settings = await loadSettings(db);
-  assert.deepEqual(await requestAutoSets(db, settings, STORIES_AT, { log }), ['morning_download']);
-  assert.deepEqual(await requestAutoSets(db, settings, STORIES_AT, { log }), []);
-  assert.deepEqual(lines.map((l) => [l.message, l.fields.series, l.fields.quota, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 'guess_the_number', 1, 1, 0]], 'logged once, not every pass');
+  assert.deepEqual(await requestAutoSets(db, settings, STORIES_RUN, { log }), ['morning_download']);
+  assert.deepEqual(await requestAutoSets(db, settings, STORIES_RUN, { log }), []);
+  assert.deepEqual(lines.map((l) => [l.message, l.fields.series, l.fields.quota, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 'ai_trivia', 1, 1, 0]], 'logged once, not every pass');
   const sets = (await db.query<{ series: string; trigger: string }>(`SELECT series, trigger FROM stories.sets ORDER BY series`)).rows;
-  assert.deepEqual(sets.map((s) => [s.series, s.trigger]), [['guess_the_number', 'click'], ['morning_download', 'auto']]);
+  assert.deepEqual(sets.map((s) => [s.series, s.trigger]), [['ai_trivia', 'click'], ['morning_download', 'auto']]);
 });
 
 test('stories: a person’s slot on the spine counts; rejected, failed, skipped sets, other days and the night’s own set don’t', async () => {
   const { db } = await harnessDb();
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
-  await storySet(db, 'guess_the_number', TODAY, 'rejected');
-  await storySet(db, 'guess_the_number', TODAY, 'failed');
-  await storySet(db, 'guess_the_number', TODAY, 'skipped');
-  await storySet(db, 'guess_the_number', TOMORROW, 'approved');
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0);
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await storySet(db, 'ai_trivia', TODAY, 'rejected');
+  await storySet(db, 'ai_trivia', TODAY, 'failed');
+  await storySet(db, 'ai_trivia', TODAY, 'skipped');
+  await storySet(db, 'ai_trivia', TOMORROW, 'approved');
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 0);
   const spine: SpineQuery = (t, p) => db.query(t, p) as ReturnType<SpineQuery>;
   await slot(spine, { vertical: 'stories', nyDate: TODAY, slot: 'morning_download', source: 'user' });
-  await slot(spine, { vertical: 'stories', nyDate: TODAY, slot: 'guess_the_number', source: 'user', status: 'cancelled' });
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0, 'a cancelled slot never counts');
+  await slot(spine, { vertical: 'ai_trivia', nyDate: TODAY, slot: 'ai_trivia', source: 'user', status: 'cancelled' });
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 0, 'a cancelled slot never counts');
   assert.equal(await seriesDayPlaced(db, 'morning_download', TODAY), 1, 'a person’s slot for that series and day');
 
   const { log, lines } = capture();
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), ['guess_the_number']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_RUN, { log }), ['ai_trivia']);
   assert.deepEqual(lines, []);
   // The night's own set, approved, holds the day as before, but it isn't a person's placement.
   await db.query(`UPDATE stories.sets SET status = 'approved' WHERE trigger = 'auto'`);
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0);
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), []);
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 0);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_RUN, { log }), []);
   assert.deepEqual(lines, []);
 });

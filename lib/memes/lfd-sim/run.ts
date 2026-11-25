@@ -105,6 +105,9 @@ export function inProcessEngine(o: {
     }, onProgress ?? (() => undefined), live.spentUsd);
     // A replay reads no feeds (they only know the last 48 hours): set after the tap so the report doesn't claim it.
     if (replay) deps.fetchFeeds = async () => [];
+    // Central intake: a simulation reads the intake's lanes when LFD's switch is 'intake' (lib/lfd/run.ts decides,
+    // for non-replay runs) but never starts an intake top-up: that would fetch and pay from a meme-lab click.
+    if (deps.intake) deps.intake = { ...deps.intake, ensureFresh: async () => ({ ran: false, reason: 'meme lab simulation: no intake top-up' }) };
     const result = await runLastFewDays(deps);
     if (!result.ok) return { ok: false, error: result.error, spentUsd: live.spentUsd() };
     const { rows } = await o.local.query<{ stories: SavedStory[]; render: unknown; caption: string; slide_objects: string[]; fit_problems: string[]; render_problems: string[] }>(

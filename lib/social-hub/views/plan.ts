@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { nyDayStart, weekdayOf } from '@/lib/social-hub/time';
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import { clockLabel, DRIFT, SERIES_NAME } from '@/lib/social-hub/slots/times';
@@ -27,10 +28,8 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
     { id: 'afternoon', label: 'Afternoon', startMinute: 13 * 60, endMinute: 14 * 60 + 30 },
     { id: 'late', label: 'Late afternoon', startMinute: 15 * 60 + 30, endMinute: 17 * 60 },
   ],
-  carousels: [
-    { id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60 },
-    { id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30 },
-  ],
+  // Carousels have no default windows: they post only where a slot is dragged onto the calendar.
+  carousels: [],
   // lib/lfd/config.ts LFD_WINDOW on DEFAULT_LFD_DAYS (Tue, Fri); tests/lfd-hub.test.ts pins the copy.
   last_few_days: [{ id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60, days: [2, 5] }],
   // lib/ai-events/config.ts AI_EVENTS_WINDOW on DEFAULT_AI_EVENTS_DAYS (Sunday, AE-08); tests/ai-events-hub.test.ts pins the copy.
@@ -38,10 +37,26 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
     { id: 'evening', label: 'Evening', startMinute: 18 * 60, endMinute: 19 * 60, days: [0] },
     { id: 'night', label: 'Night', startMinute: 19 * 60, endMinute: 20 * 60, days: [0] },
   ],
-  stories: [
-    { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
-    { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },
-    { id: 'free_vs_paid', label: 'Free vs. Paid', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [2, 6] },
+  // lib/field-notes/config.ts FIELD_NOTES_WINDOW on FIELD_NOTES_AUTO_DAYS (Tue, Fri: 1-2 a week).
+  field_notes: [{ id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30, days: [2, 5] }],
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS (8:00–8:45 PM, every day).
+  reel_ai_drama: [{ id: 'evening', label: 'Evening', startMinute: 20 * 60, endMinute: 20 * 60 + 45 }],
+  // The Stories-format types (SS-1), one series each; a window's id is its series (the legacy schedule.slot).
+  stories: [{ id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY }],
+  ai_trivia: [{ id: 'ai_trivia', label: 'Are you smarter than AI?', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [0, 1, 4] }],
+  real_or_ai: [{ id: 'real_or_ai', label: 'Real or AI?', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [2, 6] }],
+};
+
+/**
+ * What `capacityWindows` pads a day with so a booking whose slot left the calendar still holds its place.
+ * Carousels have no routine windows (PLAN), but posts made while they did (or dragged in and later removed)
+ * keep a place on their day; these are never offered as open slots.
+ */
+const PAD_WINDOWS: Record<Vertical, readonly PlanWindow[]> = {
+  ...PLAN,
+  carousels: [
+    { id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60 },
+    { id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30 },
   ],
 };
 
@@ -113,7 +128,7 @@ export function capacityWindows(vertical: Vertical, nyDate: string, carouselOff:
   if (slots?.[nyDate]) {
     const on = windowsOn(vertical, nyDate, [], slots);
     const before = today !== undefined && nyDate < today ? windowsOn(vertical, nyDate).length : 0;
-    const pad = PLAN[vertical].slice(0, Math.max(0, Math.max(held, before) - on.length));
+    const pad = PAD_WINDOWS[vertical].slice(0, Math.max(0, Math.max(held, before) - on.length));
     return [...on, ...pad].sort((a, b) => a.startMinute - b.startMinute);
   }
   const all = windowsOn(vertical, nyDate, [], slots);
@@ -152,8 +167,8 @@ export function dayPlan(posts: readonly HubPost[], nyDate: string, carouselOff: 
     const windows = capacityWindows(vertical, nyDate, carouselOff, placedCount(posts, vertical, nyDate), today, slots);
     const placed = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && PLACED.has(p.status));
     const taken = new Set(placed.map((p) => windowOf(p, windows, nyDate)).filter((id): id is string => Boolean(id)));
-    // Stories record one generic window, so count instead of matching ids.
-    const open = vertical === 'stories'
+    // Stories-format sets record one generic window, so count instead of matching ids.
+    const open = isStoryVertical(vertical)
       ? windows.slice(Math.min(placed.length, windows.length))
       : windows.filter((w) => !taken.has(w.id)).slice(0, Math.max(0, windows.length - placed.length));
     return { vertical, windows, placed, open };

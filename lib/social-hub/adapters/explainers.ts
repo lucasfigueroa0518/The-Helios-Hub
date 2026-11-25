@@ -1,12 +1,12 @@
 import {
   attemptStatus,
+  boardDate,
   cancelNote,
   category,
   historyByMedia,
   iso,
   latest,
   num,
-  nyDateFor,
   scheduleStatus,
   slotCategory,
   slotText,
@@ -21,6 +21,7 @@ import type {
   ExplainerTopicRow,
 } from '@/lib/social-hub/queries/explainers';
 import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, ScorePart } from '@/lib/social-hub/types';
+import { levelOfRank } from '@/lib/explainers/ideas/curriculum';
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { SCORE_MIN, SCORE_POINTS } from '@/lib/explainers/scoring';
 import type { ScoreKey } from '@/lib/explainers/types';
@@ -141,7 +142,8 @@ function attemptPost(row: ExplainerAttemptRow, job: ExplainerJobRow, read: Expla
     statusNote: status === 'failed' ? text(row.error) : null,
     postedAt: status === 'published' ? finished : null,
     publishAt: iso(row.publish_at),
-    nyDate: nyDateFor(status === 'published' ? finished : null, row.publish_at, row.requested_at),
+    // An attempt is on the day it posted, or its slot's, or the day it was queued (a Post now is today, not the target date).
+    nyDate: boardDate({ postedAt: status === 'published' ? finished : null, publishAt: row.publish_at, madeAt: row.requested_at }),
     permalink: row.permalink,
     metrics: latest(snapshots),
     history: snapshots,
@@ -198,7 +200,8 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
       statusNote: job.verdict === 'approved' ? 'Approved, waiting for a free slot' : 'Waiting for review',
       postedAt: null,
       publishAt: null,
-      nyDate: null,
+      // Bald-Eagle D4: a render the night made ahead shows on the date it was made for; a person's render has no date.
+      nyDate: boardDate({ target: job.target_date }),
       permalink: null,
       metrics: {},
       history: [],
@@ -240,13 +243,38 @@ export function explainerBreakdown(row: ExplainerTopicRow): ScoreBreakdown | nul
   return { formula: 'Each judge score out of 4, times its points; the seven add up to 100.', parts };
 }
 
+/** Short words a term keeps lowercase after its first word ("human-in-the-loop", "open vs closed weights"). */
+const SMALL = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'per', 'the', 'to', 'vs']);
+
+/**
+ * An idea's name in the pool (Lucas, 2026-11-21): the topic it teaches, not the reel's question. The term in Title
+ * Case ("context window" → "Context Window"; acronyms and proper names keep their capitals); the title when the topic
+ * has no term yet.
+ */
+export function topicName(row: Pick<ExplainerTopicRow, 'term' | 'title'>): string {
+  const term = text(row.term);
+  if (!term) return row.title;
+  const cap = (w: string) => (/[A-Z]/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1));
+  return term
+    .split(/\s+/)
+    .map((word, w) => word.split('-').map((part, i) => (w + i > 0 && SMALL.has(part) ? part : cap(part))).join('-'))
+    .join(' ');
+}
+
+/** "Level N" for a topic on the syllabus (curriculum, 2026-11-21); null off it. */
+function syllabusLevel(row: Pick<ExplainerTopicRow, 'syllabus_rank'>): string | null {
+  const level = levelOfRank(num(row.syllabus_rank));
+  return level == null ? null : `Level ${level}`;
+}
+
 export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
   return rows.map((row) => ({
     id: `explainers:topic:${row.topic_id}`,
     vertical: 'explainers',
-    title: row.title,
+    title: topicName(row),
     yours: row.origin === 'manual',
     score: num(row.weighted_score),
+    curriculumRank: num(row.syllabus_rank),
     scoreLabel: 'Weighted score (0–100)',
     breakdown: explainerBreakdown(row),
     state: row.published ? 'published' : row.scheduled ? 'on_deck' : row.ok_jobs > 0 ? 'content_ready' : 'idea_only',
@@ -254,7 +282,7 @@ export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
     versionCount: row.ok_jobs,
     generatedAt: iso(row.last_render_at),
     createdAt: iso(row.created_at),
-    detail: [ORIGIN_LABEL[row.origin] ?? row.origin, text(row.scope)].filter(Boolean).join(' · '),
+    detail: [ORIGIN_LABEL[row.origin] ?? row.origin, syllabusLevel(row), text(row.scope)].filter(Boolean).join(' · '),
     run: topicRun(row),
   }));
 }

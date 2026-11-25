@@ -8,6 +8,7 @@ import { loadEnvConfig } from '@next/env';
 import pg from 'pg';
 
 import { AI_EVENTS_POSTS_SQL } from '@/lib/social-hub/queries/ai-events';
+import { FIELD_NOTES_POSTS_SQL } from '@/lib/social-hub/queries/field-notes';
 import { CAROUSEL_IDEAS_SQL, CAROUSEL_POSTS_SQL } from '@/lib/social-hub/queries/carousels';
 import { EXPLAINER_JOBS_SQL } from '@/lib/social-hub/queries/explainers';
 import { LFD_LATEST_RUN_SQL, LFD_POSTS_SQL } from '@/lib/social-hub/queries/last-few-days';
@@ -23,6 +24,7 @@ const STATEMENTS: Array<[string, string]> = [
   ['lfd posts', LFD_POSTS_SQL],
   ['lfd latest run', LFD_LATEST_RUN_SQL],
   ['ai events posts', AI_EVENTS_POSTS_SQL],
+  ['field notes posts', FIELD_NOTES_POSTS_SQL],
   ['explainer jobs', EXPLAINER_JOBS_SQL],
 ];
 

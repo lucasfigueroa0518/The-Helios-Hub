@@ -6,6 +6,8 @@
  * Offline PGlite.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test, { afterEach } from 'node:test';
 
 import type { Queryable } from '@/lib/explainers/db';
@@ -17,7 +19,7 @@ import { freeRetryAt, retryFailedSlots, schedulePostIdea } from '@/lib/reels/pub
 import { carouselFill, schedulePost } from '@/lib/social/overnight/schedule';
 import { slotPlan } from '@/lib/social-hub/slots';
 import { templateSlots } from '@/lib/social-hub/slots/scheduler';
-import { applySlotChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
+import { applySlotChanges, setSlotSource, type SlotChange } from '@/lib/social-hub/slots/write';
 
 import { scratchExplainersDb } from './explainers-pglite';
 import { seedLfdPost } from './fixtures/lfd/seed';
@@ -85,19 +87,16 @@ test('reels template: a pre-cutover window booking blocks the free-time slot it 
   assert.deepEqual(slots, ['morning', 't0675']);
 });
 
-test('reels template: 6 slots under a cap of 5 make 5 and never book the 6th', async () => {
+test('reels template: 6 slots make 6 (D20: the calendar is the count; a stale daily limit trims nothing)', async () => {
   const { q } = await reelsDb();
   await setSlotSource(q as never, 'template', 't');
   // 8:45, 11:15, 6:00 seeded; add 1:00, 3:00 and 8:00 PM.
   assert.equal((await applySlotChanges(q as never, [add('reels', 780), add('reels', 900), add('reels', 1200)], opts)).ok, true);
-  assert.equal(await reelsPerDay(new Date('2026-10-21T12:00:00Z')), 5);
-  await writeCaps(q as never, { reels: 2 });
-  assert.equal(await reelsPerDay(new Date('2026-10-21T12:00:00Z')), 2, 'the cap setting is read');
+  assert.equal(await reelsPerDay(new Date('2026-10-21T12:00:00Z')), 6);
+  await q(`INSERT INTO social_hub.settings (key, value, updated_at) VALUES ('daily_caps', '{"reels":2}'::jsonb, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.equal(await reelsPerDay(new Date('2026-10-21T12:00:00Z')), 6, 'the old daily_caps row is not read');
   for (const id of IDEAS) assert.ok((await schedulePostIdea(id, 'auto', null, LATE_TUESDAY, WED)).scheduled);
   assert.deepEqual((await rowsOf(q, 'reels')).map((r) => r.slot), ['t0525', 't0675']);
-  await q(`INSERT INTO reels.post_ideas (id) VALUES ('74000000-0000-4000-8000-000000000003')`);
-  const third = await schedulePostIdea('74000000-0000-4000-8000-000000000003', 'auto', null, LATE_TUESDAY, WED);
-  assert.equal(third.scheduled, false, 'the 780 slot is over the cap of 2');
 });
 
 // ---- Text on Screen retries in template mode (ruling R11): until slot + 60, on its own day ----
@@ -146,8 +145,12 @@ test('reels template retry: a Main reel takes a minute that keeps 30 minutes fro
 
 // ---- Explainers ----
 
+const splitSql = () => readFileSync(path.join(process.cwd(), 'db', 'stories_split.sql'), 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n');
+
 async function explainersDb(n: number): Promise<{ db: Queryable; q: never; jobs: string[] }> {
-  const { db } = await scratchExplainersDb();
+  const { db, pg } = await scratchExplainersDb();
+  // The Explainers scratch DB loads the spine without db/stories_split.sql; the template seed writes the split's types (SS-21).
+  await pg.exec(splitSql());
   const jobs: string[] = [];
   for (let i = 0; i < n; i += 1) {
     const { rows: t } = await db.query<{ id: string }>(`INSERT INTO explainers.topics (title, origin, status) VALUES ($1, 'manual', 'rendered') RETURNING id`, [`Topic ${i}`]);
@@ -173,45 +176,16 @@ test('explainers template: a noon slot books in [12:00, 12:15] as t0720, Main', 
   assert.equal(row.feed_mode, 'main');
 });
 
-test('explainers template: 4 slots on Wednesday make 3 (the cap); the 4th is never booked (Review Focus 4)', async () => {
+test('explainers template: 4 slots on Wednesday make 4, all bookable (D20)', async () => {
   const { db, q, jobs } = await explainersDb(4);
   await setSlotSource(q, 'template', 't');
-  // Seeded 1:00 and 3:30 PM; add 11:00 AM and 7:00 PM. By time: 11:00, 1:00, 3:30 are made; 7:00 PM is over.
+  // Seeded 1:00 and 3:30 PM; add 11:00 AM and 7:00 PM.
   assert.equal((await applySlotChanges(q, [add('explainers', 660), add('explainers', 1140)], opts)).ok, true);
-  assert.equal(await explainersQuota(db as never, WED), 3);
+  assert.equal(await explainersQuota(db as never, WED), 4);
   const { byDate } = await templateSlots(q, (await slotPlan(q, '2026-10-20'))!, 'explainers');
-  assert.deepEqual(byDate.get(WED)!.map((s) => s.startMinute), [660, 780, 930], 'the 7:00 PM slot is over the cap and not bookable');
-  for (const job of jobs.slice(0, 3)) assert.ok((await scheduleJob(db, job, 'auto', LATE_TUESDAY, WED, first)).scheduled);
-  const fourth = await scheduleJob(db, jobs[3]!, 'auto', LATE_TUESDAY, WED, first);
-  assert.equal(fourth.scheduled, false);
-  assert.deepEqual((await rowsOf(q, 'explainers')).map((r) => [r.d, r.slot]), [[WED, 't0660'], [WED, 't0780'], [WED, 't0930']]);
-  // Without a day limit the 4th goes to Thursday, not to Wednesday's 7:00 PM slot.
-  const later = await scheduleJob(db, jobs[3]!, 'auto', LATE_TUESDAY, undefined, first);
-  assert.ok(later.scheduled);
-  assert.deepEqual((await rowsOf(q, 'explainers')).at(-1)!.d, '2026-10-22');
-});
-
-test('explainers template: a person\'s post in an over-cap slot never starves a within-cap slot (final review #8)', async () => {
-  const { db, q, jobs } = await explainersDb(3);
-  await setSlotSource(q, 'template', 't');
-  // 11:00, 1:00, 3:30 are within the cap of 3; 7:00 PM is over it, and a person put a post there.
-  assert.equal((await applySlotChanges(q, [add('explainers', 660), add('explainers', 1140)], opts)).ok, true);
-  const item = (await db.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('explainers', 'reel', 'placed') RETURNING id`)).rows[0]!.id;
-  await db.query(`INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES ($1, 'explainers', $2, 't1140', '2026-10-21T23:05:00Z', 'scheduled', 'user')`, [item, WED]);
-  const { byDate } = await templateSlots(q, (await slotPlan(q, '2026-10-20'))!, 'explainers');
-  assert.deepEqual(byDate.get(WED)!.map((s) => s.startMinute), [660, 780, 930]);
+  assert.deepEqual(byDate.get(WED)!.map((s) => s.startMinute), [660, 780, 930, 1140]);
   for (const job of jobs) assert.ok((await scheduleJob(db, job, 'auto', LATE_TUESDAY, WED, first)).scheduled);
-  assert.deepEqual((await rowsOf(q, 'explainers')).map((r) => r.slot), ['t0660', 't0780', 't0930', 't1140'], 'the run still makes its 3');
-});
-
-test('explainers template: a day already holding cap posts books nothing more there', async () => {
-  const { db, q, jobs } = await explainersDb(1);
-  await setSlotSource(q, 'template', 't');
-  await writeCaps(q, { explainers: 1 });
-  // A post placed on Wednesday outside a slot (a person's Place) uses the day's one.
-  const item = (await db.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('explainers', 'reel', 'placed') RETURNING id`)).rows[0]!.id;
-  await db.query(`INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES ($1, 'explainers', $2, 't1200', '2026-10-22T00:05:00Z', 'scheduled', 'user')`, [item, WED]);
-  assert.equal((await scheduleJob(db, jobs[0]!, 'auto', LATE_TUESDAY, WED, first)).scheduled, false);
+  assert.deepEqual((await rowsOf(q, 'explainers')).map((r) => [r.d, r.slot]), [[WED, 't0660'], [WED, 't0780'], [WED, 't0930'], [WED, 't1140']]);
 });
 
 // ---- Carousels ----
@@ -241,14 +215,14 @@ test('carousels template: a noon slot books in [12:00, 12:15] as t0720', async (
   assert.equal(row.feed_mode, null, 'no feed mode for a carousel');
 });
 
-test('carousels template: 4 slots under a cap of 3 fill 3; the 4th is never booked', async () => {
+test('carousels template: 4 slots fill 4 (D20)', async () => {
   const { q, posts } = await carouselDb(4);
   await setSlotSource(q, 'template', 't');
-  assert.equal((await applySlotChanges(q, [add('carousels', 720), add('carousels', 1080)], opts)).ok, true);
-  assert.equal((await carouselFill(q, new Date('2026-10-21T11:00:00Z'))).quota, 3);
-  for (const p of posts.slice(0, 3)) assert.ok((await schedulePost(q, p, 'auto', LATE_TUESDAY, WED, first)).scheduled);
-  assert.equal((await schedulePost(q, posts[3]!, 'auto', LATE_TUESDAY, WED, first)).scheduled, false);
-  assert.deepEqual((await rowsOf(q as never, 'carousels')).map((r) => r.slot), ['t0540', 't0720', 't0870']);
+  // Carousels are opt-in: the seed has none, so this day's four slots are all added here.
+  assert.equal((await applySlotChanges(q, [add('carousels', 540), add('carousels', 720), add('carousels', 870), add('carousels', 1080)], opts)).ok, true);
+  assert.equal((await carouselFill(q, new Date('2026-10-21T11:00:00Z'))).quota, 4);
+  for (const p of posts) assert.ok((await schedulePost(q, p, 'auto', LATE_TUESDAY, WED, first)).scheduled);
+  assert.deepEqual((await rowsOf(q as never, 'carousels')).map((r) => r.slot), ['t0540', 't0720', 't0870', 't1080']);
 });
 
 test('carousels template: a Last Few Days day is still blocked', async () => {

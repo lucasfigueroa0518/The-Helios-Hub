@@ -1,3 +1,5 @@
+import type { PhotoHashDeps } from '@/lib/photos/published-posts';
+import type { UsedVertical } from '@/lib/photos/used';
 import type { Query } from '@/lib/social/store/pg';
 import type { Post as RenderPost } from '@/lib/social/render/types';
 
@@ -27,10 +29,15 @@ import type { CarouselMetaClient } from './meta';
 
 export type PublishTrigger = 'approve' | 'auto' | 'force';
 
-/** The spine verticals that post an image set as a feed carousel. */
-export type FeedVertical = 'carousels' | 'last_few_days' | 'ai_events';
+/** A carousel child that is a video (an MP4 in the slide bucket, Last Few Days video slides, MD-LFD D19). */
+export const isVideoObject = (objectPath: string): boolean => /\.mp4$/i.test(objectPath);
+/** A video child's status poll and its signed URL's life (lib/stories/publish/publish.ts VIDEO_POLL, the same cadence). */
+export const VIDEO_ITEM_POLL = { everyMs: 10_000, maxPolls: 60, signSeconds: 7200 } as const;
 
-const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post', ai_events: 'AI Events post' };
+/** The spine verticals that post an image set as a feed carousel. */
+export type FeedVertical = 'carousels' | 'last_few_days' | 'ai_events' | 'field_notes';
+
+const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post', ai_events: 'AI Events post', field_notes: 'Field Notes post' };
 
 export type Queued =
   | { queued: true; id: string }
@@ -148,13 +155,44 @@ export type PublishDeps = {
   signImage: (objectPath: string, expiresIn: number) => Promise<string>;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /**
+   * How the publish-time used-photo write (CI-32) reads a photo's bytes for its hashes. `{}` is the live reader (the
+   * workers pass it). Absent: no download, so rows carry only the hashes a post already has (tests, offline runs).
+   */
+  photoHashes?: PhotoHashDeps;
 };
 
-/** A type's own step once Instagram has the post: mark its content row published (`nativeRef` = content_items.native_ref). */
+/** What a type's publish step learns: the Instagram media id, and how to hash the post's photos for the ledger. */
+export type PublishedInfo = { mediaId: string | null; photos: PhotoHashDeps };
+
+/** No download: a photo keeps the hashes it has (a URL-only row otherwise). */
+export const NO_PHOTO_DOWNLOAD: PhotoHashDeps = { read: async () => { throw new Error('no photo reader'); } };
+
+/**
+ * A type's own step once Instagram has the post: mark its content row published (`nativeRef` = content_items.native_ref),
+ * and log its photos in the used-photo ledger (a ledger failure only logs; it never fails the publish).
+ */
 export type FeedPublishHooks = {
   vertical: FeedVertical;
-  onPublished: (query: Query, nativeRef: string, finishedAt: string) => Promise<void>;
+  onPublished: (query: Query, nativeRef: string, finishedAt: string, info?: PublishedInfo) => Promise<void>;
 };
+
+/** The publish-time ledger write for one post (CI-32). Never throws: a failure is logged; the nightly read backstops it. */
+export async function logPublishedPhotos(
+  query: Query,
+  vertical: UsedVertical,
+  postId: string,
+  finishedAt: string,
+  info: PublishedInfo | undefined,
+): Promise<void> {
+  try {
+    const { recordPublishedPost } = await import('@/lib/photos/published-posts');
+    const log = (line: string) => console.warn(`[publish] used_photos ${vertical} ${postId}: ${line}`);
+    await recordPublishedPost(query, vertical, postId, new Date(finishedAt), { ...(info?.photos ?? NO_PHOTO_DOWNLOAD), log, mediaId: info?.mediaId ?? null });
+  } catch (e) {
+    console.warn(`[publish] used_photos ${vertical} ${postId}: not logged (${e instanceof Error ? e.message : String(e)}); the nightly Instagram read will log it`);
+  }
+}
 
 /**
  * Carry one claimed attempt (status `creating`) to Instagram: the rejection
@@ -195,10 +233,29 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
     if (!gate.ok) throw new Error(gate.message);
 
     const children: string[] = [];
+    const videos: string[] = [];
     for (const objectPath of attempt.image_objects) {
-      children.push(await meta.createImageItem(await deps.signImage(objectPath, PUBLISH_IMAGE_URL_SECONDS)));
+      if (isVideoObject(objectPath)) {
+        if (!meta.createVideoItem) throw new Error(`This ${noun} has a video slide and the Instagram client cannot post one.`);
+        const child = await meta.createVideoItem(await deps.signImage(objectPath, VIDEO_ITEM_POLL.signSeconds));
+        children.push(child);
+        videos.push(child);
+      } else children.push(await meta.createImageItem(await deps.signImage(objectPath, PUBLISH_IMAGE_URL_SECONDS)));
     }
     await update(query, id, { child_container_ids: JSON.stringify(children) });
+    // A video child is processed by Instagram before the parent can take it (Last Few Days video slides, MD-LFD D19).
+    for (const child of videos) {
+      for (let poll = 1; ; poll += 1) {
+        const status = await meta.containerStatus(child);
+        statusLog.push({ at: new Date(now()).toISOString(), ...status, statusCode: `CHILD_${status.statusCode}` });
+        if (status.statusCode === 'FINISHED') break;
+        if (status.statusCode === 'ERROR' || status.statusCode === 'EXPIRED') {
+          throw new Error(`Instagram could not process a video slide of the ${noun} (${status.statusCode}): ${status.status ?? 'no detail'}`);
+        }
+        if (poll >= VIDEO_ITEM_POLL.maxPolls) throw new Error(`A video slide was still ${status.statusCode} after ${VIDEO_ITEM_POLL.maxPolls} checks.`);
+        await sleep(VIDEO_ITEM_POLL.everyMs);
+      }
+    }
     const containerId = await meta.createCarousel(children, attempt.caption, attempt.location_id ?? undefined);
     await update(query, id, { status: 'processing', container_id: containerId });
 
@@ -222,7 +279,7 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
     posted.permalink = permalink;
     const finishedAt = new Date(now()).toISOString();
     await update(query, id, { status: 'published', media_id: mediaId, permalink, finished_at: finishedAt, status_log: JSON.stringify(statusLog) });
-    await hooks.onPublished(query, attempt.native_ref, finishedAt);
+    await hooks.onPublished(query, attempt.native_ref, finishedAt, { mediaId, photos: deps.photoHashes ?? NO_PHOTO_DOWNLOAD });
     posted.hookDone = true;
     await markScheduleForAttempt(query, id, 'published', null).catch(() => undefined);
     return { id, status: 'published' };
@@ -236,7 +293,7 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
       await update(query, id, { status: 'published', media_id: posted.mediaId, permalink: posted.permalink, finished_at: finishedAt, status_log: JSON.stringify(statusLog) })
         .catch((e) => console.warn(`[publish] could not record attempt ${id} as published: ${e instanceof Error ? e.message : String(e)}`));
       if (!posted.hookDone) {
-        await hooks.onPublished(query, posted.nativeRef, finishedAt)
+        await hooks.onPublished(query, posted.nativeRef, finishedAt, { mediaId: posted.mediaId, photos: deps.photoHashes ?? NO_PHOTO_DOWNLOAD })
           .catch((e) => console.warn(`[publish] could not mark ${noun} ${posted?.nativeRef} published: ${e instanceof Error ? e.message : String(e)}`));
       }
       await markScheduleForAttempt(query, id, 'published', null).catch(() => undefined);
@@ -252,8 +309,9 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
 export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id: string; status: 'published' | 'failed' }> {
   return carryFeedAttempt(deps, id, {
     vertical: 'carousels',
-    onPublished: async (query, postId, finishedAt) => {
+    onPublished: async (query, postId, finishedAt, info) => {
       await query(`UPDATE social.posts SET status = 'published', published_at = $2::timestamptz WHERE id = $1`, [postId, finishedAt]);
+      await logPublishedPhotos(query, 'carousels', postId, finishedAt, info);
     },
   });
 }

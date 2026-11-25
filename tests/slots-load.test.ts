@@ -9,6 +9,7 @@ import { readSeedInputs, seedTemplate, DEFAULT_SEED_INPUTS } from '@/lib/social-
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 async function db(source: 'legacy' | 'template') {
   const { pg, query } = await openHubTestDb();
@@ -36,7 +37,8 @@ test('readTemplate and readOverrides read start minutes and Stories series', asy
   const { pg, q } = await db('template');
   const monday = (await readTemplate(q)).filter((r) => r.weekday === 1);
   assert.deepEqual(monday.filter((r) => r.vertical === 'explainers').map((r) => [r.startMinute, r.series, r.feedMode]), [[780, null, 'main'], [930, null, 'main']]);
-  assert.deepEqual(monday.filter((r) => r.vertical === 'stories').map((r) => [r.startMinute, r.series]).sort(), [[510, 'guess_the_number'], [510, 'morning_download']]);
+  // SS-1: Trivia's Monday slot is its own type's; Morning Download keeps `stories`.
+  assert.deepEqual(monday.filter((r) => isStoryVertical(r.vertical)).map((r) => [r.vertical, r.startMinute, r.series]).sort(), [['ai_trivia', 510, 'ai_trivia'], ['stories', 510, 'morning_download']]);
   await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode) VALUES ('2026-10-20', 'stories', 900, 'morning_download', 'add', NULL)`);
   assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add', feedMode: null, setBy: 'system' }]);
   assert.deepEqual(await readOverrides(q, '2026-10-21', '2026-10-30'), []);
@@ -53,16 +55,14 @@ test('template: a plan covers 14 days and applies overrides at free minutes', as
   assert.equal(isLfdDay(plan, '2026-10-21'), false);
   const loaded = await loadSlots(q, '2026-10-19', '2026-10-25');
   assert.equal(loaded.size, 7);
-  assert.deepEqual(loaded.get('2026-10-19')!.slice(0, 3).map((s) => [s.vertical, s.startMinute]), [['stories', 510], ['stories', 510], ['reels', 525]], 'a day reads in time order');
+  assert.deepEqual(loaded.get('2026-10-19')!.slice(0, 3).map((s) => [s.vertical, s.startMinute]), [['ai_trivia', 510], ['stories', 510], ['reels', 525]], 'a day reads in time order');
 });
 
-test('readCaps: the defaults, the stored values, and defaults on a bad value or a read error', async () => {
+test('readCaps: the fixed maxima, whatever the old daily_caps row holds (D20)', async () => {
   const { pg, q } = await db('template');
   assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
   await pg.query(`UPDATE social_hub.settings SET value = '{"reels":2,"explainers":"lots","carousels":99}'::jsonb WHERE key = 'daily_caps'`);
-  assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, reels: 2 });
-  await pg.query(`DELETE FROM social_hub.settings WHERE key = 'daily_caps'`);
-  assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
+  assert.deepEqual(await readCaps(q), DEFAULT_CAPS, 'the stored limit is not read');
   assert.deepEqual(await readCaps(broken), DEFAULT_CAPS);
 });
 
@@ -70,30 +70,32 @@ test('readSeedInputs reads LFD and Stories days, defaults on missing rows', asyn
   const { pg, q } = await db('legacy');
   assert.deepEqual(await readSeedInputs(q), DEFAULT_SEED_INPUTS);
   await pg.query(`INSERT INTO lfd.settings (key, value) VALUES ('days', '[3]'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
-  await pg.query(`INSERT INTO stories.settings (key, value) VALUES ('series', '{"free_vs_paid":{"window":{"days":[0]}}}'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  await pg.query(`INSERT INTO stories.settings (key, value) VALUES ('series', '{"real_or_ai":{"window":{"days":[0]}}}'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   const got = await readSeedInputs(q);
   assert.deepEqual(got.lfdDays, [3]);
-  assert.deepEqual(got.storyDays.free_vs_paid, [0]);
-  assert.deepEqual(got.storyDays.guess_the_number, DEFAULT_SEED_INPUTS.storyDays.guess_the_number);
+  assert.deepEqual(got.storyDays.real_or_ai, [0]);
+  assert.deepEqual(got.storyDays.ai_trivia, DEFAULT_SEED_INPUTS.storyDays.ai_trivia);
 });
 
-test('quotaFromSlots: null while legacy; template gives min(count, cap), following daily_caps', async () => {
+test('quotaFromSlots: null while legacy; template gives the slot count (D20: the old daily_caps row is not read)', async () => {
   const legacy = await db('legacy');
   assert.equal(await quotaFromSlots(legacy.q, 'reels', '2026-10-20'), null);
   assert.equal(await storiesSlotsOn(legacy.q, '2026-10-20'), null);
   const { pg, q } = await db('template');
-  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3); // 3 slots, cap 5
+  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3); // 3 slots
   await pg.query(`UPDATE social_hub.settings SET value = '{"reels":2}'::jsonb WHERE key = 'daily_caps'`);
-  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 2);
+  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3, 'a stale daily limit trims nothing');
   assert.equal(await quotaFromSlots(q, 'explainers', '2026-10-20'), 2);
 });
 
-test('storiesSlotsOn: Stories slots on the date, capped at 2 per series', async () => {
+test('storiesSlotsOn: every Stories-format type\'s slots on the date, each within its own fixed maximum (Morning Download 10; Trivia and Real or AI? 1, SS-24; D20)', async () => {
   const { pg, q } = await db('template');
   const base = (await storiesSlotsOn(q, '2026-10-20'))!;
   await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode) VALUES
     ('2026-10-20', 'stories', 900, 'morning_download', 'add', NULL), ('2026-10-20', 'stories', 960, 'morning_download', 'add', NULL), ('2026-10-20', 'stories', 1020, 'morning_download', 'add', NULL)`);
   const got = (await storiesSlotsOn(q, '2026-10-20'))!;
-  assert.equal(got.filter((s) => s.series === 'morning_download').length, 2);
-  assert.equal(got.length, base.filter((s) => s.series !== 'morning_download').length + 2);
+  // D20: Morning Download's ceiling is its fixed maximum (10), so its 1 seeded slot and the 3 added are all made.
+  assert.equal(got.filter((s) => s.series === 'morning_download').length, 4);
+  assert.equal(got.length, base.filter((s) => s.series !== 'morning_download').length + 4);
+  assert.ok(got.filter((s) => s.series !== 'morning_download').every((s) => s.vertical === s.series), 'Trivia and Real or AI? under their own types');
 });

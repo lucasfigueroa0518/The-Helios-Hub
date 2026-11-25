@@ -35,8 +35,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     refreshOnVisit: false,
     // Weekly slot calendar: edit the template and single dates (spec 2026-10-14).
     editSlots: true,
-    // Targeted Revisions: revise one part of a post, undo it, continue a paused one. Off until Tommy turns it on.
-    revise: false,
+    // Targeted Revisions: revise one part of a post, undo it, continue a paused one. Turned on 2026-11-03.
+    revise: true,
   }),
   views: Object.freeze({
     calendar: true,

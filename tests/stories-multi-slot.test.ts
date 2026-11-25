@@ -17,16 +17,20 @@ import type { StoryCandidate } from '@/lib/stories/sources/reels';
 import { tick } from '@/lib/stories/worker';
 
 import { harnessDb, stubJev, stubPhotos, stubWriter } from './stories-harness';
+import { newsStubs } from './stories-md-news-stubs';
 
 const THU = '2026-10-08';
 const THU_1AM = new Date('2026-10-08T05:00:00Z'); // 1:00 AM New York
 const THU_10AM = new Date('2026-10-08T14:00:00Z'); // 10:00 AM New York
-const THU_4AM = new Date('2026-10-08T08:00:00Z');
+const THU_3AM = new Date('2026-10-08T07:00:00Z');
 
 type Db = Awaited<ReturnType<typeof harnessDb>>['db'];
 const qOf = (db: Db) => ((t: string, p?: unknown[]) => db.query(t, p)) as never;
 
-/** Template mode with Morning Download at 8:30 (seeded), 3:00 PM and 8:00 PM (the third is over the cap of 2). */
+/**
+ * Template mode with Morning Download at 8:30 (seeded), 3:00 PM and 8:00 PM. Settings standard D20: the calendar's
+ * slots are the count (Morning Download's fixed maximum is DEFAULT_MAX_CAP), so all three are made.
+ */
 async function templateDay(db: Db) {
   const q = qOf(db);
   await saveSeriesSetting(db, 'morning_download', { auto: true });
@@ -52,6 +56,9 @@ async function setSwitches(db: Db, publishingLive: boolean) {
 
 const idleDeps = (db: Db, now: Date) => ({
   db, sourceDb: db, now: () => now, sleep: async () => {},
+  // Real or AI?'s daily candidate run makes images and AI Trivia's intake calls the model; never from a test.
+  roaDaily: async () => null,
+  triviaDaily: async () => null,
   builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), builders: { morning_download: async () => ({ ok: false as const, skip: 'test: nothing to build', candidates: [] }) } }) as never,
   meta: () => { throw new Error('nothing may publish'); },
   storage: () => { throw new Error('not used'); },
@@ -59,17 +66,17 @@ const idleDeps = (db: Db, now: Date) => ({
   poolReads: () => { throw new Error('no pool in this test'); },
 });
 
-test('template: two Morning Download slots → two sets (slot_minute 510 and 900); the third slot is over the cap', async () => {
+test('template: three Morning Download slots → three sets (slot_minute 510, 900 and 1200; D20: the calendar\'s slots are the count)', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);
   const slots = await storiesSlotsOn(q, THU);
-  assert.deepEqual(slots!.filter((s) => s.series === 'morning_download').map((s) => s.startMinute), [510, 900], 'capped at 2 per series');
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots }), ['morning_download', 'morning_download']);
-  assert.deepEqual(await minutesOf(db), [510, 900]);
+  assert.deepEqual(slots!.filter((s) => s.series === 'morning_download').map((s) => s.startMinute), [510, 900, 1200], 'every calendar slot (D20)');
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots }), ['morning_download', 'morning_download', 'morning_download']);
+  assert.deepEqual(await minutesOf(db), [510, 900, 1200]);
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots }), [], 'one live set per slot');
 });
 
-test('template: a person\'s set in the over-cap slot never starves a within-cap slot (final review #8)', async () => {
+test('template: a person\'s set in one slot holds it and never starves the other slots (final review #8)', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);
   await requestSet(db, { series: 'morning_download', nyDate: THU, trigger: 'click', style: 'polished', slotMinute: 1200 });
@@ -82,8 +89,8 @@ test('template: a slot whose time has passed gets no set', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);
   const slots = await storiesSlotsOn(q, THU);
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_10AM, { slots }), ['morning_download']);
-  assert.deepEqual(await minutesOf(db), [900]);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_10AM, { slots }), ['morning_download', 'morning_download']);
+  assert.deepEqual(await minutesOf(db), [900, 1200]);
 });
 
 test('template: a set a person made for the series fills its first slot', async () => {
@@ -94,44 +101,48 @@ test('template: a set a person made for the series fills its first slot', async 
   await approveSet(db, set.id);
   const lines: string[] = [];
   const slots = await storiesSlotsOn(q, THU);
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots, log: (m) => lines.push(m) }), ['morning_download']);
-  assert.deepEqual(await minutesOf(db), [null, 900]);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots, log: (m) => lines.push(m) }), ['morning_download', 'morning_download']);
+  assert.deepEqual(await minutesOf(db), [null, 900, 1200]);
   assert.ok(lines.includes('fill_reduced'));
 });
 
-test('template: each slot set is scheduled in [slot, slot + 15] and books slot t0510:morning_download / t0900:morning_download', async () => {
+test('template: each slot set is scheduled in [slot, slot + 15] and books slot t0510 / t0900 / t1200:morning_download', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);
   await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots: await storiesSlotsOn(q, THU) });
   await db.query(`UPDATE stories.sets SET status = 'ready'`);
   for (const s of await listSets(db, {})) await approveSet(db, s.id);
   await setSwitches(db, true);
-  assert.equal((await tick(idleDeps(db, THU_1AM))).scheduled, 2);
+  assert.equal((await tick(idleDeps(db, THU_1AM))).scheduled, 3);
   const sets = (await listSets(db, {})).sort((a, b) => new Date(a.publish_at!).getTime() - new Date(b.publish_at!).getTime());
-  const [a, b] = sets.map((s) => nyMinute(s.publish_at!));
+  const [a, b, c] = sets.map((s) => nyMinute(s.publish_at!));
   assert.ok(a! >= 510 && a! <= 525, `8:30-8:45, got ${a}`);
   assert.ok(b! >= 900 && b! <= 915, `3:00-3:15 PM, got ${b}`);
+  assert.ok(c! >= 1200 && c! <= 1215, `8:00-8:15 PM, got ${c}`);
   const { rows } = await db.query<{ slot: string }>(`SELECT slot FROM social_hub.schedule WHERE vertical = 'stories' ORDER BY publish_at`);
-  assert.deepEqual(rows.map((r) => r.slot), ['t0510:morning_download', 't0900:morning_download']);
+  assert.deepEqual(rows.map((r) => r.slot), ['t0510:morning_download', 't0900:morning_download', 't1200:morning_download']);
 });
 
-test('template: the 4 AM worker requests one set per Stories slot', async () => {
+test('template: the 3 AM worker requests one set per Stories slot', async () => {
   const { db } = await harnessDb();
   await templateDay(db);
-  await tick(idleDeps(db, THU_4AM));
-  assert.deepEqual(await minutesOf(db), [510, 900]);
+  await tick(idleDeps(db, THU_3AM));
+  assert.deepEqual(await minutesOf(db), [510, 900, 1200]);
 });
 
 test('legacy: exactly one set per due series, no slot minute, booked under the series name', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'morning_download', { auto: true });
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
-  await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveSeriesSetting(db, 'real_or_ai', { auto: true });
   assert.equal(await storiesSlotsOn(qOf(db), THU), null);
-  await tick(idleDeps(db, THU_4AM));
+  await tick(idleDeps(db, THU_3AM));
   assert.deepEqual(await minutesOf(db), [null]);
-  assert.deepEqual(await minutesOf(db, 'guess_the_number'), [null]);
-  assert.deepEqual(await minutesOf(db, 'free_vs_paid'), [], 'not due on Thursday');
+  assert.deepEqual(await minutesOf(db, 'ai_trivia'), [null]);
+  assert.deepEqual(await minutesOf(db, 'real_or_ai'), [null]);
+  // Morning Download is made the same day; Trivia (Sun/Mon/Thu) and Real or AI? (Tue/Sat) up to 2 days ahead.
+  const days = (await db.query<{ d: string }>(`SELECT series || '@' || ny_date::text AS d FROM stories.sets ORDER BY series`)).rows.map((r) => r.d);
+  assert.deepEqual(days, ['ai_trivia@2026-10-08', 'morning_download@2026-10-08', 'real_or_ai@2026-10-10']);
 
   const { db: db2 } = await harnessDb();
   await saveSeriesSetting(db2, 'morning_download', { auto: true });
@@ -154,7 +165,7 @@ test('R12: with no slot_minute column (schema not applied yet), a legacy day sti
   await db.query(`ALTER TABLE stories.sets DROP COLUMN slot_minute`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS sets_one_live_per_day_test ON stories.sets (series, ny_date) WHERE status NOT IN ('rejected', 'failed', 'skipped')`);
   await saveSeriesSetting(db, 'morning_download', { auto: true });
-  await tick(idleDeps(db, THU_4AM)); // requests, then builds (the stub skips it)
+  await tick(idleDeps(db, THU_3AM)); // requests, then builds (the stub skips it)
   const [skipped] = await listSets(db, {});
   assert.equal(skipped!.status, 'skipped');
   assert.equal(skipped!.slot_minute, null);
@@ -164,16 +175,11 @@ test('R12: with no slot_minute column (schema not applied yet), a legacy day sti
   await db.query(`UPDATE stories.sets SET status = 'ready' WHERE id = $1`, [set.id]);
   await approveSet(db, set.id);
   await setSwitches(db, true);
-  assert.equal((await tick(idleDeps(db, THU_4AM))).scheduled, 1);
+  assert.equal((await tick(idleDeps(db, THU_3AM))).scheduled, 1);
   assert.equal((await getSet(db, set.id))!.set.status, 'scheduled');
   const { rows } = await db.query<{ slot: string }>(`SELECT slot FROM social_hub.schedule WHERE vertical = 'stories'`);
   assert.deepEqual(rows.map((r) => r.slot), ['morning_download']);
 });
-
-const materialOf = (params: Record<string, unknown>) => {
-  const m = /<material>\n([\s\S]*)\n<\/material>/.exec(String((params.messages as Array<{ content: string }>)[0]!.content));
-  return JSON.parse(m![1]!) as unknown;
-};
 
 test('R13: two Morning Download sets of one date never share a story', async () => {
   const { db } = await harnessDb();
@@ -182,18 +188,15 @@ test('R13: two Morning Download sets of one date never share a story', async () 
     key: `news.test/${n.toLowerCase()}`, origin: 'reels', ref: `idea-${i}`, headline: `${n} launches a product`, sourceName: 'Wired',
     url: `https://news.test/${n.toLowerCase()}`, body: `${n} launched a product on Thursday.`, publishedAt: '2026-10-07T12:00:00Z', nativeScore: 9 - i,
   }));
-  const write = stubWriter({
-    submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((x) => ({ key: x.key, headline: `${x.headline} on Thursday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: x.headline.split(' ')[0] }, alt_visuals: [] })),
-      opener_visual: { kind: 'setting', query: 'newsroom' },
-    }),
-  });
+  // Alpha and Bravo are top tier; the walk stops at Charlie, so a set with all four posts two (WC1), and a set
+  // without Alpha and Bravo fills its minimum from Charlie and Delta.
+  const { news } = await newsStubs(names.map((n, i) => ({ headline: `${n} launches a product`, top: i < 2, photo: 'good' as const })));
+  const depsFor = (setId: string) => ({ db, sourceDb: db, jev: createStoriesJev(stubJev(), db), write: stubWriter({}), photos: stubPhotos(), settings: DEFAULT_SETTINGS, now: THU_1AM, setId, nyDate: THU, news });
   const keys: string[][] = [];
   for (const slotMinute of [510, 900]) {
     const { set } = await requestSet(db, { series: 'morning_download', nyDate: THU, trigger: 'auto', style: 'polished', slotMinute });
-    const deps = { db, sourceDb: db, jev: createStoriesJev(stubJev(), db), write, photos: stubPhotos(), settings: DEFAULT_SETTINGS, now: THU_1AM, setId: set.id, nyDate: THU };
-    const r = await buildMorningDownload(deps, { reels: async () => pool, carousel: async () => [] });
-    assert.equal(r.ok, true);
+    const r = await buildMorningDownload(depsFor(set.id), { reels: async () => pool, carousel: async () => [] });
+    assert.equal(r.ok, true, r.ok ? '' : r.skip);
     if (!r.ok) return;
     keys.push(r.historyKeys);
     // What buildSet's saveBuild stores on the set.
@@ -205,23 +208,24 @@ test('R13: two Morning Download sets of one date never share a story', async () 
   // A rejected set frees its keys.
   await db.query(`UPDATE stories.sets SET status = 'rejected' WHERE slot_minute = 510`);
   const { set: third } = await requestSet(db, { series: 'morning_download', nyDate: THU, trigger: 'auto', style: 'polished', slotMinute: 510 });
-  const r3 = await buildMorningDownload({ db, sourceDb: db, jev: createStoriesJev(stubJev(), db), write, photos: stubPhotos(), settings: DEFAULT_SETTINGS, now: THU_1AM, setId: third.id, nyDate: THU }, { reels: async () => pool, carousel: async () => [] });
+  const r3 = await buildMorningDownload(depsFor(third.id), { reels: async () => pool, carousel: async () => [] });
   assert.ok(r3.ok && r3.historyKeys.every((k) => !keys[1]!.includes(k)));
+  assert.deepEqual(r3.ok ? r3.historyKeys : [], keys[0]);
 });
 
-test('cap: a person\'s set still in the making (ready, no slot) takes one of the two slots', async () => {
+test('cap: a person\'s set still in the making (ready, no slot) takes one of the slots', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);
   const { set } = await requestSet(db, { series: 'morning_download', nyDate: THU, trigger: 'click', style: 'polished' });
   await db.query(`UPDATE stories.sets SET status = 'ready' WHERE id = $1`, [set.id]);
   const fields: Array<Record<string, unknown>> = [];
   const lines: string[] = [];
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots: await storiesSlotsOn(q, THU), log: (m, f) => (lines.push(m), fields.push(f)) }), ['morning_download']);
-  assert.deepEqual(await minutesOf(db), [null, 900]);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots: await storiesSlotsOn(q, THU), log: (m, f) => (lines.push(m), fields.push(f)) }), ['morning_download', 'morning_download']);
+  assert.deepEqual(await minutesOf(db), [null, 900, 1200]);
   const fill = fields[lines.indexOf('fill_reduced')]!;
-  assert.equal(fill.quota, 2);
+  assert.equal(fill.quota, 3);
   assert.equal(fill.userPlaced, 1);
-  assert.equal(fill.making, 1);
+  assert.equal(fill.making, 2, "the two slots left to make");
   assert.equal(fields[lines.indexOf('auto_requested')]!.slot, 'morning_download@15:00');
 });
 
@@ -230,17 +234,17 @@ test('a failed slot read (legacy path) never adds a set to a day that already ha
   const q = await templateDay(db);
   await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots: await storiesSlotsOn(q, THU) });
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots: null }), []);
-  assert.deepEqual(await minutesOf(db), [510, 900]);
+  assert.deepEqual(await minutesOf(db), [510, 900, 1200]);
 });
 
-test('openStorySlots (Run now\'s list): open while a capped slot is free and not passed', async () => {
+test('openStorySlots (Run now\'s list): open while a slot is free and not passed', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);
   const slots = (await storiesSlotsOn(q, THU))!;
   const openOf = async (now: Date) => ((await openStorySlots(db, slots, now)).get('morning_download')?.open ?? []).map((s) => s.startMinute);
-  assert.deepEqual(await openOf(THU_1AM), [510, 900]);
-  assert.deepEqual(await openOf(THU_10AM), [900], '8:30 has passed');
+  assert.deepEqual(await openOf(THU_1AM), [510, 900, 1200]);
+  assert.deepEqual(await openOf(THU_10AM), [900, 1200], '8:30 has passed');
   await requestSet(db, { series: 'morning_download', nyDate: THU, trigger: 'auto', style: 'polished', slotMinute: 900 });
-  assert.deepEqual(await openOf(THU_10AM), [], 'the open one is held');
-  assert.deepEqual(await openOf(THU_1AM), [510]);
+  assert.deepEqual(await openOf(THU_10AM), [1200], 'the 3 PM one is held');
+  assert.deepEqual(await openOf(THU_1AM), [510, 1200]);
 });

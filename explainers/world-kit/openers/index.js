@@ -1,11 +1,14 @@
-// Frame 1 of every reel (EX3-102): the bank's opener over the reel's own hook scene. Code writes
-// assets/frames/01-opener.js (frames.mjs writeOpener) as one call to openerFrame(); the frame
-// worker writes only the hook, assets/frames/01-hook.js.
+// Frame 1 of every reel (EX3-102): the bank's opener. Code writes assets/frames/01-opener.js
+// (frames.mjs writeOpener) as one call to openerFrame(); nobody builds frame 1.
+//
+// Lucas, 2026-11-21: the opener shows "AI 101" with its icon first (ctx.hook, the card code writes
+// as assets/frames/01-hook.js, lesson.js), holds it, then takes it away and lands on frame 2, the
+// definition beat: `ctx.next` is frame 2's scene, and what the opener uncovers is frame 2's first
+// picture (common.js nextBeat), so the cut into frame 2 doesn't jump.
 
 import { scope } from '../draw.js';
 import { openerTiming } from './bank.js';
 import paperRip from './paper-rip.js';
-import recordScratch from './record-scratch.js';
 import typewriter from './typewriter.js';
 import bigBang from './big-bang.js';
 import knockKnock from './knock-knock.js';
@@ -18,7 +21,6 @@ import scissors from './scissors.js';
 
 export const DRAW = {
   'paper-rip': paperRip,
-  'record-scratch': recordScratch,
   typewriter,
   'big-bang': bigBang,
   'knock-knock': knockKnock,
@@ -31,31 +33,50 @@ export const DRAW = {
 };
 
 /**
- * Frame 1's scene module for opener `key`. `hook` is the worker's hook module (its default export
- * plus its `hero`); `voice` is the opener line's length and `words` its word times (from the
- * line's own start, before the opener's lead); `term` is the storyboard's term.
+ * Frame 1's scene module for opener `key`. `hook` is the AI 101 card module (01-hook.js: its default
+ * export and its `hero`, the house scholar when the card has one); `next` is frame 2's module (its
+ * default export: { ground, shots, draw(t) }), or null, when the opener uncovers plain paper.
+ * Earlier callers' `voice`, `words` and `silent` are accepted and ignored: frame 1 never speaks.
  */
-export function openerFrame(key, { hook, voice, words = [], term = '' }) {
+export function openerFrame(key, { hook, next = null, term = '' }) {
   const draw = DRAW[key];
   if (!draw) throw new Error(`no opener "${key}" in the bank`);
-  const scene = hook.default ?? hook;
-  const ground = scene.ground ?? 'paper';
+  const card = hook.default ?? hook;
+  const after = next ? next.default ?? next : null;
+  const ground = card.ground ?? 'paper';
   const ctx = {
-    hook: { ground, shots: scene.shots ?? hook.shots ?? [], hero: hook.hero ?? scene.hero ?? null, draw: (t, o) => {
-      // the hook scopes its own ids; the opener's ids go back under the frame's prefix after it
-      const svg = scene.draw(t, o);
-      scope('f01-', ground);
-      return svg;
-    } },
-    M: openerTiming(key, voice, words),
+    key,
+    hook: {
+      ground,
+      lesson: true,
+      shots: [],
+      hero: hook.hero ?? card.hero ?? null,
+      draw: (t, o) => {
+        const svg = card.draw(t, o);
+        scope('f01-', ground);
+        return svg;
+      },
+    },
+    next: after
+      ? {
+          ground: after.ground ?? 'paper',
+          // frame 2 draws under its own id prefix; frame 1's goes back after it
+          draw: (t = 0) => {
+            const svg = after.draw(t);
+            scope('f01-', ground);
+            return svg;
+          },
+        }
+      : null,
+    M: openerTiming(key),
     term,
   };
   return {
     ground,
-    shots: ctx.hook.shots,
+    shots: [],
     opener: key,
     draw(t) {
-      // one prefix for the frame (the hook scopes itself the same way when it draws)
+      // one prefix for the frame (the card and frame 2 scope themselves the same way when they draw)
       scope('f01-', ground);
       return draw(t, ctx);
     },

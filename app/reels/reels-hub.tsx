@@ -1,14 +1,9 @@
 'use client';
 
-import { BackToHub } from '@/components/content-type/BackToHub';
-import { PoolQueue } from '@/components/content-type/PoolQueue';
-import { QueueControls } from '@/components/content-type/QueueControls';
-import { PostingSettings, SettingsButton } from '@/components/content-type/TypeControls';
-import { ReelSeedButton } from '@/components/content-type/ReelSeedButton';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  ChevronLeft,
   ChevronRight,
   Copy as CopyIcon,
   Check,
@@ -20,10 +15,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
+import { BackToHub } from '@/components/content-type/BackToHub';
+import type { PoolPageData } from '@/components/content-type/pool/pool-data';
+import { SettingsTab } from '@/components/content-type/pool/SettingsTab';
+import { TypeHub } from '@/components/content-type/TypeHub';
+import { ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
-import { capQueued, queueOrder, slotsFromOrder } from '@/lib/social-hub/queue';
-import { ideaRef, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
+import type { TypeHubModel } from '@/lib/content-type/model';
+import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { ENTERTAINMENT_BOOST, NET_BUCKET_WEIGHT, NET_VALUE_WEIGHT } from '@/lib/reels/config';
 import type { StoredCopyJob } from '@/lib/reels/copy/jobs';
 import { fullCaption } from '@/lib/reels/copy/report';
@@ -54,31 +53,6 @@ const CATEGORY: Record<string, string> = {
 };
 
 /* ----------------------------------------------------------------- format */
-
-function formatTime(value: string | null): string {
-  if (!value) return '—';
-  return new Date(value).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-/** `nyDate` is a New York calendar date. Parsing it as UTC shifts the label back a day. */
-function formatNyDate(nyDate: string, style: 'short' | 'long' = 'short'): string {
-  const [year, month, day] = nyDate.split('-').map(Number);
-  if (!year || !month || !day) return nyDate;
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
-    weekday: style === 'long' ? 'long' : undefined,
-    month: style === 'long' ? 'long' : 'short',
-    day: 'numeric',
-  });
-}
-
-function todayInNewYork(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
 
 function score2(value: number | null): string {
   return value == null ? '—' : value.toFixed(2);
@@ -320,26 +294,10 @@ export function publishState(reel: Reel, music: MusicStatus): PublishState {
   return { kind: 'song-failed', text: 'No song pick queued for this reel.' };
 }
 
-const BADGE: Partial<Record<PublishState['kind'], string>> = {
-  awaiting: 'Awaiting approval',
-  scheduled: 'Scheduled',
-  publishing: 'Publishing',
-  published: 'Published',
-  'publish-failed': 'Publish failed',
-  'song-failed': 'Song pending',
-  'song-working': 'Song pending',
-};
-
 /** Why Approve cannot run yet, or null when it can. */
 function approveBlocker(music: MusicStatus): string | null {
   if (!music.metaReady) return 'Waiting on Meta credentials.';
   return null;
-}
-
-function badgeLabel(state: PublishState, windowsOpen: number): string | null {
-  if (state.kind === 'scheduled') return `Scheduled · ${formatSlotTime(state.publishAt)}`;
-  if (state.kind === 'awaiting' && windowsOpen === 0) return 'Carries tomorrow';
-  return BADGE[state.kind] ?? null;
 }
 
 function isPostingReel(reel: Reel): boolean {
@@ -348,13 +306,37 @@ function isPostingReel(reel: Reel): boolean {
 
 /* ------------------------------------------------------------------- hub */
 
-export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = '' }: { initial: ReelsOverview; /** What a person did to the idea queue: pins, drags, archives (idea pool standard, 2026-10-21). */ moves?: IdeaAdjustment[]; /** Today's reel slots; null: unknown (the top shows the run's picks). */ slotsToday?: number | null; reviewPath?: string }) {
+/** The reel behind a pool idea or a hub post, by its post idea id, with the slate it was scored on (the newest slate wins). */
+function reelIndex(views: readonly DayView[]): Map<string, { reel: Reel; slateId: string }> {
+  const out = new Map<string, { reel: Reel; slateId: string }>();
+  for (const view of views) {
+    for (const score of view.slate.scores) {
+      if (!out.has(score.postIdeaId)) out.set(score.postIdeaId, { reel: reelFor(view, score), slateId: view.slate.id });
+    }
+  }
+  return out;
+}
+
+const postIdeaIdOf = (id: string) => id.replace(/^reels:idea:/, '');
+
+/**
+ * Text on Screen's page: the shared type page (TypeHub and its pool screen, Settings tab included: D8, D9) over the
+ * hub's model of the reels pool, with this page's own header (Show reels, Review link) and its reel controls
+ * (Generate Reel, the song pick, Schedule, Force post) inside the pool screen's idea and post panels. The reels overview is still read and
+ * polled here for those controls.
+ */
+export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = null }: {
+  initial: ReelsOverview;
+  reviewPath?: string;
+  /** The reels pool as every type page reads it (lib/content-type/model.ts over the hub dataset); null when that read failed. */
+  model: TypeHubModel | null;
+  pool: PoolPageData | null;
+  hubError?: string | null;
+}) {
+  const router = useRouter();
   const [data, setData] = useState<ReelsOverview>(initial);
-  const [dayId, setDayId] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [confirmLive, setConfirmLive] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -365,15 +347,7 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
   }, []);
 
   const views = useMemo(() => dayViews(data), [data]);
-  const dayList = useRef<HTMLDivElement>(null);
-
-  // Days run oldest to newest, left to right. Start scrolled to today.
-  useEffect(() => {
-    const list = dayList.current;
-    if (list) list.scrollLeft = list.scrollWidth;
-  }, [views.length]);
-  const view = views.find((item) => item.slate.id === dayId) ?? views[0] ?? null;
-  const viewIndex = view ? views.indexOf(view) : -1;
+  const reels = useMemo(() => reelIndex(views), [views]);
 
   const nightInFlight = data.latest?.status === 'running' || data.latest?.status === 'requested';
   const reelInFlight =
@@ -399,22 +373,19 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
 
   // While a night or a reel is in flight the page follows it.
   usePoll(refresh, reelInFlight ? 4_000 : nightInFlight ? 10_000 : null);
+  // When it lands, the pool (the hub's read) catches up too.
+  const wasInFlight = useRef(reelInFlight || nightInFlight);
+  useEffect(() => {
+    const now = reelInFlight || nightInFlight;
+    if (wasInFlight.current && !now) void refreshHubPage(router);
+    wasInFlight.current = now;
+  }, [reelInFlight, nightInFlight, router]);
 
   useEffect(() => {
     if (!message) return undefined;
     const timer = setTimeout(() => setMessage(null), 6_000);
     return () => clearTimeout(timer);
   }, [message]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      setOpenId(null);
-      setConfirmLive(false);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   async function generate(postIdeaId: string, slateId: string) {
     try {
@@ -440,6 +411,7 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
         result.note ?? (mode === 'force' ? 'Posting to Instagram now as a trial reel.' : 'Scheduled as a trial reel.'),
       );
       await refresh();
+      void refreshHubPage(router);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -476,283 +448,104 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
     }
   }
 
-  async function setLive(value: boolean) {
-    try {
-      const result = await requestJson<{ publishingLive: boolean; scheduled?: number }>('/api/reels/settings', {
-        method: 'POST',
-        body: JSON.stringify({ publishing_live: value }),
-      });
-      const placed = result.scheduled ?? 0;
-      setMessage(
-        value
-          ? placed > 0
-            ? `Live is on. ${placed} of today's reels are on the clock.`
-            : "Live is on. Tonight's selected reels will be scheduled into the day's slots."
-          : 'Live is off. Reels already on the clock still post.',
-      );
-      await refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
+  /** The reel's own controls and sections for a pool idea or a made post (nothing when the overview has no such reel). */
+  const reelControls = (postIdeaId: string | null | undefined) => {
+    const hit = postIdeaId ? reels.get(postIdeaIdOf(postIdeaId)) : undefined;
+    if (!hit) return null;
+    const { reel, slateId } = hit;
+    return (
+      <div className="rh rh--scope">
+        <ReelDetail
+          reel={reel}
+          music={data.music}
+          bare
+          onGenerate={() => void generate(reel.score.postIdeaId, slateId)}
+          onSchedule={(videoJobId) => void publishReel(videoJobId, 'schedule')}
+          onForce={(videoJobId) => void publishReel(videoJobId, 'force')}
+          onRetrySong={(videoJobId) => void retrySong(videoJobId)}
+          windowsOpen={data.windowsOpen}
+        />
+      </div>
+    );
+  };
 
-  const archived = useMemo(() => new Set(moves.filter((m) => m.kind === 'archive').map((m) => ideaRef(m.ideaId))), [moves]);
-  const reels = view ? view.slate.scores.filter((score) => !archived.has(score.postIdeaId)).map((score) => reelFor(view, score)) : [];
-  const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
-  const picks = ranked.filter((reel) => reel.score.selected);
-  // Today (Lucas, 2026-10-26): the list is the queue with the last run's picks leading (made ones first), and the top is
-  // today's slots filled from the list as the person sees it, so a drag changes the top at once. Earlier days show their picks.
-  const live = Boolean(view?.isCurrent && slotsToday != null);
-  const lead = [...picks].sort((a, b) => Number(b.phase === 'ready') - Number(a.phase === 'ready') || (a.score.rank ?? 999) - (b.score.rank ?? 999)).map((reel) => `reels:idea:${reel.score.postIdeaId}`);
-  const lowestPick = Math.max(...picks.map((reel) => reel.score.rank ?? -Infinity));
-  // Booked or posted for this day holds a slot; an idea posted on an earlier day is done and leaves the list (as on the Content page).
-  const booked = (reel: Reel) => reel.schedule != null && reel.schedule.nyDate === view?.slate.nyDate;
-  const postedBefore = (reel: Reel) => !booked(reel) && (reel.schedule?.status === 'published' || publishState(reel, data.music).kind === 'published');
-  const queued = view?.isCurrent
-    ? capQueued(queueOrder((live ? ranked.filter((reel) => !postedBefore(reel)) : ranked.filter((reel) => !reel.score.selected)).map((reel) => ({ id: `reels:idea:${reel.score.postIdeaId}`, score: reel.score.net, reel, hasContent: reel.phase === 'ready' })), moves, live ? lead : []))
-    : [];
-  // The list as the person sees it while a drop is on its way to the server; a fresh read starts from the server's order.
-  const [seen, setSeen] = useState<string[] | null>(null);
-  const onOrder = useCallback((ids: string[]) => setSeen((prev) => (prev && prev.join() === ids.join() ? prev : ids)), []);
-  const queueKey = queued.map((q) => `${q.item.id}${q.pinned ? '*' : ''}`).join();
-  useEffect(() => setSeen(null), [queueKey]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt only when the server's order changes, so a drop is not reset
-  const queueRows = useMemo(() => queued.map((q) => ({ id: q.item.id, pinned: q.pinned, hasContent: q.item.hasContent, title: q.item.reel.score.headlines[0] ?? 'Untitled idea' })), [queueKey]);
-  const ordered = seen ? seen.flatMap((id) => queued.filter((q) => q.item.id === id)) : queued;
-  const top = live ? slotsFromOrder(ordered.map((q) => q.item.reel), booked, slotsToday ?? 0) : picks;
-  const todayRank = new Map(top.map((reel, i) => [`reels:idea:${reel.score.postIdeaId}`, i + 1]));
-  const skipOf = (reel: Reel) =>
-    !live || reel.score.selected || reel.score.rank == null || reel.score.rank >= lowestPick
-      ? null
-      : reel.copy && reel.copy.status !== 'ok' ? 'Skipped: copy didn’t pass' : 'Skipped by the last run';
-  const rest = ordered;
-  const open = reels.find((reel) => reel.score.postIdeaId === openId) ?? null;
-  const today = todayInNewYork();
+  const headerActions = (
+    <>
+      <div className="rh-review-controls">
+        <label
+          className="rh-switch"
+          title="On: the review link plays the reels. Off: the link says a new review batch is coming soon."
+        >
+          <input
+            type="checkbox"
+            checked={data.reviewOpen}
+            onChange={(event) => void setReviewOpen(event.target.checked)}
+          />
+          <span className="rh-switch__track" aria-hidden="true" />
+          Show reels
+        </label>
+        {reviewPath ? (
+          <button
+            type="button"
+            className="rh-btn"
+            title="Copy the private review link. No login."
+            onClick={() => {
+              const url = `${window.location.origin}${reviewPath}`;
+              void navigator.clipboard.writeText(url).then(
+                () => {
+                  setCopiedLink(true);
+                  window.setTimeout(() => setCopiedLink(false), 1600);
+                },
+                (error: unknown) => setMessage(error instanceof Error ? error.message : String(error)),
+              );
+            }}
+          >
+            {copiedLink ? <Check size={15} /> : <CopyIcon size={15} />}
+            {copiedLink ? 'Copied' : 'Review link'}
+          </button>
+        ) : null}
+      </div>
+    </>
+  );
 
   return (
-    <div className="rh">
-      <div className="rh__inner">
-        <header className="rh__head">
-          <div>
-            <BackToHub />
-            <h1 className="rh__title">Text on Screen <span className="rh-beta">Beta</span></h1>
-          </div>
-          <div className="rh__head-actions">
-            <div className="rh-review-controls">
-              <label
-                className="rh-switch"
-                title="On: the review link plays the reels. Off: the link says a new review batch is coming soon."
-              >
-                <input
-                  type="checkbox"
-                  checked={data.reviewOpen}
-                  onChange={(event) => void setReviewOpen(event.target.checked)}
-                />
-                <span className="rh-switch__track" aria-hidden="true" />
-                Show reels
-              </label>
-              {reviewPath ? (
-                <button
-                  type="button"
-                  className="rh-btn"
-                  title="Copy the private review link. No login."
-                  onClick={() => {
-                    const url = `${window.location.origin}${reviewPath}`;
-                    void navigator.clipboard.writeText(url).then(
-                      () => {
-                        setCopiedLink(true);
-                        window.setTimeout(() => setCopiedLink(false), 1600);
-                      },
-                      (error: unknown) => setMessage(error instanceof Error ? error.message : String(error)),
-                    );
-                  }}
-                >
-                  {copiedLink ? <Check size={15} /> : <CopyIcon size={15} />}
-                  {copiedLink ? 'Copied' : 'Review link'}
-                </button>
-              ) : null}
-            </div>
-            <ReelSeedButton />
-            <SettingsButton>
-              <PostingSettings type="reels" />
-            </SettingsButton>
-            <button
-              type="button"
-              className={`rh-live${data.music.publishingLive ? ' is-on' : ''}`}
-              aria-pressed={data.music.publishingLive}
-              title="When Live is on, each night's selected reels are scheduled into the day's posting slots and posted as trial reels."
-              onClick={() => {
-                if (data.music.publishingLive) void setLive(false);
-                else setConfirmLive(true);
-              }}
-            >
-              <span className="rh-live__lamp" aria-hidden="true" />
-              Live
-            </button>
-          </div>
-        </header>
-
-        {views.length === 0 || !view ? (
-          <p className="rh-empty">No scored days yet. The next run ranks the timely post ideas and picks the day&apos;s reels.</p>
-        ) : (
-          <>
-            <nav className="rh-days" aria-label="Days">
-              <button
-                type="button"
-                className="rh-days__step"
-                onClick={() => setDayId(views[viewIndex + 1]?.slate.id ?? view.slate.id)}
-                disabled={viewIndex >= views.length - 1}
-                aria-label="Earlier day"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <div className="rh-days__list" ref={dayList}>
-                {[...views].reverse().map((item) => {
-                  const active = item.slate.id === view.slate.id;
-                  return (
-                    <button
-                      key={item.slate.id}
-                      type="button"
-                      className={`rh-day${active ? ' is-active' : ''}`}
-                      aria-current={active ? 'date' : undefined}
-                      onClick={() => {
-                        setDayId(item.slate.id);
-                        setOpenId(null);
-                      }}
-                    >
-                      <span className="rh-day__date">{formatNyDate(item.slate.nyDate)}</span>
-                      <span className="rh-day__sub">
-                        {item.slate.nyDate === today ? 'Today' : item.isCurrent ? 'Latest' : 'Selected'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                className="rh-days__step"
-                onClick={() => setDayId(views[viewIndex - 1]?.slate.id ?? view.slate.id)}
-                disabled={viewIndex <= 0}
-                aria-label="Later day"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </nav>
-
-            <section className="rh-day-head">
+    <>
+      {model ? (
+        <TypeHub
+          model={model}
+          pool={pool}
+          title="Text on Screen"
+          headerActions={headerActions}
+          fullPostBase="/social"
+          ideaExtras={(idea) => reelControls(idea.id)}
+          postExtras={(post) => reelControls(post.idea?.id)}
+          settings={<SettingsTab type="reels" lastRefill={pool?.lastRefill ?? null} nowIso={pool?.nowIso} />}
+        />
+      ) : (
+        <div className="rh">
+          <div className="rh__inner">
+            <header className="rh__head">
               <div>
-                <h2>{formatNyDate(view.slate.nyDate, 'long')}</h2>
-                <p>
-                  Scored {formatTime(view.slate.scoredAt)}
-                  {view.isCurrent ? ` · ${view.slate.scores.length} ideas in the pool` : ''}
-                </p>
+                <BackToHub />
+                <h1 className="rh__title">Text on Screen <span className="rh-beta">Beta</span></h1>
               </div>
-            </section>
-
-            {top.length === 0 ? (
-              <p className="rh-empty">{live ? 'No reel slots today.' : 'Nothing cleared the bar this day, so no reels were selected.'}</p>
-            ) : (
-              <div className="rh-top">
-                {top.map((reel) => (
-                  <ReelCard
-                    key={reel.score.postIdeaId}
-                    reel={reel}
-                    badge={isPostingReel(reel) || publishState(reel, data.music).kind === 'published' ? badgeLabel(publishState(reel, data.music), data.windowsOpen) : null}
-                    onOpen={() => setOpenId(reel.score.postIdeaId)}
-                    onGenerate={() => void generate(reel.score.postIdeaId, view.slate.id)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {top.length > 0 && (
-              <p className="rh-muted rh-posting-note">
-                {live
-                  ? `Today's ${top.length === 1 ? 'slot' : `${top.length} slots`}, filled from the top of the list below. Drag an idea into the top ${top.length} to put it here; one with no video yet needs to be generated.`
-                  : "These reels can post today, one per window still open. A reel that misses today's windows carries to tomorrow. It is not scheduled late."}
-              </p>
-            )}
-
-            {rest.length > 0 && (
-              <section className="rh-rest">
-                <h3 className="rh-rest__title">
-                  The bench <span>{rest.length}</span>
-                </h3>
-                <p className="rh-muted">
-                  {live
-                    ? 'Last night’s picks lead, made ones first. The top of the list fills today’s slots. Hold and drag any idea to move it, pin it to make it first, or archive it to hide it for good.'
-                    : 'Depth and rotation. These do not go out until the next run picks them. Hold and drag any idea to move it, pin it to make it first, or archive it to hide it for good.'}
-                </p>
-                <PoolQueue
-                  vertical="reels"
-                  topN={0}
-                  enabled
-                  rows={queueRows}
-                  onOrder={onOrder}
-                  renderRow={(id, handle) => {
-                    const q = rest.find((r) => r.item.id === id)!;
-                    const shownRank = rest.indexOf(q) + 1;
-                    return <RestRow reel={q.item.reel} ideaId={id} rank={shownRank} pinned={q.pinned} placed={q.placed} today={todayRank.get(id) ?? null} skip={skipOf(q.item.reel)} handle={handle} onOpen={() => setOpenId(q.item.reel.score.postIdeaId)} />;
-                  }}
-                />
-              </section>
-            )}
-          </>
-        )}
-      </div>
-
-      {open && view && (
-        <Drawer label="Reel details" onClose={() => setOpenId(null)}>
-          <ReelDetail
-            reel={open}
-            music={data.music}
-            onGenerate={() => void generate(open.score.postIdeaId, view.slate.id)}
-            onSchedule={(videoJobId) => void publishReel(videoJobId, 'schedule')}
-            onForce={(videoJobId) => void publishReel(videoJobId, 'force')}
-            onRetrySong={(videoJobId) => void retrySong(videoJobId)}
-            windowsOpen={data.windowsOpen}
-          />
-        </Drawer>
-      )}
-
-      {confirmLive && (
-        <div className="rh-confirm" role="presentation" onClick={() => setConfirmLive(false)}>
-          <div
-            className="rh-confirm__card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rh-live-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="rh-live-title">Go live?</h2>
-            <p>
-              Today&apos;s selected reels will be scheduled into the windows still open and posted to Instagram. The bench stays off the clock.
-            </p>
-            <div className="rh-confirm__actions">
-              <button type="button" className="rh-btn" onClick={() => setConfirmLive(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rh-btn rh-btn--primary"
-                onClick={() => {
-                  setConfirmLive(false);
-                  void setLive(true);
-                }}
-              >
-                Go live
-              </button>
-            </div>
+              <div className="rh__head-actions">{headerActions}</div>
+            </header>
+            <p className="rh-empty">Could not load the pool: {hubError ?? 'the hub read failed.'}</p>
+            {/* Settings don't need the hub read, so they stay reachable when it fails. */}
+            <div className="pl"><SettingsTab type="reels" lastRefill={null} /></div>
           </div>
         </div>
       )}
 
       {message && (
-        <p className="rh-toast" role="status">
-          {message}
-        </p>
+        <div className="rh rh--scope">
+          <p className="rh-toast" role="status">
+            {message}
+          </p>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -777,7 +570,7 @@ function Pills({ score }: { score: StoredScore }) {
   return (
     <>
       {score.selected && <span className="rh-pill rh-pill--selected">Selected</span>}
-      {score.origin === 'carryover' && <span className="rh-pill">Carryover</span>}
+      {score.origin === 'carryover' && !score.yours && <span className="rh-pill">Carryover</span>}
     </>
   );
 }
@@ -798,112 +591,6 @@ function GenerateButton({ reel, onGenerate, block }: { reel: Reel; onGenerate: (
       {working ? <Loader2 size={15} className="rh-spin" /> : <Sparkles size={15} />}
       {working ? `${reel.stage}…` : 'Generate Reel'}
     </button>
-  );
-}
-
-function ReelCard({
-  reel,
-  badge,
-  onOpen,
-  onGenerate,
-}: {
-  reel: Reel;
-  badge: string | null;
-  onOpen: () => void;
-  onGenerate: () => void;
-}) {
-  const [hover, setHover] = useState(false);
-  const { archetype, category } = labels(reel.score);
-  return (
-    <article className="rh-reel">
-      <div
-        className="rh-reel__media"
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-      >
-        {reel.phase === 'ready' && reel.video ? (
-          <ReelVideo src={`/api/reels/video/${reel.video.id}`} poster={reel.poster} playing={hover} />
-        ) : reel.still ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="rh-media__fill" src={reel.still} alt="" loading="lazy" />
-        ) : null}
-        <button type="button" className="rh-reel__hit" onClick={onOpen} aria-label={`Open reel ${reel.score.rank ?? ''} details`}>
-          {reel.phase === 'ready' && !hover && (
-            <span className="rh-reel__play" aria-hidden="true">
-              <Play size={18} />
-            </span>
-          )}
-        </button>
-        {badge && <span className={`rh-reel__badge${badge === 'Published' ? ' is-done' : ''}`}>{badge}</span>}
-        {reel.phase === 'working' && (
-          <div className="rh-reel__state">
-            <Loader2 size={20} className="rh-spin" />
-            <span>{reel.stage}</span>
-          </div>
-        )}
-        {(reel.phase === 'empty' || reel.phase === 'failed' || reel.phase === 'blocked') && (
-          <div className="rh-reel__state">
-            {reel.phase === 'failed' && (
-              <span className="rh-reel__note">
-                <AlertTriangle size={14} /> Generation stopped
-              </span>
-            )}
-            {reel.phase === 'blocked' ? (
-              <span className="rh-reel__note">Nothing cleared the bar to write from</span>
-            ) : (
-              <GenerateButton reel={reel} onGenerate={onGenerate} />
-            )}
-          </div>
-        )}
-      </div>
-      <button type="button" className="rh-reel__meta" onClick={onOpen}>
-        <span className="rh-reel__score">{score2(reel.score.net)}</span>
-        <span className="rh-reel__labels">
-          {archetype && <span>{archetype}</span>}
-          {category && <span className="rh-reel__cat">{category}</span>}
-        </span>
-        <span className="rh-reel__pills">
-          <Pills score={reel.score} />
-        </span>
-      </button>
-    </article>
-  );
-}
-
-const PHASE_CHIP: Record<ReelPhase, string> = {
-  ready: 'Reel ready',
-  working: 'Generating',
-  failed: 'Stopped',
-  empty: 'No reel',
-  blocked: 'No reel',
-};
-
-function RestRow({ reel, ideaId, rank, pinned, placed, today = null, skip = null, handle, onOpen }: { reel: Reel; ideaId: string; rank: number; pinned: boolean; placed: boolean; /** Its place in today's slots, if it fills one. */ today?: number | null; /** Why the last run passed over it. */ skip?: string | null; handle: ReactNode; onOpen: () => void }) {
-  const { archetype, category } = labels(reel.score);
-  const title = reel.score.headlines[0] ?? 'Untitled idea';
-  return (
-    <div className={`rh-row rh-row--queue${pinned ? ' is-pinned' : ''}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
-      <span className="rh-row__rank">{rank}</span>
-      <span className="rh-row__grip-cell">{handle}</span>
-      <span className="rh-row__main">
-        <span className="rh-row__headline">{title}</span>
-        <span className="rh-row__labels">
-          {archetype ? `${archetype} · ${category ?? '—'}` : 'No framework cleared 0.60'}
-        </span>
-      </span>
-      <span className="rh-row__pills">
-        <Pills score={reel.score} />
-        {today != null ? <span className="rh-chip rh-chip--quota" title="Fills one of today’s slots">Today #{today}</span> : null}
-        {pinned ? <span className="rh-chip rh-chip--pinned">Pinned</span> : placed ? <span className="rh-chip">Placed</span> : null}
-        {skip ? <span className="rh-chip" title="The last run passed over it though it ranked above one of its picks">{skip}</span> : null}
-        <span className={`rh-chip rh-chip--${reel.phase}`}>
-          {reel.phase === 'working' && <Loader2 size={11} className="rh-spin" />} {PHASE_CHIP[reel.phase]}
-        </span>
-        <QueueControls vertical="reels" ideaId={ideaId} pinned={pinned} title={title} compact />
-      </span>
-      <span className="rh-row__score">{score2(reel.score.net)}</span>
-      <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
-    </div>
   );
 }
 
@@ -1066,6 +753,7 @@ function ApproveBlock({
 export function ReelDetail({
   reel,
   music,
+  bare = false,
   onGenerate,
   onSchedule,
   onForce,
@@ -1074,6 +762,8 @@ export function ReelDetail({
 }: {
   reel: Reel;
   music: MusicStatus;
+  /** Inside the pool screen's panel, which already shows the title, the reel and the caption: the reel's own controls and sections only. */
+  bare?: boolean;
   onGenerate: () => void;
   onSchedule: (videoJobId: string) => void;
   onForce: (videoJobId: string) => void;
@@ -1097,6 +787,7 @@ export function ReelDetail({
   const spend = (reel.copy?.usd ?? 0) + (reel.frame?.usd ?? 0) + (reel.video?.usd ?? 0);
   return (
     <div className="rh-detail">
+      {bare ? null : (<>
       <header className="rh-detail__head">
         <span className="rh-detail__rank">#{reel.score.rank ?? '—'}</span>
         <div className="rh-detail__score">
@@ -1130,6 +821,7 @@ export function ReelDetail({
           <div className="rh-detail__blank">{reel.phase === 'working' ? `${reel.stage}…` : 'No reel yet'}</div>
         )}
       </div>
+      </>)}
 
       {song && (
         <button type="button" className="rh-song-strip" onClick={() => setSongOpen((value) => !value)} aria-expanded={songOpen}>
@@ -1244,7 +936,7 @@ export function ReelDetail({
           </Section>
         )}
 
-        <Section title="Caption" open>
+        {bare ? null : <Section title="Caption" open>
           {caption ? (
             <>
               <p className="rh-text">{caption}</p>
@@ -1253,7 +945,7 @@ export function ReelDetail({
           ) : (
             <p className="rh-muted">No caption yet.</p>
           )}
-        </Section>
+        </Section>}
 
         <Section title="On-screen copy">
           {reel.copy?.status === 'ok' ? <p className="rh-text rh-text--screen">{reel.copy.onScreenCopy}</p> : <p className="rh-muted">No copy yet.</p>}

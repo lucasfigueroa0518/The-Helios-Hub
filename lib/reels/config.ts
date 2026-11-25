@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 /**
  * Every value here changes what gets ingested, kept, grouped, or shown, so each
  * one cites the decision that set it (R4: no silent defaults).
@@ -60,8 +61,8 @@ export const PUBLISH_STALE_MINUTES = 30;
 export const CLAP_MODEL = 'laion/larger_clap_music_and_speech';
 /** CLAP's feature extractor expects 48 kHz mono. */
 export const CLAP_SAMPLE_RATE = 48_000;
-/** A song pick still `running` after this was abandoned (cold endpoint starts take minutes). */
-export const SONG_PICK_STALE_MINUTES = 20;
+/** A song pick still `running` after this was abandoned. Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const SONG_PICK_STALE_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
 
 /** RET-01 / D-044: the clock starts at ingest time, not publish time. */
 export const RETENTION_DAYS = 21;
@@ -200,9 +201,9 @@ export const MONTHLY_WATCH_USD = 100;
 
 /**
  * A run whose process died leaves a `running` row that blocks the next night.
- * Comfortably longer than a real run, short enough to self-heal before 1 AM.
+ * Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop.
  */
-export const STALE_RUN_MINUTES = 90;
+export const STALE_RUN_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
 
 /** JEV-01 / D-021: alias, with the resolved versioned ID logged per call. */
 export const JEV_MODEL = 'jev-latest';
@@ -225,8 +226,8 @@ export const B6_MODEL = 'claude-sonnet-5';
 export const COPY_MODEL = 'claude-sonnet-5-5';
 /** How many reels a night aims to finish. Each one has to clear the copy gate, or be the best of four ideas (D-224). */
 export const PASSING_REELS_PER_NIGHT = 3;
-/** A copy job still `running` after this was abandoned by a dead worker. */
-export const COPY_STALE_MINUTES = 5;
+/** A copy job still `running` after this was abandoned by a dead worker. Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const COPY_STALE_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
 
 /** Scene writer. Same Claude model as the other reels calls. */
 export const VISUAL_SCENE_MODEL = 'claude-sonnet-5';
@@ -244,16 +245,16 @@ export const VISUAL_IMAGE_SIZE = '1152x2048';
 export const VISUAL_IMAGE_QUALITY = 'high';
 /** The plan's "last ~10 scene blocks used on the feed." */
 export const VISUAL_RECENT_SCENES = 10;
-/** A frame that is still `running` after this was abandoned by a dead worker. */
-export const VISUAL_STALE_MINUTES = 10;
+/** A frame that is still `running` after this was abandoned by a dead worker. Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const VISUAL_STALE_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
 /** D-228. The fixed caption cue is on. Jev only withholds it when it would read badly. */
 export const FULL_STORY_CUE_ENABLED = true;
 /** Motion writer. Same Claude model as the scene writer. The system prompt is cached. */
 export const MOTION_MODEL = 'claude-sonnet-5';
 /** One timestamped clip-length prompt. Enough room to finish, not enough for a second draft. */
 export const MOTION_MAX_TOKENS = 1200;
-/** A video job still `running` after this was abandoned. Kling plus overlay can take minutes. */
-export const VIDEO_STALE_MINUTES = 20;
+/** A video job still `running` after this was abandoned. Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const VIDEO_STALE_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
 
 /**
  * D-266. Kling 2.5 Turbo Standard on Fal takes 5 or 10 seconds only. Ten is

@@ -1,8 +1,7 @@
 /**
  * Promote / Demote last until used (B8), on PGlite with the real schema
  * files: the hub reads active moves from any day, marks used ones consumed in
- * one place, and falls back to today's moves before the column exists. The
- * Stories build reads the same active moves.
+ * one place, and falls back to today's moves before the column exists.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -12,10 +11,8 @@ import { consumeMoves, readAdjustments } from '@/lib/social-hub/queries/day';
 import { markPromoteUsed, readMoves, readTonightMoves, recordPromoteSkip, withSkip } from '@/lib/social-hub/moves-store';
 import { tonightMoves } from '@/lib/social-hub/views/moves';
 import type { HubPost } from '@/lib/social-hub/types';
-import { activeStoryMoves } from '@/lib/stories/build';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
-import { harnessDb } from './stories-harness';
 
 const TODAY = '2026-10-14';
 const YESTERDAY = '2026-10-13';
@@ -57,27 +54,6 @@ test('consumeMoves: a move whose idea got content after it, and a Stories move w
   const consumed = (await q<{ id: string }>(`SELECT id::text AS id FROM social_hub.idea_adjustments WHERE consumed_at IS NOT NULL`)).rows.map((r) => r.id);
   assert.deepEqual(consumed.sort(), [reel, story].sort());
   assert.deepEqual((await readAdjustments(q, TODAY)).map((a) => a.id), [keep], 'the next read no longer sees them');
-});
-
-test('the Stories build reads the series’ unused moves from any day, as pool keys', async () => {
-  const { db } = await harnessDb();
-  const add = (ideaId: string, kind: string, at: string) =>
-    db.query<{ id: string }>(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind, created_at) VALUES ('stories', $1, $2::date, $3, $4::timestamptz) RETURNING id::text AS id`, [ideaId, at.slice(0, 10), kind, at]);
-  await add('stories:pool:free_vs_paid:k1', 'promote', '2026-10-13T12:00:00Z');
-  const used = (await add('stories:pool:free_vs_paid:k2', 'demote', '2026-10-13T12:05:00Z')).rows[0]!.id;
-  await add('stories:pool:morning_download:k3', 'promote', '2026-10-14T12:00:00Z');
-  await db.query(`UPDATE social_hub.idea_adjustments SET consumed_at = now() WHERE id = $1`, [used]);
-  assert.deepEqual(await activeStoryMoves(db, 'free_vs_paid'), [{ ideaId: 'k1', kind: 'promote' }]);
-});
-
-test('the Stories build before the consumed_at column exists: today’s moves, as before Phase B', async () => {
-  const { db } = await harnessDb();
-  const now = new Date('2026-10-14T16:00:00Z');
-  const ins = (key: string, day: string) => db.query(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind) VALUES ('stories', $1, $2::date, 'promote')`, [`stories:pool:free_vs_paid:${key}`, day]);
-  await ins('old', '2026-10-13');
-  await ins('today', '2026-10-14');
-  await db.query(`ALTER TABLE social_hub.idea_adjustments DROP COLUMN consumed_at`);
-  assert.deepEqual(await activeStoryMoves(db, 'free_vs_paid', now), [{ ideaId: 'today', kind: 'promote' }]);
 });
 
 test('workers read a type’s active moves: its pins in the order pinned and its demoted ideas; used moves and other types are left out', async () => {

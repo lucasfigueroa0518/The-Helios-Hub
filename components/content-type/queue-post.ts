@@ -12,7 +12,8 @@ export type QueueBody =
   | { vertical: string; action: 'reorder-pins'; order: string[] };
 
 export async function postQueue(body: QueueBody): Promise<void> {
-  const res = await fetch('/api/content-type/idea-queue', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  // keepalive: the pool screen flushes a pending archive on pagehide, so the request must outlive the tab.
+  const res = await fetch('/api/content-type/idea-queue', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const json = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
 }

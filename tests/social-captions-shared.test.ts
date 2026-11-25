@@ -109,7 +109,9 @@ test('fix round 1: no fixed list of example industries in any caption prompt', a
   const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
   const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
   const { CAPTIONER_SYSTEM } = await import('@/lib/social/captioner/prompt');
-  for (const [name, text] of Object.entries({ CAPTION_SHARED_RULES, CAPTION_INSTRUCTIONS, COPY_SKILL, CAPTIONER_SYSTEM })) {
+  // Explainers (caption v11) name no industry at all: "These reels are for everybody" (Lucas, 2026-11-03).
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /real estate|best matches this story|recent closings used/);
+  for (const [name, text] of Object.entries({ CAPTION_SHARED_RULES, COPY_SKILL, CAPTIONER_SYSTEM })) {
     assert.doesNotMatch(text, /a real estate team|a med spa|an HVAC company|a consumer brand\)/, name);
     assert.match(text, /best matches this story/, name);
     assert.match(text, /not (the one|one) (the )?recent closings used/, name);
@@ -154,11 +156,10 @@ test('copy fix: every caption prompt describes the Helios line as one concrete p
   const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
   const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
   const { CAPTIONER_CAROUSEL_RULES } = await import('@/lib/social/captioner/prompt');
-  const { LFD_CAPTION_SYSTEM } = await import('@/lib/lfd/caption-lines');
-  const lfdOwn = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
-  const explainerOwn = CAPTION_INSTRUCTIONS.slice(CAPTION_INSTRUCTIONS.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
+  // Explainers (caption v10) carry the Helios-line rules only through CAPTION_SHARED_RULES, which every check above covers.
   const skill = readFileSync('.cursor/skills/explainer-caption/SKILL.md', 'utf8');
-  for (const [name, text] of Object.entries({ CAPTIONER_CAROUSEL_RULES, COPY_SKILL, explainerOwn, lfdOwn, skill })) {
+  // LFD (lfd-caption-v3, caption voice 2026-11-24) no longer has a model-written Helios line or the shared rules.
+  for (const [name, text] of Object.entries({ CAPTIONER_CAROUSEL_RULES, COPY_SKILL, skill })) {
     const flat = text.replace(/\s+/g, ' ');
     assert.match(flat, /one concrete point/i, name);
     assert.match(flat, /should start, stop, or watch because of (this story|this concept|that story), said in Helios's voice/, name);
@@ -174,24 +175,32 @@ test('copy fix: every caption prompt describes the Helios line as one concrete p
 });
 
 test('copy fix: usually one emoji before the hook and one after the question, still at most two', async () => {
-  const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
   const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
   const { CAPTIONER_CAROUSEL_RULES } = await import('@/lib/social/captioner/prompt');
-  const { LFD_CAPTION_SYSTEM } = await import('@/lib/lfd/caption-lines');
-  for (const [name, text] of Object.entries({ CAPTION_SHARED_RULES, CAPTIONER_CAROUSEL_RULES, COPY_SKILL, CAPTION_INSTRUCTIONS, LFD_CAPTION_SYSTEM })) {
+  for (const [name, text] of Object.entries({ CAPTION_SHARED_RULES, CAPTIONER_CAROUSEL_RULES, COPY_SKILL })) {
     assert.match(text, /[Uu]sually one/, name);
     assert.match(text, /at most two emoji|At most two emoji|At most 2 emoji/, name);
   }
 });
 
-test('copy fix: Reels, Explainers and LFD keep paragraphs to one or two sentences and cut secondary facts', async () => {
+test('copy fix: Reels and Explainers keep paragraphs to one or two sentences and cut secondary facts', async () => {
   const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
   const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
-  const { LFD_CAPTION_SYSTEM } = await import('@/lib/lfd/caption-lines');
-  for (const [name, text] of Object.entries({ COPY_SKILL, CAPTION_INSTRUCTIONS, LFD_CAPTION_SYSTEM })) {
+  for (const [name, text] of Object.entries({ COPY_SKILL, CAPTION_INSTRUCTIONS })) {
     assert.match(text, /one or two sentences/, name);
-    assert.match(text, /[Cc]ut (a|the) secondary (fact|detail)|cut secondary (facts|details)/, name);
   }
+  assert.match(COPY_SKILL, /[Cc]ut (a|the) secondary (fact|detail)|cut secondary (facts|details)/);
+  // Explainers caption v14 (caption voice, 2026-11-24) replaced "cut a secondary detail" with stopping once the question is answered.
+  assert.match(CAPTION_INSTRUCTIONS, /Stop as soon as the question is answered/);
+});
+
+test('caption voice (lfd-caption-v3): LFD allows at most two emoji, none in the body, and leaves the Helios line to code', async () => {
+  const { LFD_CAPTION_INSTRUCTIONS } = await import('@/lib/lfd/caption-lines');
+  assert.match(LFD_CAPTION_INSTRUCTIONS, new RegExp(`At most ${CAPTION_EMOJI_MAX} emoji in the whole caption`));
+  assert.match(LFD_CAPTION_INSTRUCTIONS, /No emoji\./);
+  assert.match(LFD_CAPTION_INSTRUCTIONS, /adds the Helios line/);
+  assert.ok(!LFD_CAPTION_INSTRUCTIONS.includes(CAPTION_SHARED_RULES), 'LFD no longer carries the shared Helios-line rules');
+  assert.ok(!LFD_CAPTION_INSTRUCTIONS.includes(HELIOS_CONTEXT), 'LFD no longer carries the Helios context');
 });
 
 // Fix round 3 (Tommy, 2026-10-20, after the live Reels check): the Helios line opened "Our call at
@@ -201,11 +210,9 @@ const PROMPT_TEXTS = async () => {
   const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
   const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
   const { CAPTIONER_CAROUSEL_RULES } = await import('@/lib/social/captioner/prompt');
-  const { LFD_CAPTION_SYSTEM } = await import('@/lib/lfd/caption-lines');
-  const lfdOwn = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
-  const explainerOwn = CAPTION_INSTRUCTIONS.slice(CAPTION_INSTRUCTIONS.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
+  // Explainers (caption v10) carry the Helios-line rules only through CAPTION_SHARED_RULES, which every check above covers.
   const skill = readFileSync('.cursor/skills/explainer-caption/SKILL.md', 'utf8');
-  return { CAPTION_SHARED_RULES, CAPTIONER_CAROUSEL_RULES, COPY_SKILL, explainerOwn, lfdOwn, skill };
+  return { CAPTION_SHARED_RULES, CAPTIONER_CAROUSEL_RULES, COPY_SKILL, skill };
 };
 
 test('fix round 3: no caption prompt names the Helios line with a label noun the model can copy', async () => {

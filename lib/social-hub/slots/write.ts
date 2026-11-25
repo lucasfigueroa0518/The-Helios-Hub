@@ -6,7 +6,7 @@ import { isDayKey, weekdayOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { isVertical } from '@/lib/social-hub/verticals';
 
-import { readCaps, readOverrides, readTemplate } from './load';
+import { readOverrides, readTemplate } from './load';
 import { resolveDay, sortSlots, validateDay } from './resolve';
 import { applyMove, applyPlace, applyRemove, canPlace, isLocked, ALREADY_STARTED, PAST_DAY, type DayCtx, type Refusal } from './rules';
 import { readSeedInputs, seedTemplate, type SeedInputs } from './seed';
@@ -319,10 +319,10 @@ export function holdStartedToday(before: State, s: State, today: string, nowMinu
 
 // ── Bookings ──
 
-const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', stories: 'setId', reels: 'postIdeaId' };
+const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', field_notes: 'fieldNotesPostId', stories: 'setId', ai_trivia: 'setId', real_or_ai: 'setId', reels: 'postIdeaId', reel_ai_drama: 'jobId' };
 
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
-const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'ai_events', 'reels', 'explainers']);
+const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'ai_events', 'field_notes', 'reels', 'explainers', 'reel_ai_drama']);
 
 /** `slotBy`: schedule.slot_by when set (Stories: mirrored from stories.sets.slot_by by projectSet), else the person's when they placed it (source 'user'), else the system's. */
 export type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string>; slotBy: SetBy };
@@ -560,26 +560,6 @@ export async function writeDiff(q: SlotQuery, before: State, s: State, by: strin
       withMark ? [r.nyDate, r.vertical, r.startMinute, r.series, r.action, r.feedMode, by, r.setBy] : [r.nyDate, r.vertical, r.startMinute, r.series, r.action, r.feedMode, by],
     );
   }
-}
-
-// ── Caps ──
-
-/**
- * Change daily caps (a person's decision, spec §Safety cap). Each value is an
- * integer 0–10; anything else throws before writing. Merged over the stored caps.
- */
-export async function writeCaps(q: SlotQuery, patch: Partial<Record<Vertical, number>>): Promise<Record<Vertical, number>> {
-  for (const [v, n] of Object.entries(patch)) {
-    if (!isVertical(v)) throw new Error(`Unknown content type “${v}”.`);
-    if (!Number.isInteger(n) || (n as number) < 0 || (n as number) > 10) throw new Error('A daily limit is a whole number from 0 to 10.');
-  }
-  const next = { ...(await readCaps(q)), ...patch };
-  await q(
-    `INSERT INTO social_hub.settings (key, value, updated_at) VALUES ('daily_caps', $1::jsonb, now())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [JSON.stringify(next)],
-  );
-  return next;
 }
 
 // ── The switch ──

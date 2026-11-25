@@ -5,7 +5,8 @@ import type { Photo } from '@/lib/stories/render/types';
 export type LfdWindow = { after: string; through: string };
 
 export type Origin = 'reels' | 'carousel' | 'feed' | 'seed';
-export type Lane = 'major' | 'rundown';
+/** `builder`: a story-builder@2 lead (central intake); legacy runs never produce it. */
+export type Lane = 'major' | 'builder' | 'rundown';
 
 export type LfdCandidate = {
   /** storyKey(url): one key per article. */
@@ -26,6 +27,10 @@ export type LfdCandidate = {
   alsoFrom: string[];
   /** major-news@2 score once judged; null when not judged. */
   major: number | null;
+  /** story-builder@2 score from the central intake; null when not scored (legacy lanes never carry one). */
+  builder: number | null;
+  /** Best known event date (YYYY-MM-DD or ISO) from the intake; null when unknown or legacy. Gates the builder lane (7 days). */
+  eventDate: string | null;
   /** A person seeded this story (lib/lfd/seeds.ts): it is taken before the lanes and bypasses the repeat and company checks. */
   yours?: boolean;
 };
@@ -52,20 +57,34 @@ export type StoryCopy = {
 
 /**
  * A story with its photo. `photoSource`: the article's own lead image, or the
- * Stories finder. `photoTrace`: how that photo was chosen (finder steps, or the
+ * Stories finder, or (builder slides) AI Drama's harvest engine. `photoTrace`: how that photo was chosen (finder steps, or the
  * lead-image note), saved on the post for the review screen.
  */
 /** A meme the engine used as the story's picture (photo-fail rescue or pool scan). */
 export type EngineMeme = { templateId: string; memeId: string; rank: number; role: 'cover' | 'slide'; position: number; object: string; text: string[] };
 
-export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'finder' | 'meme'; photoTrace?: string[]; meme?: EngineMeme };
+/**
+ * A golden clip the video finder found for a story (MD-LFD D16–D19): the slide posts as a video, its photo is the
+ * clip's poster. `file`/`poster` are local to this run; the saved story keeps `LfdSavedVideo` instead.
+ */
+export type LfdVideoPick = { tier: 'golden'; file: string; poster: string; sourceUrl: string; channel: string; site: string; len: number };
+
+/**
+ * A video slide as saved on the post (`stories[i].video`): its MP4 (what Instagram gets for slide i + 2), the fitted
+ * band clip, and `check`, a hash of the slide's words and photo when it was made (lib/lfd/video.ts videoCheck): a
+ * revision that changes either makes the publish fall back to the slide's JPEG.
+ */
+export type LfdSavedVideo = { object: string; band: string; seconds: number; fit: 'crop' | 'blur' | 'vertical'; tier: 'golden'; sourceUrl: string; check: string };
+
+export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'harvest' | 'finder' | 'meme' | 'video'; photoTrace?: string[]; meme?: EngineMeme; video?: LfdVideoPick };
 
 /** A story that left the post, and why (the run record, spec §7.1). `unfinished`: still pending when the rounds ran out. */
 export type Drop = {
   key: string;
   lane: Lane;
   headline: string;
-  reason: 'thin-text' | 'not-grounded' | 'no-photo' | 'write-failed' | 'image-failed' | 'vision-rejected' | 'unfinished';
+  /** `not-grounded`: the writer's fact check still found an unsupported claim after its one rewrite (WC9). `meme-story`: the one-meme-story scan took this photo slide's place. `unfinished` and `video-boost` are older runs' reasons. */
+  reason: 'thin-text' | 'not-grounded' | 'no-photo' | 'write-failed' | 'image-failed' | 'vision-rejected' | 'unfinished' | 'video-boost' | 'meme-story';
   /** Why, when there is more to say (the vision check's reason, a refused fallback photo). */
   detail?: string;
 };

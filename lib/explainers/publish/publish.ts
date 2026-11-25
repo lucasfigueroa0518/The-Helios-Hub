@@ -1,5 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { CAPTION_MAX_CHARS, stampCaption, stripEpisodePrefix } from '@/lib/explainers/caption-format';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
+import { CAPTION_MAX_CHARS, stripEpisodePrefix } from '@/lib/explainers/caption-format';
 import { checkAccountQuota } from '@/lib/instagram/account-gate';
 import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
 import { bookingFeedMode } from '@/lib/social-hub/slots';
@@ -91,15 +92,13 @@ export async function publishReadiness(
   if (job.published) return { ok: false, note: 'This explainer is already published.', alreadyPublished: true };
   if (job.status !== 'ok') return { ok: false, note: `The render is ${job.status}, not finished.` };
   if (job.verdict === 'rejected') return { ok: false, note: 'This reel was rejected.' };
-  if (job.verdict !== 'approved') {
-    const { rows: setting } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
-    if (setting[0]?.value !== false) return { ok: false, note: 'Only a reel a person approved can be published.' };
-  }
+  // Every post needs a person's approval (settings standard D16): require_approval is never read as false.
+  if (job.verdict !== 'approved') return { ok: false, note: 'Only a reel a person approved can be published.' };
   if (!job.video) return { ok: false, note: 'The render has no video.' };
   if (job.location !== 'bucket') return { ok: false, note: 'The video is only on the machine that rendered it, not in Storage.' };
   const caption = stripEpisodePrefix(job.caption ?? '');
   if (!caption) return { ok: false, note: 'The render has no post caption.' };
-  if (stampCaption(caption, 999).length > CAPTION_MAX_CHARS) {
+  if (caption.length > CAPTION_MAX_CHARS) {
     return { ok: false, note: `The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.` };
   }
   return { ok: true, videoObject: job.video, caption };
@@ -222,8 +221,8 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
     if (!gate.ok) throw new Error(gate.message);
 
     const videoUrl = await deps.signVideo(attempt.video_object, PUBLISH_VIDEO_URL_SECONDS);
-    const episode = await nextPublishedEpisode(db, meta);
-    const caption = stampCaption(attempt.caption, episode);
+    // No episode line any more (caption voice, 2026-11-24); an older caption's baked-in one is dropped.
+    const caption = stripEpisodePrefix(attempt.caption);
     if (caption.length > CAPTION_MAX_CHARS) {
       throw new Error(`The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`);
     }
@@ -261,12 +260,21 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
  * Hard publish (Social Hub, SH-15/SH-17): post this render now. A person's
  * click counts as approval: an unreviewed render is recorded `approved`
  * (note says so); a rejected one is refused. Its waiting slot is closed so
- * it cannot post twice.
+ * it cannot post twice. Refused unless Explainers are Live (D16), before
+ * anything is recorded.
  */
+export const EXPLAINERS_NOT_LIVE_NOTE = 'Explainers aren’t Live, so nothing posts to Instagram. Set them to Live in the Settings tab first.';
+
 export async function hardPublishJob(db: Queryable, jobId: string, by: string): Promise<Queued> {
   const { rows } = await db.query<{ verdict: string | null }>(`SELECT verdict FROM explainers.feedback WHERE job_id = $1`, [jobId]);
   const verdict = rows[0]?.verdict ?? null;
   if (verdict === 'rejected') return { queued: false, note: 'This render was rejected in review.', terminal: true };
+  // Live only (D16; stateOf: Generate off with Live on reads as paused). Read here, not from schedule.ts, which imports this file.
+  const { rows: keys } = await db.query<{ key: string; value: unknown }>(
+    `SELECT key, value FROM explainers.settings WHERE key IN ('auto_render', 'publishing_live')`,
+  );
+  const on = (key: string) => keys.some((row) => row.key === key && row.value === true);
+  if (!postsToInstagram(stateOf(on('auto_render'), on('publishing_live')).state)) return { queued: false, note: EXPLAINERS_NOT_LIVE_NOTE, terminal: false };
   if (verdict == null) {
     await db.query(
       `INSERT INTO explainers.feedback (job_id, verdict, tags, note, created_by)

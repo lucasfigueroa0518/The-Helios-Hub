@@ -459,10 +459,6 @@ export async function getAnalyticsSummary(input: {
   fromEmail?: string | null;
   messageMode?: string | null;
 }): Promise<AnalyticsSummary> {
-  const window = await resolveAnalyticsQueryWindow(input);
-  const excludedRunIds = await loadExcludedRunIds();
-  const excludedLeadList = await loadExcludedLeadIds(excludedRunIds);
-
   const cleanCampaignIds = input.campaignIds?.filter(Boolean) ?? [];
   const cleanTags = input.tags?.map((t) => t.trim().toLowerCase()).filter(Boolean) ?? [];
   const cleanUserId = input.userId?.trim() || null;
@@ -470,8 +466,13 @@ export async function getAnalyticsSummary(input: {
   const cleanFromEmail = input.fromEmail?.trim().toLowerCase() || null;
   const cleanMessageMode = parseAnalyticsMessageMode(input.messageMode);
 
+  // The window, the exclusions, the filter options and the matching campaigns do not depend on
+  // each other, so they are read together (one wave instead of five round trips in a row).
+  const windowRead = resolveAnalyticsQueryWindow(input);
+  const exclusionsRead = loadExcludedRunIds().then(async (runIds) => ({ runIds, leadIds: await loadExcludedLeadIds(runIds) }));
+
   // 1. Fetch available filter options (tags, active campaigns, users)
-  const [tagsRes, campaignsRes, usersRes] = await Promise.all([
+  const optionsRead = Promise.all([
     dbQuery<{ tag: string }>(`SELECT DISTINCT tag FROM outreach.campaign_tags ORDER BY tag ASC`),
     dbQuery<{ id: string; name: string; tags: string[] }>(
       `SELECT c.id::text AS id, c.name,
@@ -485,12 +486,8 @@ export async function getAnalyticsSummary(input: {
     ),
   ]);
 
-  const available_tags = tagsRes.rows.map((r) => r.tag);
-  const available_campaigns = campaignsRes.rows;
-  const available_users = usersRes.rows;
-
   // 2. Resolve matching campaign IDs based on filters
-  const { rows: matchingCampaigns } = await dbQuery<{
+  const matchingRead = dbQuery<{
     id: string;
     name: string;
     owner_id: string;
@@ -528,10 +525,18 @@ export async function getAnalyticsSummary(input: {
     ],
   );
 
+  const [window, { runIds: excludedRunIds, leadIds: excludedLeadList }, [tagsRes, campaignsRes, usersRes], { rows: matchingCampaigns }] =
+    await Promise.all([windowRead, exclusionsRead, optionsRead, matchingRead]);
+
+  const available_tags = tagsRes.rows.map((r) => r.tag);
+  const available_campaigns = campaignsRes.rows;
+  const available_users = usersRes.rows;
+
   const matchedCampaignIds = matchingCampaigns.map((c) => c.id);
 
   // 3. Draft & Engagement statistics grouped by campaign & user
-  const { rows: draftRows } = await dbQuery<{
+  // Steps 3-5 need only the window, the exclusions and the matched campaigns, so they run together too.
+  const draftRead = dbQuery<{
     campaign_id: string;
     user_id: string;
     user_email: string | null;
@@ -597,7 +602,7 @@ export async function getAnalyticsSummary(input: {
   const safeCampaignIds = matchedCampaignIds.length
     ? matchedCampaignIds
     : ['00000000-0000-0000-0000-000000000000'];
-  const [rawLeadFacts, unallocated, workerSpend, deliveryCosts, usageCache] = await Promise.all([
+  const factsRead = Promise.all([
     loadLeadCampaignFacts({
       from: window.from,
       to: window.to,
@@ -614,23 +619,8 @@ export async function getAnalyticsSummary(input: {
     loadDeliveryCostSummary(window.from.slice(0, 10), window.to.slice(0, 10)),
     getOrgSetting<UsageCache>('smartlead.usage_cache', {}),
   ]);
-  const workerWindowUsd = prorateGcpWorkerUsd({
-    monthToDateUsd: workerSpend.cost_amount,
-    windowFrom: new Date(window.from),
-    windowTo: new Date(window.to),
-  });
-  const leadFacts = applyWorkerShare(rawLeadFacts, workerWindowUsd);
-  const orgLeadFacts = uniqueLeadFacts(leadFacts);
-  const orgIdentity = classifySpendIdentity({
-    facts: orgLeadFacts,
-    unallocatedWastedUsd: unallocated.total_usd,
-    fixedDeliveryUsd: deliveryCosts.fixedUsd,
-    smartleadUsd: deliveryCosts.smartleadUsd,
-    smartleadUsedUsd: deliveryCosts.smartleadUsedUsd,
-  });
-
   // 5. Orchestration Job Statistics
-  const { rows: jobRows } = await dbQuery<{
+  const jobsRead = dbQuery<{
     campaign_id: string;
     user_id: string;
     jobs_total: string;
@@ -657,6 +647,23 @@ export async function getAnalyticsSummary(input: {
       excludedLeadList.length ? excludedLeadList : null,
     ],
   );
+
+  const [{ rows: draftRows }, [rawLeadFacts, unallocated, workerSpend, deliveryCosts, usageCache], { rows: jobRows }] =
+    await Promise.all([draftRead, factsRead, jobsRead]);
+  const workerWindowUsd = prorateGcpWorkerUsd({
+    monthToDateUsd: workerSpend.cost_amount,
+    windowFrom: new Date(window.from),
+    windowTo: new Date(window.to),
+  });
+  const leadFacts = applyWorkerShare(rawLeadFacts, workerWindowUsd);
+  const orgLeadFacts = uniqueLeadFacts(leadFacts);
+  const orgIdentity = classifySpendIdentity({
+    facts: orgLeadFacts,
+    unallocatedWastedUsd: unallocated.total_usd,
+    fixedDeliveryUsd: deliveryCosts.fixedUsd,
+    smartleadUsd: deliveryCosts.smartleadUsd,
+    smartleadUsedUsd: deliveryCosts.smartleadUsedUsd,
+  });
 
   const byUser = new Map<string, AnalyticsUserRow>();
   const byIdentity = new Map<string, AnalyticsIdentityRow>();

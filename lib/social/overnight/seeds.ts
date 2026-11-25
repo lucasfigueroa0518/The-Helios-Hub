@@ -1,6 +1,7 @@
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import { scoreGroups } from '@/lib/social/ingest/select/score';
 import type { ScoredGroup, StoryGroup } from '@/lib/social/ingest/select/types';
+import { isPrivateHost } from '@/lib/net/private-host';
 import type { JevAsk } from '@/lib/social/jev/client';
 import { loadPinnedCandidates } from '@/lib/social/overnight/pinned';
 import type { Query } from '@/lib/social/store/pg';
@@ -38,17 +39,7 @@ export type SeedDeps = {
 const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const outletOf = (url: string) => new URL(url).hostname.replace(/^www\./, '');
 
-/** A link to this machine or a private network is never fetched for a seed (the server would be reading it for the person). */
-export function isPrivateHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || h === '::1' || h === '0.0.0.0') return true;
-  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-  }
-  return h.includes(':') && (h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80'));
-}
+export { isPrivateHost };
 
 /** The seeds still waiting: stored, not expired. Never throws (no table, bad JSON: none). */
 export async function readOpenSeeds(query: Query, now = new Date()): Promise<StoredSeed[]> {

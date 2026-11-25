@@ -286,7 +286,8 @@ test('trial/main change reaches system bookings', async () => {
 });
 
 test('Last Few Days on a Carousels day needs a confirm', async () => {
-  const { q } = await seeded();
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[540, null], [870, null]], NOT_LFD_DAYS); // the seed has no Carousels now
   const plan = await planScheduleSave(q, sched('last_few_days', [540], [2, 3, 5]), { now: SUN_10AM });
   assert.equal(plan.ok, false);
   if (plan.ok) return;
@@ -297,6 +298,7 @@ test('Last Few Days on a Carousels day needs a confirm', async () => {
 
 test('with the confirm, Carousels come off that day but a person-placed Carousel stays and Last Few Days skips it', async () => {
   const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[540, null], [870, null]], NOT_LFD_DAYS); // the seed has no Carousels now
   const placed = await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0540', publishAt: '2026-10-28T13:05:00Z', source: 'user' });
   const asked = await planScheduleSave(q, sched('last_few_days', [540], [2, 3, 5]), { now: SUN_10AM });
   assert.ok(!asked.ok && asked.errors.includes('Last Few Days skips Wed Oct 28: you set a Carousel there.'), JSON.stringify(asked));
@@ -315,6 +317,7 @@ test('with the confirm, Carousels come off that day but a person-placed Carousel
 
 test('a later Last Few Days save doesn\'t list a skip that was already there', async () => {
   const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[540, null], [870, null]], NOT_LFD_DAYS); // the seed has no Carousels now
   await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0540', publishAt: '2026-10-28T13:05:00Z', source: 'user' });
   await save(pg, q, sched('last_few_days', [540], [2, 3, 5]), SUN_10AM, { confirm: true });
   const { plan } = await save(pg, q, sched('last_few_days', [540], [2, 3, 5]), SUN_10AM);
@@ -449,11 +452,11 @@ test('real unschedules: Carousels and Last Few Days (unscheduleItem), Explainers
   assert.equal((await pg.query<{ status: string }>(`SELECT status FROM social_hub.schedule WHERE vertical = 'stories'`)).rows[0]!.status, 'cancelled');
 });
 
-test('over cap is refused', async () => {
+test('over the type\'s fixed maximum is refused (AI Drama posts at most 3 a day, D20)', async () => {
   const { pg, q } = await seeded();
-  const out = await saveSchedule(body(sched('explainers', [[780, 'main'], [840, 'main'], [930, 'main'], [1020, 'main']], EVERY_DAY)), deps(pg, q));
+  const out = await saveSchedule(body(sched('reel_ai_drama', [[600, 'main'], [720, 'main'], [840, 'main'], [960, 'main']], EVERY_DAY)), deps(pg, q));
   assert.equal(out.status, 422);
-  assert.deepEqual(out.body.errors, ['Explainers can post 3 a day. Raise the daily limit on the Explainers page to add more.']);
+  assert.ok((out.body.errors as string[]).some((e) => /can post at most 3 a day\./.test(e)), JSON.stringify(out.body.errors));
 });
 
 test('legacy refuses', async () => {

@@ -11,7 +11,8 @@ import { join } from 'node:path';
 
 import { CLOSE_EVENTS } from './close-timing.js';
 import { openerByKey } from './openers/bank.js';
-import { chosenOpener, openerLine } from './openers/sound.mjs';
+import { HANDOFF_FRAME, handoffByKey, handoffEvents } from './handoff-bank.js';
+import { chosenOpener } from './openers/sound.mjs';
 
 /** `- key: value` fields of one frame block, keys lowercased. */
 export function blockFields(block) {
@@ -70,10 +71,31 @@ export function writeClose(root, f) {
   writeFileSync(join(dir, `${f.id}.events.json`), `${JSON.stringify(CLOSE_EVENTS, null, 1)}\n`);
 }
 
-/** The opener is frame 1 (EX3-102): the bank's opener over the worker's hook. */
+/** The opener is frame 1 (EX3-102): the bank's opener, landing on the AI 101 card (hx-6). */
 export const OPENER_FRAME = 1;
-/** The hook's scene module, which the frame worker writes for frame 1. */
+/** Frame 1's scene module under the opener: code writes it as the AI 101 card (openers/lesson.js). */
 export const HOOK_ID = '01-hook';
+/** The first line of a code-written frame-1 card (try.mjs skips the worker's hook contract on it). */
+export const LESSON_MARK = '// Frame 1 AI 101 card (hx-6)';
+
+/** Frame 1's scene module for opener `key`: the AI 101 card, written by code. */
+export const lessonModule = (key) => [
+  `${LESSON_MARK}: what the "${key}" opener lands on. Written by code; never edit.`,
+  "import { lessonScene } from '../kit/openers/lesson.js';",
+  '',
+  `const card = lessonScene(${JSON.stringify(key)});`,
+  'export const LESSON = true;',
+  'export const hero = card.hero;',
+  'export const shots = card.shots;',
+  'export default card;',
+  '',
+].join('\n');
+
+/** True when the project's 01-hook.js is code's AI 101 card (not a worker's hook). */
+export function isLessonHook(root) {
+  const file = join(root, 'assets', 'frames', `${HOOK_ID}.js`);
+  return existsSync(file) && readFileSync(file, 'utf8').startsWith(LESSON_MARK);
+}
 
 /** The storyboard's `term:` (its front matter), or ''. */
 export function storyboardTerm(root) {
@@ -87,29 +109,92 @@ export function storyboardTerm(root) {
 export const isBankOpener = (root, f) => Boolean(f) && f.number === OPENER_FRAME && Boolean(chosenOpener(root));
 
 /**
- * Write frame 1's module (one call into the bank, with the line's length and word times baked in)
- * and its sound events (none: the opener's stem carries its sound) for storyboard frame `f`.
- * Returns the opener's key, or null when the job chose none (frame 1 is then the worker's own).
+ * Write frame 1's module (one call into the bank) and its sound events (none: the opener's stem
+ * carries its sound) for storyboard frame `f`. Frame 1 is the whole hook before the voice (Lucas,
+ * 2026-11-21): the opener shows the AI 101 card (01-hook.js) and lands on frame 2, which it imports
+ * to uncover its first picture. Returns the opener's key, or null when the job chose none (frame 1 is
+ * then the worker's own).
  */
 export function writeOpener(root, f) {
   const key = chosenOpener(root);
   if (!key || !f?.id) return null;
-  const metaFile = join(root, 'audio_meta.json');
-  const line = existsSync(metaFile) ? openerLine(JSON.parse(readFileSync(metaFile, 'utf8'))) : null;
-  const voice = line?.voice > 0 ? line.voice : 3.8;
-  const words = (line?.words ?? []).map((w) => ({ text: String(w.text ?? '').trim(), start: w.start, end: w.end }));
   const dir = join(root, 'assets', 'frames');
   mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${HOOK_ID}.js`), lessonModule(key));
+  const next = projectFrames(root).find((x) => x.number === f.number + 1)?.id ?? null;
   const module = [
-    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener over the hook (${HOOK_ID}.js).`,
-    '// Written by code from assets/opener.json; never edit. The frame worker writes only the hook.',
+    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener: the AI 101 card (${HOOK_ID}.js), taken away onto frame 2${next ? ` (${next}.js)` : ''}.`,
+    '// Written by code from assets/opener.json; never edit. Nobody builds frame 1.',
     `import * as hook from './${HOOK_ID}.js';`,
+    ...(next ? [`import * as next from './${next}.js';`] : []),
     "import { openerFrame } from '../kit/openers/index.js';",
     '',
-    `export default openerFrame(${JSON.stringify(key)}, { hook, voice: ${voice}, words: ${JSON.stringify(words)}, term: ${JSON.stringify(storyboardTerm(root))} });`,
+    `export default openerFrame(${JSON.stringify(key)}, { hook${next ? ', next' : ''}, term: ${JSON.stringify(storyboardTerm(root))} });`,
     '',
   ].join('\n');
   writeFileSync(join(dir, `${f.id}.js`), module);
   writeFileSync(join(dir, `${f.id}.events.json`), '[]\n');
   return key;
+}
+
+// ── The hand-off (Explainers 4.3): frame 3 is code's when the job chose a template ─────────────
+
+/** Where a job names its hand-off (job.ts assignHandoff): { key, name, parts, sounds, hero }. */
+export const HANDOFF_CHOICE = join('assets', 'handoff.json');
+
+/** The project's hand-off choice, or null (a job from before 4.3: frame 3 is the worker's own). */
+export function chosenHandoff(root) {
+  const file = join(root, HANDOFF_CHOICE);
+  if (!existsSync(file)) return null;
+  try {
+    const c = JSON.parse(readFileSync(file, 'utf8'));
+    return handoffByKey(c?.key) ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when frame `f` is code's hand-off (frame 3, with a choice on file). */
+export const isHandoff = (root, f) => Boolean(f) && f.number === HANDOFF_FRAME && Boolean(chosenHandoff(root));
+
+/**
+ * Write frame 3's module (one call into handoff.js with the frame's length, the term, the hero and
+ * the mapped parts baked in) and its soft sound events. The length is the paced timing file's when
+ * there is one, else the storyboard's. Returns the template's key, or null when the job chose none.
+ */
+export function writeHandoff(root, f) {
+  const choice = chosenHandoff(root);
+  if (!choice || !f?.id) return null;
+  let duration = Number.isFinite(f.duration) && f.duration > 0 ? f.duration : 3.2;
+  const timing = join(root, 'assets', 'timing', `${f.id}.json`);
+  if (existsSync(timing)) {
+    try {
+      const d = Number(JSON.parse(readFileSync(timing, 'utf8'))?.duration);
+      if (d > 0) duration = d;
+    } catch {
+      // the storyboard's length stands
+    }
+  }
+  const ground = ['paper', 'stage'].includes(f.fields?.ground) ? f.fields.ground : 'paper';
+  const parts = Array.isArray(choice.parts) ? choice.parts : [];
+  const sounds = Array.isArray(choice.sounds) ? choice.sounds : [];
+  const opts = { duration, term: storyboardTerm(root), hero: choice.hero ?? null, parts, ground };
+  const dir = join(root, 'assets', 'frames');
+  mkdirSync(dir, { recursive: true });
+  // frame 4's module, when it is built: its first shot is frame 3's backdrop (a continuation, no jump)
+  const nextF = projectFrames(root).find((x) => x.number === f.number + 1);
+  const nextFile = nextF?.id && existsSync(join(dir, `${nextF.id}.js`)) ? `./${nextF.id}.js` : null;
+  const module = [
+    `// Frame 3 (Explainers 4.3): the hand-off, "${handoffByKey(choice.key).name}", over the reel's own world.`,
+    '// Written by code from assets/handoff.json; never edit. Nobody builds frame 3.',
+    "import * as world from '../world/world.js';",
+    "import { handoffFrame } from '../kit/handoff.js';",
+    ...(nextFile ? [`import next from ${JSON.stringify(nextFile)};`] : []),
+    '',
+    `export default handoffFrame(${JSON.stringify(choice.key)}, { world, ${nextFile ? 'next, ' : ''}...${JSON.stringify(opts)} });`,
+    '',
+  ].join('\n');
+  writeFileSync(join(dir, `${f.id}.js`), module);
+  writeFileSync(join(dir, `${f.id}.events.json`), `${JSON.stringify(handoffEvents(choice.key, { duration, sounds, parts: parts.length }), null, 1)}\n`);
+  return choice.key;
 }

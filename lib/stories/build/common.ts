@@ -2,14 +2,15 @@
  * What every series builder shares: its dependencies, its result, backdrop
  * and layout rotation, and photo helpers.
  */
+import { leadDaysFor } from '@/lib/social-hub/lead';
 import type { StoriesDb } from '@/lib/stories/db';
 import type { StoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder, PhotoRequest } from '@/lib/stories/photos';
 import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
-import { recentKeys, sameDayKeys, type NewCandidate, type NewFrame } from '@/lib/stories/repository';
+import { verticalOfSeries } from '@/lib/social-hub/story-types';
+import { costTypeSql, recentKeys, sameDayKeys, typeDaySpendUsd, type NewCandidate, type NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
-import type { SourcePage } from '@/lib/stories/source-page';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 export type BuildDeps = {
@@ -18,15 +19,43 @@ export type BuildDeps = {
   sourceDb: StoriesDb;
   jev: StoriesJev;
   write: WriterCreate;
-  photos: PhotoFinder;
+  /** AI Trivia's opponent (AT-74/75, lib/stories/trivia/opponent.ts): OpenAI and fal. Absent (tests): the set has no opponent. */
+  opponent?: import('@/lib/stories/trivia/opponent').OpponentClient;
+  /** The old Stories photo finder: only the retired Free vs. Paid builder used it. Absent (the worker): no finder photos. */
+  photos?: PhotoFinder;
   settings: StoriesSettings;
   now: Date;
   setId: string;
   nyDate: string;
   /** The series' open ideas from stories.pool. Null only when the pool could not be read: the build then reads its sources directly. */
   pool?: OpenPool | null;
-  /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
-  readSource?: (url: string, figure?: string) => Promise<SourcePage>;
+  /** The series reads the central intake (consumer switch 'intake'): Morning Download ranks by the stored scores and the lead queue. */
+  intake?: boolean;
+  /** Morning Download's video finder (MD-LFD D16–D19, lib/stories/video.ts). Absent (tests, replays, no yt-dlp): photos only. */
+  video?: import('@/lib/stories/video').StoryVideoDeps;
+  /** Morning Download's news chain clients (WIRING-CONTRACT Owner D). Absent: Morning Download skips the set. */
+  news?: NewsChainDeps;
+};
+
+/**
+ * The clients of the locked news chain for one Morning Download build: the shortlist's Jev, one Anthropic create for
+ * the rerank, the photo brief and AI check and the writer, the photo finder's readers, the band upscaler and storage.
+ */
+export type NewsChainDeps = {
+  create: WriterCreate;
+  jevAsk: import('@/lib/social/jev/client').JevAsk;
+  /** lib/news-photos PhotoDeps without the per-story parts (create, usedReason): the image Jev, page reader, Serper, fetch. */
+  photo: Omit<import('@/lib/news-photos').PhotoDeps, 'create' | 'usedReason'>;
+  /** The photo upscaler (lib/news-photos/band.ts findPhotoUpscaler) or null: band frames are then not upscaled, and say so. */
+  upscaler: import('@/lib/news-photos/band').PhotoUpscaler | null;
+  tmpDir: string;
+  /** Where the band photo is stored (the stories bucket). */
+  storage: Pick<import('@/lib/stories/storage').StoriesStorage, 'upload' | 'sign'>;
+  /**
+   * The photo bank (D49): every story's pick and runner-ups are offered (lib/news-photos/bank-offer.ts); the worker
+   * drains it after the build. Absent or null (tests): nothing is offered.
+   */
+  bank?: import('@/lib/news-photos/bank-offer').PhotoBankSink | null;
 };
 
 /**
@@ -34,11 +63,55 @@ export type BuildDeps = {
  * (stories.history, written at publish) and what its other live sets of the
  * same New York date already hold (ruling R13: two sets of one day never
  * repeat a story, even before either posts).
+ *
+ * A series made ahead (Bald-Eagle D4, lib/social-hub/lead.ts: Guess the
+ * Number, Free vs. Paid) also avoids what its live sets within `lead` days of
+ * this set's date hold: a set built tonight for day + 2 and last night's set
+ * for day + 1 are both built before either posts, so neither is in the
+ * history yet. Morning Download (lead 0) keeps the same-date rule only.
  */
 export async function keysToAvoid(deps: Pick<BuildDeps, 'db' | 'now' | 'nyDate' | 'setId'>, series: Series, days: number): Promise<Set<string>> {
   const shown = await recentKeys(deps.db, series, days, deps.now);
-  for (const k of await sameDayKeys(deps.db, series, deps.nyDate, deps.setId)) shown.add(k);
+  const span = leadDaysFor('stories', series);
+  const held = span > 0 ? await nearbyKeys(deps.db, series, deps.nyDate, deps.setId, span) : await sameDayKeys(deps.db, series, deps.nyDate, deps.setId);
+  for (const k of held) shown.add(k);
   return shown;
+}
+
+/**
+ * Keys other live sets of this series hold on dates within `span` days of
+ * `nyDate` (their build's `payload.historyKeys`), posted or not. Rejected,
+ * failed and skipped sets free their keys (sameDayKeys' rule over a range).
+ */
+export async function nearbyKeys(db: StoriesDb, series: Series, nyDate: string, exceptSetId: string, span: number): Promise<Set<string>> {
+  const { rows } = await db.query<{ key: string }>(
+    `SELECT DISTINCT k.key FROM stories.sets s
+       CROSS JOIN LATERAL jsonb_array_elements_text(
+         CASE WHEN jsonb_typeof(s.payload->'historyKeys') = 'array' THEN s.payload->'historyKeys' ELSE '[]'::jsonb END) AS k(key)
+      WHERE s.series = $1 AND s.ny_date BETWEEN $2::date - $4::int AND $2::date + $4::int
+        AND s.id <> $3::uuid AND s.status NOT IN ('rejected', 'failed', 'skipped')`,
+    [series, nyDate, exceptSetId, Math.max(0, Math.floor(span))],
+  );
+  return new Set(rows.map((r) => r.key));
+}
+
+/**
+ * Spend counted against a set's daily cap, which is its type's (SS-1: each Stories-format type has its own cap;
+ * one type over it never holds another). A same-day type (Morning Download) counts what it spent on the run day
+ * (its sets, and the spend tied to no set that is its own; costTypeSql). A type made ahead (Bald-Eagle D4) counts
+ * what was spent on its sets FOR the target date (stories.cost_events joined to their set's ny_date), so the
+ * cutover night that fills two dates may spend up to one cap per date (D8), and a night's builds for day + 2
+ * never eat the run day's cap.
+ */
+export async function capSpendUsd(db: StoriesDb, series: Series, targetDate: string, now: Date): Promise<number> {
+  const vertical = verticalOfSeries(series);
+  if (leadDaysFor('stories', series) === 0) return typeDaySpendUsd(db, vertical, now);
+  const { rows } = await db.query<{ usd: number }>(
+    `SELECT COALESCE(sum(c.usd), 0)::float8 AS usd FROM stories.cost_events c JOIN stories.sets s ON s.id = c.set_id
+      WHERE s.ny_date = $1::date AND ${costTypeSql()} = $2`,
+    [targetDate, vertical],
+  );
+  return rows[0]?.usd ?? 0;
 }
 
 export type BuildResult =
@@ -57,13 +130,26 @@ export async function nextBackdrop(db: StoriesDb, series: Series, setId: string)
   return last ? BACKDROPS[(BACKDROPS.indexOf(last) + 1) % BACKDROPS.length]! : BACKDROPS[0];
 }
 
+/** The last Morning Download set's cover headline (its opener's `promise`), so the next set can rotate on. */
+export async function lastOpenerPromise(db: StoriesDb, setId: string): Promise<string[] | null> {
+  const { rows } = await db.query<{ promise: string[] | null }>(
+    `SELECT f.copy->'promise' AS promise FROM stories.sets s JOIN stories.frames f ON f.set_id = s.id AND f.seq = 1
+      WHERE s.series = 'morning_download' AND s.id <> $1 AND s.status IN ('ready', 'approved', 'scheduled', 'publishing', 'published')
+      ORDER BY s.ny_date DESC, s.created_at DESC LIMIT 1`,
+    [setId],
+  );
+  const p = rows[0]?.promise;
+  return Array.isArray(p) ? p.map(String) : null;
+}
+
 /** Turn a frame list into numbered rows. */
 export function toFrames(data: FrameData[], backdrop: Backdrop, template: (d: FrameData) => string | null = () => null): NewFrame[] {
   return data.map((d, i) => ({ seq: i + 1, role: d.role, backdrop, copy: d, template: template(d), photo: 'photo' in d ? ((d as { photo?: Photo }).photo ?? null) : 'logo' in d ? ((d as { logo?: Photo }).logo ?? null) : null }));
 }
 
 /** Ask the finder, never failing the build over a photo (a type-led frame is fine). */
-export async function findPhoto(photos: PhotoFinder, req: PhotoRequest, log: string[]): Promise<Photo | null> {
+export async function findPhoto(photos: PhotoFinder | undefined, req: PhotoRequest, log: string[]): Promise<Photo | null> {
+  if (!photos) return null;
   try {
     return await photos.find(req);
   } catch (err) {

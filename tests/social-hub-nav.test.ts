@@ -8,7 +8,7 @@ const B = '/social';
 
 test('the active tab follows the path, and a post follows where it was opened from (REVISIONS G10)', () => {
   assert.equal(activeHubTab(B, '/social', null), 'content');
-  assert.equal(activeHubTab(B, '/social/content/pools/reels', null), 'content');
+  assert.equal(activeHubTab(B, '/social/content/library/music', null), 'content');
   assert.equal(activeHubTab(B, '/social/calendar', null), 'calendar');
   assert.equal(activeHubTab(B, '/social/analytics/reels', null), 'analytics');
   assert.equal(activeHubTab(B, '/social/post/reels:abc', '/social/analytics/reels?range=7d'), 'analytics');
@@ -34,7 +34,7 @@ test('from is trusted only as a hub path under the same base', () => {
 test('breadcrumbs name each level; the last is the current page', () => {
   assert.deepEqual(crumbsFor(B, '/social/analytics/reels').map((c) => c.label), ['Analytics', 'Text on Screen']);
   assert.equal(crumbsFor(B, '/social/analytics/reels').at(-1)!.href, null);
-  assert.deepEqual(crumbsFor(B, '/social/content/pools/carousels').map((c) => c.label), ['Content', 'Carousels pool']);
+  assert.deepEqual(crumbsFor(B, '/carousels').map((c) => c.label), ['Content', 'Carousels'], 'a type page (which holds its pool) sits under Content');
   assert.deepEqual(crumbsFor(B, '/social/content/library/music').map((c) => c.label), ['Content', 'Music pool']);
   const post = postCrumbs(B, '/social/analytics/reels?range=7d', 'A post');
   assert.deepEqual(post.map((c) => c.label), ['Analytics', 'Text on Screen', 'A post']);
@@ -47,7 +47,9 @@ test('old hub URLs redirect to their new places', () => {
   assert.equal(legacyRootRedirect(B, { month: '2026-10' }), '/social/calendar?month=2026-10');
   assert.equal(legacyRootRedirect(B, { post: 'reels:abc', day: '2026-10-08' }), `/social/post/reels%3Aabc?from=${encodeURIComponent('/social/calendar?day=2026-10-08')}`);
   assert.equal(legacyHouseRedirect(B, {}), '/social');
-  assert.equal(legacyHouseRedirect(B, { tab: 'ideas', v: 'stories' }), '/social/content/pools/stories');
+  assert.equal(legacyHouseRedirect(B, { tab: 'ideas', v: 'stories' }), '/morning-download', 'ideas go to the type page, which holds its pool');
+  assert.equal(legacyHouseRedirect(B, { tab: 'ideas' }), '/reels');
+  assert.equal(legacyHouseRedirect('/social/preview', { tab: 'ideas', v: 'carousels' }), '/social/preview/type/carousels');
   assert.equal(legacyHouseRedirect(B, { tab: 'types' }), '/social/analytics');
   assert.equal(legacyHouseRedirect(B, { tab: 'all', v: 'carousels' }), '/social/analytics/carousels');
   assert.equal(legacyAnalyticsRedirect(B, {}), null);

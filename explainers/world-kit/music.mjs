@@ -27,6 +27,7 @@ import { pathToFileURL } from 'node:url';
 
 import { CLOSE } from './close-timing.js';
 import { parseFrames } from './frames.mjs';
+import { loadVoiceScreen, MUSIC_SCREEN_HINT, trackVoiceFree } from './sfx-library.mjs';
 
 /** The rotation (EX3-82). Every query asks for high energy at 105–128 BPM. */
 export const STYLES = [
@@ -59,19 +60,20 @@ export const TAIL_CUT = 1.0;
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const trackId = (t) => String(t.id ?? t.audio_id ?? t.name ?? t.audio_url ?? '');
 
-/** The acceptable tracks of `results` (ranked as given), avoiding `avoid` ids. */
-const acceptable = (results, avoid) =>
+/** The acceptable tracks of `results` (ranked as given), avoiding `avoid` ids; voice-screened. */
+const acceptable = (results, avoid = [], screen = loadVoiceScreen()) =>
   (results ?? []).filter((t) => {
     const text = `${t.name ?? ''} ${t.description ?? ''} ${(t.tags ?? []).join?.(' ') ?? ''}`;
-    return t.audio_url && !BANNED.test(text) && !avoid.includes(trackId(t));
+    // the voice screen (voice-screen.mjs): a track with a voice, or never screened, never plays
+    return t.audio_url && !BANNED.test(text) && !avoid.includes(trackId(t)) && trackVoiceFree(t, screen);
   });
 
 /**
  * The track for a reel of `total` seconds: the best one at least as long as the reel, else the
  * best loopable one. Returns { track, loop } or null.
  */
-export function pickTrack(results, { total, avoid = [] }) {
-  const ok = acceptable(results, avoid);
+export function pickTrack(results, { total, avoid = [], screen = loadVoiceScreen() }) {
+  const ok = acceptable(results, avoid, screen);
   const long = ok.find((t) => Number(t.duration) >= total + 1);
   if (long) return { track: long, loop: false };
   const short = ok.find((t) => Number(t.duration) >= MIN_LOOPABLE);
@@ -119,8 +121,10 @@ export function bedGain(lufs) {
 /**
  * Choose, fetch and fit the bed. `search(query)` and `download(url, dest)` are injectable for
  * tests; by default they are HeyGen's catalog search and download.
+ * @param {string} root
+ * @param {{ search?: any, download?: any, screen?: any }} [opts]
  */
-export async function placeMusic(root, { search, download } = {}) {
+export async function placeMusic(root, { search, download, screen = loadVoiceScreen() } = {}) {
   const errors = [];
   const total = reelLength(root);
   if (!(total > 0)) return { ok: false, errors: ['the storyboard has no paced durations (run pace.mjs first)'], choice: null };
@@ -144,7 +148,7 @@ export async function placeMusic(root, { search, download } = {}) {
       errors.push(`search "${s.key}": ${e instanceof Error ? e.message : String(e)}`);
       continue;
     }
-    const p = pickTrack(results, { total, avoid });
+    const p = pickTrack(results, { total, avoid, screen });
     if (p) {
       found.push({ ...p, style: s });
       break;
@@ -153,7 +157,7 @@ export async function placeMusic(root, { search, download } = {}) {
   const best = found[0] ?? null;
   const pick = best?.track ?? null;
   const style = best?.style ?? null;
-  if (!pick) return { ok: false, errors: [...errors, `no track passed for a ${total}s reel in any style`], choice: null };
+  if (!pick) return { ok: false, errors: [...errors, `no track passed for a ${total}s reel in any style (${MUSIC_SCREEN_HINT})`], choice: null };
 
   const dir = join(root, 'assets', 'bgm');
   mkdirSync(dir, { recursive: true });
@@ -205,6 +209,7 @@ export async function placeMusic(root, { search, download } = {}) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const result = await placeMusic(process.cwd()).catch((e) => ({ ok: false, errors: [e instanceof Error ? e.message : String(e)], choice: null }));
-  console.log(JSON.stringify(result, null, 1));
-  process.exit(result.ok ? 0 : 1);
+  // Write, then exit once stdout has drained: process.exit() right after console.log cut a piped
+  // report off at 64 KB, and the job read the cut JSON as "no errors" (2026-11-03).
+  process.stdout.write(`${JSON.stringify(result, null, 1)}\n`, () => process.exit(result.ok ? 0 : 1));
 }

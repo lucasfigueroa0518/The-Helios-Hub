@@ -54,7 +54,7 @@ export function createJevAsk(config: ConstructorParameters<typeof TypeSafeClient
     }
     return {
       answers,
-      usage: { input_tokens: res.usage.input_tokens, output_tokens: res.usage.output_tokens },
+      usage: { input_tokens: res.usage.input_tokens ?? 0, output_tokens: res.usage.output_tokens ?? 0 },
       model: res.model,
     };
   };

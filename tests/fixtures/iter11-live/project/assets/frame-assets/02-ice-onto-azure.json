@@ -1,0 +1,126 @@
+{
+ "assets": [
+  {
+   "id": "V52",
+   "kind": "logo",
+   "file": "assets/media/V52.png",
+   "url": "https://1000logos.net/wp-content/uploads/2021/11/Microsoft-Azure-logo.png",
+   "source_page": "https://1000logos.net/microsoft-azure-logo/",
+   "credit": "1000 Logos (1000logos.net)",
+   "license": null,
+   "shows": "Microsoft four-colour logo with the words Microsoft Azure in grey on white.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 2160,
+   "height": 1215,
+   "phash": "8752fcadda522591",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:product-logo:azure",
+    "resized:0.563",
+    "boxes:media/V52.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0.0098,
+     "y": 0.2535,
+     "w": 0.9805,
+     "h": 0.4931
+    },
+    "brightness": 0.5284,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 2700,
+    "chroma": 0.5058,
+    "phash": "8752fcadda522591",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V76",
+   "kind": "place_photo",
+   "file": "assets/media/V76.jpg",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/f1/ICE_Headquarters_in_Washington_DC_2009.jpg?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original",
+   "source_page": "https://commons.wikimedia.org/wiki/File:ICE_Headquarters_in_Washington_DC_2009.jpg",
+   "credit": "Wikimedia Commons (commons.wikimedia.org)",
+   "license": null,
+   "shows": "Large white stone office building on a Washington, D.C. street with parked cars, likely the ICE headquarters building; no ICE sign clearly visible.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2009-02-15",
+   "date_confidence": "exact",
+   "width": 2036,
+   "height": 1246,
+   "phash": "aaf9d7d0d0d2a0d8",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "source:serper",
+    "date_basis:exif",
+    "recency:0.4",
+    "want:wish:W1:1",
+    "wish:W1",
+    "boxes:media/V76.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5475,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 2545,
+    "focus": {
+     "x": 0.125,
+     "y": 0.7119,
+     "w": 0.4688,
+     "h": 0.2542
+    },
+    "phash": "aaf9d7d0d0d2a0d8",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  }
+ ]
+}

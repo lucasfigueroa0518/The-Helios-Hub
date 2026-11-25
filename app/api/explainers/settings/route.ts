@@ -25,10 +25,18 @@ const EDITABLE = new Set<SettingKey>([
   'dedupe_lookback_days',
   'voice_id',
   'orchestrator_model',
+  'build_runner',
+  'director_model',
   'frame_worker_model',
+  'scene_builder_model',
+  'tech_frame_worker_model',
+  'picture_check_model',
+  'reader_model',
   'idea_model',
+  'analogy_model',
   'music_enabled',
   'sfx_enabled',
+  'opener_voice',
 ]);
 
 function errorMessage(error: unknown) {

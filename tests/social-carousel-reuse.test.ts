@@ -29,6 +29,10 @@ async function scratchDb(): Promise<{ query: Query; pg: PGlite }> {
   const pg = new PGlite();
   await pg.exec(schemaSql('social_schema.sql'));
   await pg.exec(schemaSql('social_hub_schema.sql'));
+  // Carousels Live (D16: auto_run and publishing_live on): Approve books a slot (contract §4.3) and a due slot posts.
+  // Paused would approve without a slot (tests/social-overnight.test.ts covers each state).
+  await pg.exec(`INSERT INTO social.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', 'true'::jsonb)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   const query: Query = async (text, params) => ({ rows: (await pg.query(text, params)).rows as any[] });
   return { query, pg };
 }

@@ -1,0 +1,42 @@
+{
+ "file": "4d10fea4-new-props.js",
+ "job": "4d10fea4-debd-4490-84b7-312563b42bba",
+ "topic": "Mixture of Experts",
+ "added_at": "2026-11-17T02:00:18.376Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "round hospital wall clock": {
+   "source_name": "round hospital wall clock",
+   "tags": {
+    "is": "a big round wall clock with a wooden rim, a paper face, twelve ticks and two ink hands at ten past ten",
+    "setting": [
+     "hospital",
+     "entrance hall",
+     "waiting room"
+    ],
+    "material": [
+     "wood",
+     "paper face",
+     "ink hands"
+    ],
+    "parts": [
+     "rim",
+     "face",
+     "ticks",
+     "hour hand",
+     "minute hand",
+     "pin"
+    ],
+    "not": [
+     "a stopwatch",
+     "a timer",
+     "a plate",
+     "a compass"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

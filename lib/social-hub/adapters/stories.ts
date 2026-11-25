@@ -6,13 +6,17 @@ import { isStorySeries, slotId } from '@/lib/social-hub/slots/types';
 import type { StoriesRead, StoryFrameRow, StoryInsightRow, StoryPoolRow, StorySetRow } from '@/lib/social-hub/queries/stories';
 import { nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import type { FactorValue, HubIdea, HubMetrics, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, SourceRef } from '@/lib/social-hub/types';
+import { SERIES_LABEL } from '@/lib/content-type/story-series';
+import { verticalOfSeries } from '@/lib/social-hub/story-types';
+import { verticalInfo } from '@/lib/social-hub/verticals';
 import { morningDownloadScore } from '@/lib/stories/md-score';
-import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
-const SERIES: Record<string, string> = SERIES_LABEL as Record<string, string>;
+const SERIES: Readonly<Record<string, string>> = SERIES_LABEL;
 const STYLE_LABEL: Record<string, string> = { polished: 'Polished', homemade: 'Homemade' };
 const BACKDROP_LABEL: Record<string, string> = { black: 'Black', white: 'White', orange: 'Orange', green: 'Green' };
-const ORIGIN_LABEL: Record<string, string> = { reels: 'Text on Screen', carousel: 'Carousel', catalog: 'Catalog', github: 'GitHub', generated: 'Generated', model: "Claude's idea" };
+const ORIGIN_LABEL: Record<string, string> = { reels: 'Text on Screen', carousel: 'Carousel', catalog: 'Catalog', github: 'GitHub', generated: 'Generated', model: 'AI writer' };
+/** Frame roles a person reads differently from their key (Real or AI?: "Question" / "Reveal"). */
+const ROLE_LABEL: Record<string, string> = { roa_question: 'Question', roa_reveal: 'Reveal' };
 const STORY_TAG_LABEL: Record<string, string> = { story_choice: 'Story choice', copy: 'Copy', photo: 'Photo', design: 'Design', accuracy: 'Accuracy' };
 
 const STATUS: Record<string, HubStatus> = {
@@ -92,7 +96,16 @@ function str(value: unknown): string | null {
 export function setHeadline(set: StorySetRow): string | null {
   const p = set.payload;
   if (set.series === 'morning_download') return str(payloadList(p, 'stories')[0]?.headline);
+  if (set.series === 'ai_trivia') return str(((p?.trivia as Record<string, unknown> | undefined)?.q as Record<string, unknown> | undefined)?.question);
+  if (set.series === 'real_or_ai') {
+    // payload.roa.rounds (planning/Real or AI/CONTRACT.md §3): each round's answer, in order, e.g. "Real, then AI".
+    const rounds = (p?.roa as { rounds?: Array<{ truth?: unknown }> } | undefined)?.rounds;
+    const truths = Array.isArray(rounds) ? rounds.map((r) => (r?.truth === 'ai' ? 'AI' : r?.truth === 'real' ? 'Real' : null)) : [];
+    return truths.length && truths.every(Boolean) ? truths.join(', then ') : null;
+  }
+  // Retired (AT-14); its sets on record still read.
   if (set.series === 'guess_the_number') return str(p?.question) ?? str((p?.story as Record<string, unknown> | undefined)?.headline) ?? str(p?.story);
+  // Retired (Real or AI? replaces it); its sets on record still read.
   if (set.series === 'free_vs_paid') {
     const pair = p?.pair as Record<string, unknown> | undefined;
     const names = [str(pair?.free) ?? str((pair?.free as Record<string, unknown> | undefined)?.name), str(pair?.paid) ?? str((pair?.paid as Record<string, unknown> | undefined)?.name)].filter(Boolean);
@@ -175,25 +188,28 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       if (list.length) latestFrames.push({ seq: f.seq, insight: list[list.length - 1]! });
     }
     const status = STATUS[set.status] ?? 'ready';
+    // A set belongs to its series' type (SS-1); its hub id keeps the `stories:` namespace (D46: ids never change).
+    const vertical = verticalOfSeries(set.series);
+    const href = verticalInfo(vertical).href;
     const series = SERIES[set.series] ?? set.series;
     const headline = setHeadline(set);
     return {
-      id: hubId('stories', 'set', set.set_id),
-      vertical: 'stories',
+      id: hubId(vertical, 'set', set.set_id),
+      vertical,
       format: 'story',
       name: headline ? `${series}: ${headline}` : series,
       description: `${frames.length} frame${frames.length === 1 ? '' : 's'}${headline ? ` · ${headline}` : ''}`,
       status,
-      statusNote: status === 'skipped' ? 'Missed its window. Story sets are never reused (SH-53).' : status === 'failed' ? text(set.error) : status === 'generating' ? 'Being made' : status === 'ready' ? 'Waiting for approval on /stories' : null,
+      statusNote: status === 'skipped' ? 'Missed its window. Story sets are never reused (SH-53).' : status === 'failed' ? text(set.error) : status === 'generating' ? 'Being made' : status === 'ready' ? `Waiting for approval on ${href}` : null,
       postedAt: iso(set.published_at),
       publishAt: iso(set.publish_at),
       nyDate: set.ny_date.slice(0, 10),
       slot: storySlot(set, series),
       permalink: null,
-      pipelineHref: '/stories',
+      pipelineHref: href,
       media: {
         kind: 'frames',
-        frames: frames.map((f) => ({ src: f.storage_path ? `/api/stories/frames/${encodeURIComponent(f.frame_id)}?v=${pathVersion(f.storage_path)}` : null, label: `Frame ${f.seq} · ${f.role}`, path: f.storage_path })),
+        frames: frames.map((f) => storyFrameMedia(f)),
       },
       costMicros: null,
       costNote: null,
@@ -202,7 +218,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       native: nativeFields(set, frames),
       factorValues: factorValues(set, frames),
       // Stories are never auto-approved (docs/social-overnight.md).
-      approval: { required: true, approvedAt: iso(set.approved_at), note: set.approved_at ? 'Approved' : 'Needs approval on /stories' },
+      approval: { required: true, approvedAt: iso(set.approved_at), note: set.approved_at ? 'Approved' : `Needs approval on ${href}` },
       idea: { id: `stories:${set.series}:${set.ny_date.slice(0, 10)}`, label: series },
       generatedAt: iso(set.built_at),
       versions: [],
@@ -235,7 +251,7 @@ export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
     const rescored = morningScore(row);
     return {
       id: `stories:pool:${row.series}:${row.key}`,
-      vertical: 'stories' as const,
+      vertical: verticalOfSeries(row.series),
       title: row.title,
       score: rescored?.score ?? num(row.score),
       scoreLabel: row.series === 'morning_download' ? 'News score (0–1)' : 'Source rank',
@@ -250,4 +266,23 @@ export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
       group: SERIES[row.series] ?? row.series,
     };
   });
+}
+
+/**
+ * One frame for the hub. An image frame shows its JPEG. A video frame's `src` and `path` are its poster (what an
+ * <img> can show, so every thumbnail and card works) and `video`/`videoPath` its MP4, played where the post opens.
+ */
+export function storyFrameMedia(f: Pick<StoryFrameRow, 'frame_id' | 'seq' | 'role' | 'storage_path' | 'poster_path' | 'media'>): { src: string | null; label: string; path: string | null; video?: string | null; videoPath?: string | null } {
+  const route = `/api/stories/frames/${encodeURIComponent(f.frame_id)}`;
+  const label = `Frame ${f.seq} · ${ROLE_LABEL[f.role] ?? f.role}`;
+  const isVideo = f.media === 'video' || /\.mp4$/i.test(f.storage_path ?? '');
+  if (!isVideo) return { src: f.storage_path ? `${route}?v=${pathVersion(f.storage_path)}` : null, label, path: f.storage_path };
+  const poster = f.poster_path ?? null;
+  return {
+    src: poster ? `${route}?v=${pathVersion(poster)}` : null,
+    label,
+    path: poster,
+    video: f.storage_path ? `${route}?media=video&v=${pathVersion(f.storage_path)}` : null,
+    videoPath: f.storage_path,
+  };
 }

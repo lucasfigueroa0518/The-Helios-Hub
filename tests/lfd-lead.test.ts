@@ -8,7 +8,7 @@ import type { Ready } from '@/lib/lfd/types';
 
 function ready(key: string, headline: string, o: { lane?: 'major' | 'rundown'; alsoFrom?: string[] } = {}): Ready {
   return {
-    pick: { key, refs: [key], origin: 'reels', headline, sourceName: 'The Verge', url: `https://x.com/${key}`, body: 'b'.repeat(4000), publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: o.alsoFrom ?? [], major: null, lane: o.lane ?? 'rundown' },
+    pick: { key, refs: [key], origin: 'reels', headline, sourceName: 'The Verge', url: `https://x.com/${key}`, body: 'b'.repeat(4000), publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: o.alsoFrom ?? [], major: null, builder: null, eventDate: null, lane: o.lane ?? 'rundown' },
     copy: { key, setup: '', headline: `${headline} (written)`, highlight: '', names: [], body: `${headline} blurb`, photo: { kind: 'company', query: 'q', subjects: [], alts: [] } },
     photo: { src: `https://p/${key}.jpg`, credit: 'C', kind: 'scene' },
   } as Ready;

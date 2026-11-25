@@ -69,7 +69,7 @@ function registry(o: {
   approveSchedule?: unknown; approvePost?: unknown; rejectPost?: unknown; hardPublishPost?: unknown;
   carouselItemId?: unknown; requestRerun?: unknown;
   setVerdict?: unknown; hardPublishJob?: unknown; loadSettings?: unknown; requestRerender?: unknown;
-  explainerItemId?: unknown; verdictOf?: unknown; scheduleJob?: unknown; publishingLive?: unknown;
+  explainerItemId?: unknown; verdictOf?: unknown; scheduleJob?: unknown; publishingLive?: unknown; holdsSlots?: unknown;
   schedulePostIdea?: unknown; rejectReel?: unknown; forcePost?: unknown;
   reelItemId?: unknown; todaySlate?: unknown; findReelLock?: unknown; requestFinish?: unknown;
   storyApprove?: unknown; storyReject?: unknown; storyPublishNow?: unknown; storyRegenerate?: unknown;
@@ -93,7 +93,7 @@ function registry(o: {
       loadSettings: pick(o.loadSettings, 'loadSettings'), requestRerender: pick(o.requestRerender, 'requestRerender'),
       itemId: pick(o.explainerItemId, 'explainerItemId'), verdictOf: pick(o.verdictOf, 'verdictOf'), unscheduleJob: pick(o.unscheduleJob, 'unscheduleJob'),
       placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
-      scheduleJob: pick(o.scheduleJob, 'scheduleJob'), publishingLive: pick(o.publishingLive, 'publishingLive'),
+      scheduleJob: pick(o.scheduleJob, 'scheduleJob'), publishingLive: pick(o.publishingLive, 'publishingLive'), holdsSlots: pick(o.holdsSlots, 'holdsSlots'),
     }),
     reels: reelActions({
       schedulePostIdea: pick(o.schedulePostIdea, 'schedulePostIdea'), rejectReel: pick(o.rejectReel, 'rejectReel'), forcePost: pick(o.forcePost, 'forcePost'),
@@ -109,6 +109,10 @@ function registry(o: {
     }),
     last_few_days: { vertical: 'last_few_days' },
     ai_events: { vertical: 'ai_events' },
+    field_notes: { vertical: 'field_notes' },
+    reel_ai_drama: { vertical: 'reel_ai_drama' },
+    ai_trivia: { vertical: 'ai_trivia' },
+    real_or_ai: { vertical: 'real_or_ai' },
   });
 }
 
@@ -172,7 +176,8 @@ test('hard publish: each type\'s own function with the right arguments', async (
   const hardPublishPost = spy<[unknown, string], { queued: boolean }>({ queued: true });
   const hardPublishJob = spy<[unknown, string, string], { queued: boolean; note: string }>({ queued: false, note: 'This render was rejected in review.' });
   const storyPublishNow = spy<[string], unknown>({});
-  const POST = actionRoute(hardPublish(registry({ forcePost, hardPublishPost, hardPublishJob, storyPublishNow })), on());
+  // Explainers are Live here (D16): Publish now is refused otherwise, before the pipeline is asked.
+  const POST = actionRoute(hardPublish(registry({ forcePost, hardPublishPost, hardPublishJob, storyPublishNow, publishingLive: async () => true })), on());
   assert.equal((await POST(req({ vertical: 'reels', ref: V }))).status, 200);
   assert.equal((await POST(req({ vertical: 'carousels', ref: U }))).status, 200);
   const exp = await POST(req({ vertical: 'explainers', ref: V }));
@@ -184,6 +189,13 @@ test('hard publish: each type\'s own function with the right arguments', async (
   assert.deepEqual(hardPublishJob.calls, [['explainers-db', V, 'tommy@helios.test']]);
   assert.deepEqual(storyPublishNow.calls, [[U]]);
   assert.equal((await POST(req({ vertical: 'nope', ref: U }))).status, 400);
+  // Not Live (Paused, Approval or a mismatch): refused with 409 and the Settings-tab note; the pipeline is never asked.
+  const notLive = spy<[unknown, string, string], { queued: boolean }>({ queued: true });
+  const OFF = actionRoute(hardPublish(registry({ hardPublishJob: notLive, publishingLive: async () => false })), on());
+  const refused = await OFF(req({ vertical: 'explainers', ref: V }));
+  assert.equal(refused.status, 409);
+  assert.match((await refused.json()).note, /Explainers aren’t Live.*Settings tab/);
+  assert.deepEqual(notLive.calls, []);
 });
 
 test('hard regenerate: explainers requestRerender with loaded settings, refusals returned; stories regenerate; carousels and trial reels too (D51, D52)', async () => {
@@ -319,7 +331,7 @@ test('hard regenerate for carousels queues a one-story rerun (D51); for Trial Re
   assert.deepEqual(requestRerun.calls, [['the-query', U, 'tommy@helios.test']]);
   const r = await POST(req({ vertical: 'reels', refs: { postIdeaId: U, videoJobId: V } }));
   assert.equal(r.status, 200);
-  assert.match((await r.json()).note, /Rebuilding today’s video/);
+  assert.match((await r.json()).note, /Rebuilding this idea’s video for its day/);
   assert.deepEqual(todaySlate.calls, [[U]]);
   assert.deepEqual(findReelLock.calls, [[V, U]]);
   assert.deepEqual(requestFinish.calls, [[U, V]], 'requestFinish(idea, today’s slate)');
@@ -403,9 +415,10 @@ test('today, on deck, types and sources', () => {
   const deck = onDeck(d.posts);
   assert.ok(deck.length > 0 && deck.every((p) => p.status === 'scheduled' || p.status === 'publishing'));
   const rows = typeRows(d.posts, 'views', parseRange({}, FIXTURE_NOW));
-  assert.deepEqual(rows.map((r) => r.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events']);
-  // The preview fixture has no Last Few Days or AI Events posts.
-  assert.ok(rows.filter((r) => r.vertical !== 'last_few_days' && r.vertical !== 'ai_events').every((r) => r.posts > 0 && r.costPerPost != null && r.value != null));
+  assert.deepEqual(rows.map((r) => r.vertical), ['reels', 'explainers', 'carousels', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama']);
+  // The preview fixture has no Last Few Days, AI Events, Field Notes, AI Drama, AI Trivia or Real or AI? posts.
+  const none = new Set(['last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama', 'ai_trivia', 'real_or_ai']);
+  assert.ok(rows.filter((r) => !none.has(r.vertical)).every((r) => r.posts > 0 && r.costPerPost != null && r.value != null));
   const skip = typeRows(d.posts, 'skipRate', parseRange({}, FIXTURE_NOW));
   assert.equal(skip.find((r) => r.vertical === 'stories')!.value, null, 'a reel-only metric is n/a for Stories');
   const src = sourceRows(d.sources, d.posts, 'views');

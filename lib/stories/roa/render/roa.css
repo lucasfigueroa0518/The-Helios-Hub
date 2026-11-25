@@ -1,0 +1,51 @@
+/*
+ * Real or AI? slides (CONTRACT §4 Owner B, RA-12; RA-25 type): the as-built layout (Classic text in highlight boxes on
+ * the photo; RA-26: a payoff card in place of the pen circle) set in the Helios pair, shared with "Are you smarter than AI?": Pragmatica Extended,
+ * uppercase, for the question and the verdict; Roboto for the line (500) and the proof (400). This file owns every rule
+ * the slide uses; nothing is read from AI Trivia's stylesheet any more (its `.tv-*` look is gone on the trivia branch).
+ * The `.tv-*` names stay because the contrast check reads `.tv-text` and `.tv-hide-text`.
+ * Scoped under .rs-frame so nothing else on the Stories renderer's page moves. Everything level: nothing is turned.
+ * Pragmatica Extended and Roboto are declared by the Stories renderer itself (render.ts, lib/stories/render/assets).
+ * Courier Prime (SIL OFL 1.1, assets/CourierPrime-OFL.txt) is the Typewriter text for the AI prompt (RA-17, RA-26).
+ */
+@font-face { font-family: 'Courier Prime'; src: url('/__local/lib/stories/roa/render/assets/CourierPrime-Regular.ttf'); font-weight: 400; font-style: normal; font-display: block; }
+
+.rs-frame { position: absolute; inset: 0; overflow: hidden; background: #060608; color: #FFFFFF; font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif; font-weight: 500; -webkit-font-smoothing: antialiased; }
+.rs-frame *, .rs-frame *::before, .rs-frame *::after { box-sizing: border-box; }
+.rs-frame [data-fit-min] { overflow-wrap: normal; word-break: normal; hyphens: none; }
+
+/* The photo, posted from the camera roll, full-bleed; the reveal's dim sits over it. */
+.rs-frame .tv-bg, .rs-frame .tv-dim { position: absolute; inset: 0; }
+.rs-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* One typed line (or wrapped block) and its highlight: one rounded box per line, lines touching. */
+.rs-frame .tv-line { display: block; flex: none; width: fit-content; max-width: 100%; line-height: 1.42; }
+.rs-frame .tv-hl { padding: 0.05em 0.3em 0.1em; border-radius: 0.24em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.rs-frame .tv-box--orange { background: #FF5E1A; color: #FFFFFF; }
+.rs-frame .tv-box--white { background: #FFFFFF; color: #000000; }
+.rs-frame .tv-box--soft { background: rgba(0, 0, 0, 0.6); color: #FFFFFF; }
+
+/* The type: one column in the safe band; the question sits at the top, the reveal at the bottom. */
+.rs-stack { position: absolute; display: flex; flex-direction: column; align-items: flex-start; gap: 26px; z-index: 2; }
+.rs-stack--bottom { justify-content: flex-end; }
+
+/* The headline face: Pragmatica Extended, uppercase, for the question and the verdict. */
+.rs-label, .rs-verdict { font-family: 'Pragmatica Extended', 'Helvetica Neue', Arial, sans-serif; font-weight: 700; text-transform: uppercase; white-space: nowrap; margin-left: 6px; }
+.rs-label { font-size: 76px; line-height: 1.5; }
+.rs-verdict { font-size: 132px; line-height: 1.34; }
+.rs-label .tv-hl, .rs-verdict .tv-hl { padding: 0.06em 0.28em 0.04em; border-radius: 0.2em; }
+
+/* The line (Roboto 500) and the proof (Roboto 400). */
+.rs-line { font-size: 56px; line-height: 1.38; max-height: 260px; }
+.rs-proof { font-size: 32px; font-weight: 400; max-height: 110px; line-height: 1.5; }
+
+/* The payoff card (RA-26): a white card with a small Roboto heading. The prompt (AI) sets its body in Courier Prime,
+   the Typewriter text; the camera card (real) sets the camera in Roboto 700 and the rest in Roboto 500. */
+.rs-card { flex: none; width: 100%; max-height: 460px; padding: 26px 36px 30px; border-radius: 22px; background: #FFFFFF; display: flex; flex-direction: column; gap: 6px; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.rs-card-h { color: #5C5C5C; font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif; font-weight: 700; font-size: 26px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
+.rs-card-r { color: #000000; font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif; font-weight: 500; font-size: 38px; line-height: 1.32; }
+.rs-card-r--lead { font-weight: 700; font-size: 46px; line-height: 1.2; }
+.rs-card--typed .rs-card-r { font-family: 'Courier Prime', 'Courier New', monospace; font-weight: 400; font-size: 38px; line-height: 1.32; letter-spacing: 0; }
+
+/* The contrast check hides the text to read the pixels behind it. */
+.tv-hide-text .rs-frame .tv-text { color: transparent !important; }

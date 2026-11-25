@@ -1,0 +1,37 @@
+{
+ "file": "c56433e5-06-example-props.js",
+ "job": "c56433e5-10b1-4a9f-abdc-9af6d3adae79",
+ "topic": "model routing",
+ "added_at": "2026-11-17T02:00:18.392Z",
+ "from": "assets/frames/06-example.props.js",
+ "props": {
+  "small processor chip": {
+   "source_name": "small processor chip",
+   "tags": {
+    "is": "a small square computer chip: a flat black-edged body with a die square printed on top and short metal pins along its edges",
+    "setting": [
+     "electronics",
+     "AI model diagram",
+     "circuit board"
+    ],
+    "material": "flat paper slab, ink print",
+    "parts": [
+     "square body",
+     "printed die square",
+     "notch dot",
+     "short pins on two sides"
+    ],
+    "not": [
+     "cookie",
+     "sd card",
+     "microwave",
+     "big server",
+     "brain"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

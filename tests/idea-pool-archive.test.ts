@@ -72,3 +72,14 @@ test('an idea that is gone still archives the post; another type’s or a malfor
   assert.equal(spec.parse(body({ ideaId: 'nonsense' })), null);
   assert.equal(spec.parse(body({ refs: { jobId: 'not-a-uuid' } })), null);
 });
+
+test('an AI Drama post archives its pitch idea too', async () => {
+  const calls: string[] = [];
+  const drama = async () => ({ reel_ai_drama: { vertical: 'reel_ai_drama', reject: async () => ({ ok: true, note: 'Rejected.' }) } }) as unknown as Record<Vertical, ContentActions>;
+  const spec = archiveContent(drama, async (v, id) => void calls.push(`archive ${v} ${id}`));
+  const parsed = spec.parse({ vertical: 'reel_ai_drama', refs: { jobId: UUID }, ideaId: `reel_ai_drama:pitch:${UUID}` });
+  assert.ok(parsed, 'a reel_ai_drama idea id parses');
+  assert.equal(parsed.ideaId, `reel_ai_drama:pitch:${UUID}`);
+  assert.equal((await spec.run(parsed, { email: 't' })).ok, true);
+  assert.deepEqual(calls, [`archive reel_ai_drama reel_ai_drama:pitch:${UUID}`]);
+});

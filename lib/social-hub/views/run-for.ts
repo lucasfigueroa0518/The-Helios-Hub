@@ -1,9 +1,10 @@
 import type { AllProgress, ProgressItem } from '@/lib/content-type/progress';
+import { isStoryVertical, STORY_TYPE_LABEL } from '@/lib/social-hub/story-types';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 
-const TYPES = ['carousels', 'stories', 'explainers', 'last_few_days', 'ai_events'] as const;
+const TYPES = ['carousels', 'stories', 'ai_trivia', 'real_or_ai', 'explainers', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'] as const;
 
-const TYPE_LABEL = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events' } as const;
+const TYPE_LABEL = { carousels: 'Carousels', ...STORY_TYPE_LABEL, explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events', field_notes: 'Field Notes', reel_ai_drama: 'AI Drama Reels' } as const;
 
 /** Stable id of what the Content page already knows is in flight, so a poll can tell when that changed. */
 export function inFlightKey(runs: AllProgress): string {
@@ -47,11 +48,11 @@ export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressI
   const items = runs[c.vertical] ?? [];
   const own = items.find((i) => i.topicId && c.idea && (c.idea.id === i.topicId || c.idea.id.endsWith(`:${i.topicId}`)));
   if (own) return own;
-  if (c.vertical === 'explainers') return null;
-  if (c.vertical === 'stories') return c.series ? items.find((i) => i.label === c.series) ?? null : null;
+  if (c.vertical === 'explainers' || c.vertical === 'reel_ai_drama') return null;
+  if (isStoryVertical(c.vertical)) return c.series ? items.find((i) => i.label === c.series) ?? null : null;
   // A run that picks its own stories shows on every card; one asked for particular stories (topicId) only on those.
-  // A Last Few Days or AI Events run is always the type's own job: it shows on its card.
-  if (c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events') {
+  // A Last Few Days, AI Events or Field Notes run is always the type's own job: it shows on its card.
+  if (c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events' || c.vertical === 'field_notes') {
     const open = items.filter((i) => !i.topicId);
     return open.find((i) => i.state === 'running') ?? open.find((i) => i.state === 'queued') ?? null;
   }
@@ -79,6 +80,6 @@ export function runOnMadeCard(post: { status: string; idea?: { id: string } | nu
  * the whole type step, so it waits for Run now.
  */
 export function canMakeCard(c: QuotaCandidate): boolean {
-  if (c.vertical === 'stories') return Boolean(c.seriesId);
-  return Boolean(c.idea) || c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events';
+  if (isStoryVertical(c.vertical)) return Boolean(c.seriesId);
+  return Boolean(c.idea) || c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events' || c.vertical === 'field_notes';
 }

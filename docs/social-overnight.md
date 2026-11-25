@@ -14,21 +14,28 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 |---|---|---|---|---|---|---|
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
 | Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; `posts_per_day` less what people placed, up to `daily_render_cap` = 2 renders; see Daily fill) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
+| AI Drama Reels | `reel_ai_drama` (on the explainers database handle) | `helios-reel-ai-drama` (social VM; enable with `systemctl enable --now`) | 12:00 AM night fill (only with `auto` on; `posts_per_day` = 1 less what people placed, under the daily spend cap); develop/calibrate requests a person queues on `/reel-ai-drama` | 8:00–8:45 PM, every day; approved reels only while `require_approval` is on | 5:30 | built; posts itself while `publisher_mode` is off or shadow, through the shared publisher when live |
 | Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02; see the template-mode paragraph below); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
 | Last Few Days | `lfd` | `helios-social` (the same process as Carousels; no unit of its own) | 3:00 on its days (`lfd.settings.days`, Tue/Fri), only with `lfd.settings.auto_run` on, in the carousel run's place; a manual run from the hub's "Make Last Few Days now" on any day | 9:00–10:00 AM on its days | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | AI Events This Week | `ai_events` | `helios-social` (the same process; no unit of its own) | 12:00 PM on its days (`ai_events.settings.days`, Sunday), only with `ai_events.settings.auto_run` on: ranks the coming week's events (Jev `event-pick@1`, capped at `run_cap_usd`) and renders a ranked carousel each for Miami and Boston; a manual run from the hub's Generate or Rebuild post on any day | Sunday: Miami 6:00–7:00 PM, Boston 7:00–8:00 PM | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
+| Field Notes | `field_notes` | `helios-social` (the same process; no unit of its own) | 2:00 AM on its days (Tue/Fri, `FIELD_NOTES_AUTO_DAYS`), only with `field_notes.settings.auto_run` on (ships off): picks one tip, writes the slides (live Claude and Jev, capped at `run_cap_usd`) and renders the carousel on the photo pool; a manual run from the hub's Generate or Rebuild post on any day | 2:30–3:30 PM on its days, approved posts only, 1 a day | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built; `publishing_live` ships off |
+| Intake (shared, not a content type) | `intake` | `helios-social` (the same process; no unit of its own) | 12:00 AM main run and 2:40 AM top-up (`lib/intake/run.ts`): fetches the sources the open orders name, groups them into stories and scores the touched ones. Jev only (caps: main $0.50, top-up $0.15); no open order, nothing fetched. MD Generate and manual LFD runs top it up when it is older than 180 minutes | none (no posts) | none | built; schema `db/intake_schema.sql` |
+| Instagram photo read (shared, not a content type) | `social` (`social.ig_media_matches`, `social.used_photos`) | `helios-social` (the same process; no unit of its own) | 11:45 PM (`lib/photos/ig-sync.ts`, CI-32): lists the account's feed posts (21 days back every run; a post is handled once it is new to `social.ig_media_matches`, or again while unmatched and under 3 days old, newest first, so a run cut short resumes next night) and live stories, matches each to the post we built (media id, then caption, then cover image; a Story frame by image only when two frames posted within the hour match the same one set) and logs its photos into the 20-day used-photo ledger at the Instagram time; skipped while Meta is not configured. No model call | none (reads only) | none | built; schema `db/social_used_photos_v2.sql` |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
-| IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
+| Morning Download, Are you smarter than AI?, Real or AI? (three types since the Stories split, SS-1; one engine) | `stories`, `ai_trivia`, `real_or_ai` | `helios-stories` | 3:00 sets for series with `auto` on (Morning Download daily, Are you smarter than AI? Sun/Mon/Thu, Real or AI? Tue/Sat); 3:00 daily Are you smarter than AI? writer run (`runTriviaDaily`, once per pool day, text only: writes and fact-checks questions onto the content map, renders nothing; held at the Stories spend caps); then the 3:00 daily Real or AI? candidate run (`runRoaDaily`, once per pool day, settings key `roa_daily`: 4 images a day, 2 real and 2 AI, made or found, screened by Jev vision, into a pool capped at 20; held at the same caps). Real or AI? sets are 4 still image Stories (question, reveal, question, reveal), so no video renderer. Guess the Number (AT-14) and Free vs. Paid (replaced by Real or AI?) are retired: history only | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
+
+**Per-hour rule (night schedule v2):** at most two content types per clock hour, never two video renderers; the intake (scoring only) does not count.
+Are you smarter than AI? (`ai_trivia`) is the one Stories series that renders video (two clips per set, a 10-second question and a 5-second answer, `lib/stories/trivia/render`, synchronous). There is no shared render lock: its `auto` is off, so its clips render only on a Generate click in the Stories worker's build step, outside the night hours. Before turning its `auto` on, give its 3:00 build an hour no other video renderer holds (or add a lock).
 
 Last Few Days (spec `docs/superpowers/specs/2026-10-13-last-few-days-design.md`) runs inside the `helios-social` worker
 instead of a systemd unit of its own (step 3 of "Adding a content type" does not apply): one process carries out one run at a
-time, so its 3:00 run can never overlap a carousel run, and "one type per hour" holds because it takes the carousel run's
+time, so its 3:00 run can never overlap a carousel run, and the per-hour rule holds because it takes the carousel run's
 slot on its days. Engine `lib/lfd`, schema `lfd`; its posts are spine items (`vertical 'last_few_days'`). A human-only CLI
 run stays available (`npx tsx scripts/lfd_run.ts --live`, Tommy).
 
 AI Events This Week (`planning/AI Events/DECISIONS.md`) also runs inside `helios-social`. Its clock is 12:00 PM, after the
-networking ingest's 9:00 AM Sunday refresh on `helios-orch-worker` and hours from every other run, so "one type per hour"
-holds; its runs are claimed after Last Few Days' in the same loop, under the same 30-minute timeout. Engine `lib/ai-events`,
+networking ingest's 9:00 AM Sunday refresh on `helios-orch-worker` and hours from every other run, so the per-hour rule
+holds; its runs are claimed after Last Few Days' in the same loop, under the same hang guard (no run time limit; CI-33). Engine `lib/ai-events`,
 schema `ai_events`; its posts are spine items (`vertical 'ai_events'`). A run ranks the coming Monday to Sunday per city
 (the weekly pool, `ai_events.pool`; events already scored are never asked again, AE-05), renders one ranked post per
 city for Miami and Boston (cover, #2 to #4, the locked #1 tease, the closing slide; AE-29) with a drawn look, books Miami
@@ -37,17 +44,37 @@ calendar snapshot. It makes no Claude calls. A Rebuild post run re-renders both 
 looks. A slot more than 60 minutes late is cancelled, never posted late. The human one-shot is
 `npx tsx scripts/ai_events_once.ts` (it carries out a run queued from the hub; Lucas only).
 
+Field Notes (`planning/Field Notes/CONTRACT.md`) also runs inside `helios-social`. Its clock is 2:00 AM (night schedule v2),
+sharing the hour with the Explainers idea cycle (one video renderer plus one slide renderer); its runs are claimed after AI Events' in the same loop, under the same hang guard (no run time limit; CI-33). Engine
+`lib/field-notes`, schema `field_notes` (apply it before redeploying the worker); its posts are spine items (`vertical 'field_notes'`).
+A run picks one tip, pairs it with photos from the pool (the rest rule), renders 4 to 6 slides and waits for a person: nothing posts
+without approval. It books the afternoon window only while `publishing_live` is on. A slot more than 120 minutes late is cancelled,
+never posted late. Deploy with `./scripts/gcp/deploy-social-worker.sh`.
+
 While `social_hub.settings.slot_source` is `template`, each run fills that date's calendar slots instead of `posts_per_day`, Last Few Days runs on dates with an LFD slot, and Stories series post on dates with their slot. `legacy` is the old behavior. In template mode a day with an LFD slot never runs Carousels, even with Last Few Days paused: the 3 AM run queues nothing and logs why.
 
-One type per hour so no two pipelines call Claude, Jev, or Meta at the same
-time. All workers run on the social worker VM; outreach stays alone on
+At most two types per hour (night schedule v2, see the per-hour rule above), never
+two video renderers, so the VM never renders two videos at once. All workers run on the social worker VM; outreach stays alone on
 `helios-orch-worker`.
+
+## Refill and the nightly total (D3, D16, D19)
+
+Refill is not a control: every type's idea pool refills on its cadence in
+**every** state (Paused included), even when the day's quota is full. Each refill
+is held to its `pool_refill_cap_usd` (`refill_capped` when the cap stops it), and
+all refills in one New York night share one total, `social_hub.settings`
+`refill_total_cap_usd` (default $5, editable on the Social Hub Cost page). The
+ledger is `social_hub.refill_spend` (`lib/content-type/refill-total.ts`): a refill
+reserves its cap, cut to what is left of the total, then settles at what it spent.
+No room left: the refill is skipped (`refill_total_capped`) and runs the next night.
+A person's own run is not held to the total. Making posts (drafting, renders) is
+never counted here; it keeps its own run caps.
 
 ## Daily fill (D54, D55)
 
-When a type is on, its night run fills that New York day's quota: Trial
+When a type makes posts (Approval or Live), its night run fills that New York day's quota: Trial
 Reels 3 (`PASSING_REELS_PER_NIGHT`), Explainers and Carousels their
-`posts_per_day`, IG Stories one set per series on each day it runs.
+`posts_per_day`, the Stories-format types one set per type on each day it runs.
 In template mode the quota is that day's calendar slots instead of `posts_per_day`.
 Whatever a person placed for that day counts toward the quota: a
 `social_hub.schedule` row with `source = 'user'` that is scheduled, posting
@@ -65,7 +92,7 @@ placements cut the count.
 | Carousels | The 3 AM run makes `min(run_stories, quota − placed)` stories and schedules at most that many (`scheduleRunPosts`). A stored finished post that ranks in ships without spend (D37). A story whose post already holds a slot is passed over. Nothing left: the run is `skipped` (`stop_reason` `quota-filled`) and makes nothing. |
 | Last Few Days | One post on each of its days. A post a person placed for that day means the 3:00 run is skipped (`stop_reason` `quota-filled: …`). A manual run from the hub is never skipped. |
 | AI Events This Week | Two posts a week, Miami and Boston. The Sunday 12:00 run makes only the cities with no post yet; when both have one (a person ran Generate before noon) it is skipped (`stop_reason` `post-exists: …`); Rebuild post re-renders them instead. |
-| IG Stories | A series' day that a person filled (a set they generated that is approved, scheduled or posted for that day, or their slot for it on the spine) gets no auto set. |
+| Stories-format types (Morning Download, AI Trivia, Real or AI?) | A series' day that a person filled (a set they generated that is approved, scheduled or posted for that day, or their slot for it on the spine) gets no auto set. |
 
 ## The contract
 
@@ -75,8 +102,14 @@ Each content type has, in its own schema:
    with the two single-row unique indexes from `reels.runs` (at most one running,
    at most one queued). The app queues a run by inserting `requested`; only the
    worker executes it.
-2. **`settings`** (key/value): `auto_run` and `publishing_live`, both default
-   off for a new type. Turning either on is a human decision.
+2. **`settings`** (key/value): the type's state, **Paused | Approval | Live**
+   (settings standard D16, `planning/settings-standard/CONTRACT.md`), stored in
+   its Generate key (`auto_run`) plus `publishing_live`: Paused = off/off,
+   Approval = on/off, Live = on/on. Generate off with Live on reads as Paused and
+   logs `state_mismatch`; a missing row is off. Set only in the type's Settings
+   tab (`lib/content-type/posting.ts`), never one key alone. Also
+   `pool_refill_cap_usd` (the most one refill may spend, D19). A new type ships
+   Paused; changing the state is a human decision.
 3. **`posting_schedule`**: copy of `reels.posting_schedule` (`ny_date`, `slot`,
    `publish_at`, `status scheduled|publishing|published|cancelled|failed`,
    `source auto|user`, `publish_attempt_id`) with the same unique indexes.
@@ -122,23 +155,26 @@ Trial Reels' Regenerate rebuilds only today's video for an idea (D52).
 
 ## Approval
 
-Nothing posts without a person's approval (Tommy, 2026-10-08). Every
-`publishing_live` ships off. Trial Reels posts only from the Approve / Force
-buttons while it is off; Explainers schedules only reels with an `approved`
-verdict in `explainers.feedback`; Carousels are approved in the Social Hub
-(a slot the run placed, or a carousel in review, which approving places in
-the earliest open window); IG Stories post only a set someone approved
-(Approve / Publish now on `/stories`).
+Nothing posts without a person's approval (Tommy, 2026-10-08; settings standard
+D16). There is no setting to turn it off: `require_approval` is written `true`
+for every type and is never read as false. Explainers need the `approved`
+verdict; Stories never auto-approve a set; Carousels, Trial Reels and the rest
+need their approval row. A rejected item never posts.
 
-Each type has a `require_approval` setting, on (and treated as on when the row
-is missing). With it on, an auto-scheduled Trial Reel or Carousel slot posts
-only once a person approves it (Trial Reels: the slot's
-`social_hub.schedule.approved_at`, carried to the video's item when it posts;
-Carousels: the item's `social_hub.approvals` row, so approved content stays
-approved wherever it is placed); an unapproved slot that comes due is
-cancelled with the reason, never posted late. A rejected item never posts. Explainers
-need the `approved` verdict; Stories never auto-approve a set. Tommy turns
-these off himself.
+What approving does depends on the type's state (CONTRACT.md §1, §4):
+
+| State | Approving a post | Posts to Instagram |
+|---|---|---|
+| Paused | marks it approved; it stays in the Made tab | no |
+| Approval | books or keeps its slot | no |
+| Live | books or keeps its slot | yes, at its slot time |
+
+Back to Made (D17, D18): switching a type to Paused takes its scheduled posts out
+of their slots (`social_hub.schedule` status `cancelled`, reason `paused`), and a
+slot that passes without posting (the type isn't Live, or the lateness rule) does
+the same with reason `slot-passed`. Nothing is deleted. The post stays approved
+and is never re-slotted automatically: it posts only after a person places it in a
+slot while the type is Live.
 
 Shared code lives in `lib/instagram/` (clock, posting windows, the Graph
 transport and container calls, insights client and rules) and
@@ -189,6 +225,12 @@ other type (D33/D40: quota yes, feed spacing no). `social_hub.settings`
 | `off` (default) | idle | release, post and read insights, as before |
 | `shadow` | logs `shadow_plan`: what it would release, cancel and post | still post |
 | `live` | releases, posts, reads insights; writes `publisher_heartbeat` listing the types it drives | stand down from those steps while the heartbeat (< 5 min old) lists their type; they still schedule, and resume on their own if the publisher goes quiet |
+
+AI Drama Reels behave like the other types: while `publisher_mode` is off or shadow, the drama worker
+(`helios-reel-ai-drama`) releases its due slots, posts one attempt at a time and reads insights itself; with `live`,
+the shared publisher drives them (`lib/publishing/drivers/reel-ai-drama.ts`, added when `EXPLAINERS_DB=supabase`,
+there is no `EXPLAINERS_DATABASE_URL`, and the `reel_ai_drama` schema is applied; otherwise it logs
+`reel_ai_drama_not_driven`) and the drama worker stands down.
 
 Going live: enable the unit (`sudo systemctl enable --now helios-publisher`),
 set `shadow` for a day and compare its `shadow_plan` lines with the type
@@ -296,3 +338,12 @@ In the `social` (carousel) code, "story" means a **news story** (`story_id`,
 2. Add the six contract items to the type's schema file (additive, idempotent).
 3. Add a systemd unit and deploy it to the social worker VM.
 4. Ship with `auto_run` and `publishing_live` off.
+
+## Run time limits (CI-33, 2026-11-10)
+
+No content run is failed or killed for taking long. In-process runs (Last Few Days, its memes stage, AI Events, Field
+Notes) are failed only when hung: no output from the process for 45 minutes (`RUN_QUIET_LIMIT_MS`), or the 12 h
+backstop (`RUN_HANG_BACKSTOP_MS`), both in `lib/content-runs/hang-guard.ts`. Render, compile and voice subprocesses
+(Explainers, Reel AI Drama) have only the 12 h backstop. Runs left `running` by a dead worker are reaped when
+`helios-social` boots (LFD, AI Events, Field Notes) and otherwise by the 12 h age backstop (Carousels, Reels and their
+stage jobs, IG Stories builds, intake, AI Drama). Per-request network timeouts and publishing limits are unchanged.

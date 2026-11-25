@@ -81,6 +81,10 @@ function registry(q: Query, itemId: string): () => Promise<Record<Vertical, Cont
     stories: { vertical: 'stories' },
     last_few_days: { vertical: 'last_few_days' },
     ai_events: { vertical: 'ai_events' },
+    field_notes: { vertical: 'field_notes' },
+    reel_ai_drama: { vertical: 'reel_ai_drama' },
+    ai_trivia: { vertical: 'ai_trivia' },
+    real_or_ai: { vertical: 'real_or_ai' },
   });
 }
 
@@ -108,9 +112,9 @@ async function applied(q: Query, itemId: string, before: PartState, after: PartS
   return r.id;
 }
 
-test('the revise flag is off by default', () => {
+test('the revise flag is on by default', () => {
   assert.equal(ACTION_FLAGS.includes('revise'), true);
-  assert.equal(actionEnabled('revise'), false);
+  assert.equal(actionEnabled('revise'), true);
 });
 
 test('route is unreachable while the flag is off', async () => {
@@ -124,9 +128,6 @@ test('route is unreachable while the flag is off', async () => {
     assert.equal(res.status, 404);
     assert.equal(sessionRead, false, 'no session read');
   }
-  // With the shipped flags (revise off), too.
-  const shipped = actionRoute(reviseContent(neverActions), { session: async () => ({ email: 'x' }) });
-  assert.equal((await shipped(req({ vertical: 'carousels', refs: { postId: U }, instruction: 'shorter' }))).status, 404);
 });
 
 test('revise inserts one requested row with the user\'s words and returns immediately', async () => {

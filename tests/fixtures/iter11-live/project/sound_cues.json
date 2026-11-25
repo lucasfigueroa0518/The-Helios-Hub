@@ -1,0 +1,427 @@
+{
+ "music": [
+  {
+   "t": 0,
+   "action": "start",
+   "style": "pulse",
+   "gain": 0.33,
+   "at": {
+    "frame": 1,
+    "word": null,
+    "offset": 0
+   },
+   "why": "Cold open: a tense pulse the viewer hears at once, setting up the contradiction."
+  },
+  {
+   "t": 5.829,
+   "action": "drop",
+   "style": null,
+   "gain": 0,
+   "at": {
+    "frame": 1,
+    "word": 21,
+    "offset": -0.3
+   },
+   "why": "Short held breath: the riser peaks on this stop so the ICE hit lands harder."
+  },
+  {
+   "t": 6.129,
+   "action": "resume",
+   "style": null,
+   "gain": 0.31,
+   "at": {
+    "frame": 1,
+    "word": 21,
+    "offset": 0
+   },
+   "why": "Pulse returns on the hit, on the word ICE."
+  },
+  {
+   "t": 22.61,
+   "action": "swell",
+   "style": null,
+   "gain": 0.38,
+   "dur": 3,
+   "at": {
+    "frame": 3,
+    "word": 10,
+    "offset": 0
+   },
+   "why": "Entrance: Brad Smith registers as a force as his name lands."
+  },
+  {
+   "t": 33.5,
+   "action": "change",
+   "style": "drive",
+   "gain": 0.33,
+   "at": {
+    "frame": 5,
+    "word": null,
+    "offset": 0
+   },
+   "why": "The employees confront the CEO: the feeling turns urgent and pushes forward."
+  },
+  {
+   "t": 35.851,
+   "action": "swell",
+   "style": null,
+   "gain": 0.4,
+   "dur": 2,
+   "at": {
+    "frame": 5,
+    "word": 8,
+    "offset": 0
+   },
+   "why": "Nadella enters the story as the man who must answer."
+  },
+  {
+   "t": 54.44,
+   "action": "swell",
+   "style": null,
+   "gain": 0.42,
+   "dur": 5,
+   "at": {
+    "frame": 8,
+    "word": null,
+    "offset": -0.05
+   },
+   "why": "Long build under Nadella's strong words, so the turn into 'But' feels like a trap closing."
+  },
+  {
+   "t": 54.49,
+   "action": "change",
+   "style": "dread",
+   "gain": 0.33,
+   "at": {
+    "frame": 8,
+    "word": null,
+    "offset": 0
+   },
+   "why": "The turn: the music goes ominous as the unexplained line is exposed, a new feeling on the cut."
+  },
+  {
+   "t": 77.469,
+   "action": "swell",
+   "style": null,
+   "gain": 0.45,
+   "dur": 8,
+   "at": {
+    "frame": 10,
+    "word": 23,
+    "offset": 0
+   },
+   "why": "Long build across the petition and the deadline, tightening toward the peak."
+  },
+  {
+   "t": 82.996,
+   "action": "drop",
+   "style": null,
+   "gain": 0,
+   "at": {
+    "frame": 11,
+    "word": 11,
+    "offset": -0.3
+   },
+   "why": "Held breath at the end of the riser: a brief stop just before Nadella receives the petition."
+  },
+  {
+   "t": 83.296,
+   "action": "change",
+   "style": "piano",
+   "gain": 0.33,
+   "at": {
+    "frame": 11,
+    "word": 11,
+    "offset": 0
+   },
+   "why": "Peak: tension tips into a quiet, human piano as the petition reaches Nadella."
+  },
+  {
+   "t": 87.38,
+   "action": "change",
+   "style": "reflect",
+   "gain": 0.3,
+   "at": {
+    "frame": 12,
+    "word": 0,
+    "offset": 0
+   },
+   "why": "Landing: sparse, bittersweet music for the silence and the work that goes on, carried through the close."
+  }
+ ],
+ "stingers": [
+  {
+   "t": 6.129,
+   "kind": "riser",
+   "dur": 3.5,
+   "gain": 0.55,
+   "id": "pixabay/riser",
+   "at": {
+    "frame": 1,
+    "word": 21,
+    "offset": 0
+   },
+   "why": "Builds the hook's tension to the word ICE."
+  },
+  {
+   "t": 6.129,
+   "kind": "hit",
+   "dur": 0,
+   "gain": 0.9,
+   "id": "pixabay/impact-bass-1",
+   "at": {
+    "frame": 1,
+    "word": 21,
+    "offset": 0
+   },
+   "why": "The reveal: ICE joins the 'proud to support' contradiction."
+  },
+  {
+   "t": 13.689,
+   "kind": "whoosh",
+   "dur": 0.6,
+   "gain": 0.45,
+   "id": "pixabay/whoosh-short",
+   "at": {
+    "frame": 2,
+    "word": 11,
+    "offset": 0
+   },
+   "why": "The arrow draws from ICE onto the Azure cloud."
+  },
+  {
+   "t": 15.011,
+   "kind": "spot",
+   "dur": 0,
+   "gain": 0.5,
+   "id": "rpg-audio/bookOpen",
+   "at": {
+    "frame": 2,
+    "word": 16,
+    "offset": 0
+   },
+   "why": "The recreated 'proud to support' card is laid down."
+  },
+  {
+   "t": 21.42,
+   "kind": "whoosh",
+   "dur": 0.6,
+   "gain": 0.45,
+   "id": "pixabay/whoosh-short",
+   "at": {
+    "frame": 3,
+    "word": 7,
+    "offset": 0
+   },
+   "why": "Brad Smith's cutout lifts in."
+  },
+  {
+   "t": 30.032,
+   "kind": "whoosh",
+   "dur": 0.7,
+   "gain": 0.45,
+   "id": "pixabay/whoosh-short",
+   "at": {
+    "frame": 4,
+    "word": 6,
+    "offset": 0
+   },
+   "why": "Share arrows and bubbles burst outward as the post goes viral."
+  },
+  {
+   "t": 35.566,
+   "kind": "whoosh",
+   "dur": 0.6,
+   "gain": 0.45,
+   "id": "pixabay/whoosh-short",
+   "at": {
+    "frame": 5,
+    "word": 7,
+    "offset": 0
+   },
+   "why": "Nadella's cutout steps in facing the letter."
+  },
+  {
+   "t": 45.903,
+   "kind": "whoosh",
+   "dur": 1,
+   "gain": 0.4,
+   "id": "pixabay/whoosh-cinematic",
+   "at": {
+    "frame": 6,
+    "word": 18,
+    "offset": 0
+   },
+   "why": "The $19 million counter climbs."
+  },
+  {
+   "t": 58.302,
+   "kind": "hit",
+   "dur": 0,
+   "gain": 0.7,
+   "id": "impact-sounds/impactBell_heavy_001",
+   "at": {
+    "frame": 8,
+    "word": 12,
+    "offset": 0
+   },
+   "why": "An ominous ring on 'never explained', the line he left alone."
+  },
+  {
+   "t": 67.584,
+   "kind": "whoosh",
+   "dur": 0.8,
+   "gain": 0.45,
+   "id": "pixabay/whoosh-short",
+   "at": {
+    "frame": 9,
+    "word": 12,
+    "offset": 0
+   },
+   "why": "The 300,000 counter runs up."
+  },
+  {
+   "t": 69.543,
+   "kind": "whoosh",
+   "dur": 0.6,
+   "gain": 0.4,
+   "id": "pixabay/whoosh-short",
+   "at": {
+    "frame": 9,
+    "word": 14,
+    "offset": 0
+   },
+   "why": "500 slides in against 300,000, to scale."
+  },
+  {
+   "t": 83.296,
+   "kind": "riser",
+   "dur": 2.9,
+   "gain": 0.55,
+   "id": "pixabay/whoosh-cinematic",
+   "at": {
+    "frame": 11,
+    "word": 11,
+    "offset": 0
+   },
+   "why": "Builds through the Q&A scene to Nadella being handed the petition."
+  },
+  {
+   "t": 83.296,
+   "kind": "hit",
+   "dur": 0,
+   "gain": 0.9,
+   "id": "pixabay/impact-bass-1",
+   "at": {
+    "frame": 11,
+    "word": 11,
+    "offset": 0
+   },
+   "why": "Peak signature hit: the petition reaches Nadella."
+  },
+  {
+   "t": 91.407,
+   "kind": "hit",
+   "dur": 0,
+   "gain": 0.6,
+   "id": "impact-sounds/impactSoft_heavy_000",
+   "at": {
+    "frame": 12,
+    "word": 14,
+    "offset": 0
+   },
+   "why": "The ICE seal lands: the work goes on."
+  }
+ ],
+ "ambience": [
+  {
+   "start": 0,
+   "end": 10.2,
+   "id": "freesound/ambience/hall-171462",
+   "gain": 0.12,
+   "frames": [
+    1,
+    1
+   ],
+   "why": "The big reverberant space of the holding facility."
+  },
+  {
+   "start": 10.2,
+   "end": 19.25,
+   "id": "freesound/ambience/office-108695",
+   "gain": 0.1,
+   "frames": [
+    2,
+    2
+   ],
+   "why": "Corporate workplace hum under the Azure announcement."
+  },
+  {
+   "start": 19.25,
+   "end": 28.3,
+   "id": "freesound/ambience/wind-117136",
+   "gain": 0.1,
+   "frames": [
+    3,
+    3
+   ],
+   "why": "Soft outdoor air on the plaza."
+  },
+  {
+   "start": 28.3,
+   "end": 33.5,
+   "id": "freesound/ambience/room-tone-641306",
+   "gain": 0.12,
+   "frames": [
+    4,
+    4
+   ],
+   "why": "Quiet room under the sketched spread."
+  },
+  {
+   "start": 33.5,
+   "end": 48.52,
+   "id": "freesound/ambience/office-108695",
+   "gain": 0.1,
+   "frames": [
+    5,
+    6
+   ],
+   "why": "The employees' office as they send the letter."
+  },
+  {
+   "start": 48.52,
+   "end": 54.49,
+   "id": "freesound/ambience/night-237329",
+   "gain": 0.1,
+   "frames": [
+    7,
+    7
+   ],
+   "why": "Evening falls as Nadella writes."
+  },
+  {
+   "start": 54.49,
+   "end": 80.09,
+   "id": "freesound/ambience/room-tone-641306",
+   "gain": 0.12,
+   "frames": [
+    8,
+    10
+   ],
+   "why": "A hush under the sketched gap and the deadline."
+  },
+  {
+   "start": 80.09,
+   "end": 94.48,
+   "id": "freesound/ambience/wind-117136",
+   "gain": 0.1,
+   "frames": [
+    11,
+    12
+   ],
+   "why": "Open Redmond campus, wind over a wide empty space."
+  }
+ ],
+ "muffles": []
+}

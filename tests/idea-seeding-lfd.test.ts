@@ -1,8 +1,8 @@
 /**
  * Idea seeding and Archive, Last Few Days (design 2026-10-26-last-few-days-queue-and-seeding), offline on PGlite with the real
- * schemas, a stubbed page fetch, a stubbed Jev and a stubbed writer (no live calls): a pasted link becomes a story of the
- * person's own that the next run takes before the lanes (up to 3), an archived story stays out of every run, and with no seeds
- * and no archives a run picks exactly what it always did.
+ * schemas, a stubbed page fetch, a stubbed Jev and a stubbed news chain (`deps.news`; no live calls): a pasted link becomes a
+ * story of the person's own that the next run walks before the reranked list (up to 3), an archived story stays out of every
+ * run, and with no seeds and no archives a run picks exactly what it always did.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -17,8 +17,8 @@ import { buildDataset } from '@/lib/social-hub/dataset';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { readAll } from '@/lib/social-hub/load';
 import type { JevAsk, JevResult } from '@/lib/social/jev/client';
-import type { PhotoFinder } from '@/lib/stories/photos';
 
+import { stubNewsChain } from './fixtures/lfd/news-chain';
 import { resetSeed, seedCarouselRun, seedReelsIdea, seedScore } from './fixtures/lfd/seed';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -53,26 +53,11 @@ const jev = (): JevAsk => async (req, meta): Promise<JevResult> => {
   return { answers: { same_event: { noul: 0.1 } }, usage, model: 's' };
 };
 
-/** Echoes every story in the material with valid copy. The caption call throws, so the template caption ships. */
-const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
-  if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
-    return { id: 'v', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 4, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input: { shows_story_subject: true, generic_stock: false, reason: 'ok' } }] } as unknown as Anthropic.Message;
-  }
+/** The run's own Claude calls: the slide vision check passes; the caption call throws, so the template caption ships. */
+const create = (async (p: Anthropic.MessageCreateParamsNonStreaming) => {
   if ((p as { output_config?: { format?: unknown } }).output_config?.format) throw new Error('stub: no caption model');
-  const user = String((p.messages.at(-1) as { content: unknown }).content);
-  const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string }> };
-  const stories = material.stories.map((s) => ({
-    key: s.key, setup: '', headline: `Story ${s.headline.slice(0, 40)}`, highlight: '', names: [],
-    body: 'It happened this week. The company says more is coming', photo: { kind: 'company', query: s.headline, subjects: [], alts: [] },
-  }));
-  return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 5, cache_read_input_tokens: 50 }, content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
-};
-
-const photos = (): PhotoFinder => ({
-  usd: 0,
-  find: async () => null,
-  findSet: async (reqs) => reqs.map((r, i) => (/NoPhoto/.test(r.query) ? null : { src: `https://p/${encodeURIComponent(r.query)}-${i}.jpg`, credit: 'C', kind: 'scene' })),
-});
+  return { id: 'v', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 4, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input: { shows_story_subject: true, generic_stock: false, reason: 'ok' } }] } as unknown as Anthropic.Message;
+}) as LfdRunDeps['create'];
 
 async function freshDb() {
   resetSeed();
@@ -93,7 +78,7 @@ function runDeps(query: HubQuery, over: Partial<LfdRunDeps> = {}): LfdRunDeps & 
     jev: (req, meta) => (jevCalls += 1, j(req, meta)),
     jevCount: () => jevCalls,
     create,
-    photos: photos(),
+    news: stubNewsChain({ noPhoto: /NoPhoto/ }).news,
     fetchFeeds: async () => [],
     fetchBody: async () => null,
     readPage: async (url) => ({ ok: false, url, error: 'stub: no page' }),
@@ -140,7 +125,7 @@ test('golden: with no seeds and no archives a run picks exactly what it always d
   assert.equal(plain.record.seeds, undefined);
   assert.equal(plain.record.seedError, undefined);
   // The same candidates through a Selector with no forced list.
-  const cand = (key: string, over: Partial<LfdCandidate> = {}): LfdCandidate => ({ key, refs: [key], origin: 'reels', headline: `Thing ${key}`, sourceName: 'x', url: `https://${key}`, body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, ...over });
+  const cand = (key: string, over: Partial<LfdCandidate> = {}): LfdCandidate => ({ key, refs: [key], origin: 'reels', headline: `Thing ${key}`, sourceName: 'x', url: `https://${key}`, body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, ...over });
   const majors = [cand('m1', { major: 0.9 }), cand('m2', { major: 0.7 })];
   const rundown = ['r1', 'r2', 'r3', 'r4', 'r5'].map((k, i) => cand(k, { net: 0.9 - i / 10 }));
   const noForced = await new Selector(majors, rundown, [], jev()).fill();
@@ -158,20 +143,19 @@ test('golden: with no seeds and no archives a run picks exactly what it always d
   assert.equal(same.record.seeds, undefined, 'an expired seed is not even listed');
 });
 
-test('a seeded story is taken first, lands in the right lane, is marked made, and costs one Jev call', async () => {
+test('seeded stories are walked first, carry their seed origin, are marked made, and cost one major-news call each for their lane', async () => {
   const { query } = await freshDb();
   const base = await run((await freshDb()).query);
   await seed(query, 'a'); // Zorblax: above the bar
   await seed(query, 'd'); // Dunmore: below it
   assert.equal((await query(`SELECT 1 FROM lfd.posts`)).rows.length, 0, 'adding makes nothing');
   const { post, record, jevCalls } = await run(query);
-  const byKey = new Map(post.stories.map((s) => [s.key, s]));
-  assert.equal(byKey.get(keyOf('a'))?.lane, 'major');
-  assert.equal(byKey.get(keyOf('a'))?.origin, 'seed');
-  assert.equal(byKey.get(keyOf('d'))?.lane, 'rundown');
+  assert.deepEqual(post.stories.slice(0, 2).map((s) => [s.key, s.origin]), [[keyOf('a'), 'seed'], [keyOf('d'), 'seed']], 'the seeds lead, oldest first');
+  assert.deepEqual(post.stories.slice(2).map((s) => s.key), GOLDEN.slice(0, 4), 'the reranked list fills the rest');
   assert.equal(post.stories.length, 6);
-  assert.ok(post.idea_ids.includes(keyOf('a')));
-  assert.equal(jevCalls, base.jevCalls + 2, 'one major-news call per taken seed');
+  assert.ok(post.idea_ids.includes(keyOf('a')) && post.idea_ids.includes(keyOf('d')));
+  assert.equal(jevCalls, base.jevCalls + 2, 'an unscored seed gets one major-news call, nothing more');
+  assert.deepEqual(post.stories.slice(0, 2).map((s) => s.lane), ['major', 'rundown'], 'the lane bar decides a seed\'s lane');
   assert.deepEqual(record.seeds.map((s: any) => [s.key, s.outcome]), [[keyOf('a'), 'in the post'], [keyOf('d'), 'in the post']]);
   assert.equal((await seedRow(query, 'a'))?.status, 'made');
   assert.equal((await readOpenSeeds(query, NOW)).length, 0);
@@ -189,18 +173,18 @@ test('a seed that fails stays open with its reason, and the post still fills', a
   assert.ok(!post.stories.some((s) => s.key === keyOf('a') || s.key === keyOf('c')));
   const out = new Map(record.seeds.map((s: any) => [s.key, s.outcome]));
   assert.equal(out.get(keyOf('a')), 'thin-text');
-  assert.equal(out.get(keyOf('c')), 'no-photo');
+  assert.equal(out.get(keyOf('c')), 'no-photo: photo: no candidate cleared');
   assert.deepEqual([(await seedRow(query, 'a'))?.status, (await seedRow(query, 'a'))?.outcome], ['open', 'thin-text']);
   assert.equal((await readOpenSeeds(query, NOW)).length, 2, 'both wait for the next run');
 });
 
-test('4 open seeds: 3 are taken, the 4th shows waiting and is not scored; the lane is the seed’s own score', async () => {
+test('4 open seeds: 3 are taken, the 4th shows waiting and costs nothing', async () => {
   const { query } = await freshDb();
   const base = await run((await freshDb()).query);
   for (const n of ['a', 'b', 'c', 'd']) await seed(query, n, LONG, new Date(NOW.getTime() - 60_000 * (10 - 'abcd'.indexOf(n)))); // oldest first: a, b, c, d
   const { post, record, jevCalls } = await run(query);
   assert.deepEqual(post.stories.filter((s) => s.origin === 'seed').map((s) => s.key).sort(), [keyOf('a'), keyOf('b'), keyOf('c')]);
-  assert.equal(jevCalls, base.jevCalls + 3, 'the waiting seed costs nothing');
+  assert.equal(jevCalls, base.jevCalls + 3, 'each taken seed is scored once; the waiting one costs nothing');
   assert.deepEqual(record.seeds.map((s: any) => s.outcome), ['in the post', 'in the post', 'in the post', 'waiting: this run already had 3']);
   assert.equal((await seedRow(query, 'd'))?.status, 'open');
   assert.match((await seedRow(query, 'd'))?.outcome, /waiting/);

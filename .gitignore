@@ -84,3 +84,22 @@ planning/Explainer Reels/3.2 review/
 planning/Explainer Reels/3.3 review/
 planning/Explainer Reels/intros/**/*.mp4
 explainers/design/intros/.out/
+
+# Real Case background removal (rembg, local)
+.venv-rembg/
+
+# Local scratch (not for the repo)
+.tmp/
+/.hyperframes/
+
+# Performance tooling: machine-local state and run outputs
+perf/.local/
+perf/runs/
+.lighthouseci/
+
+# Sound library drop-ins: originals, converted MP3s (kept in an outside store) and the ingest cache stay off git
+explainers/design/sfx/inbox/*
+!explainers/design/sfx/inbox/README.md
+explainers/design/sfx/dropins
+explainers/design/sfx/.ingest-cache.json
+explainers/design/sfx/tools/*/

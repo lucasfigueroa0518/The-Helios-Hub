@@ -1,8 +1,10 @@
 import type { HubQuery } from '@/lib/social-hub/db';
+import { verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 
 /**
- * IG Stories reads (schema `stories`, SELECT only). A set is one post and its
+ * Stories engine reads (schema `stories`, SELECT only), shared by the three Stories-format types (SS-1):
+ * read once, then `storiesFor` keeps one type's sets, frames, insights and pool. A set is one post and its
  * frames are its pages (spec §3). Stories have no posting_schedule or
  * publish_attempts: `stories.sets` is queue and schedule (docs/social-overnight.md).
  */
@@ -38,6 +40,10 @@ export type StoryFrameRow = {
   template: string | null;
   backdrop: string;
   storage_path: string | null;
+  /** A video frame's poster JPEG (null for an image frame or an older row). */
+  poster_path?: string | null;
+  /** 'video' for an MP4 frame; 'image' or null otherwise. */
+  media?: string | null;
   flagged: boolean;
   ig_media_id: string | null;
   published_at: string | null;
@@ -95,7 +101,7 @@ export type StoriesRead = {
 export const STORY_SETS_SQL = `
 SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style,
        -- The build log (photo_log and the rest) is for the stories worker. Pages read stories, story, pair, question, url.
-       (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'log' - 'pool') AS payload,
+       (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'triviaSkip' - 'log' - 'pool') AS payload,
        s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS slot_minute, s.flagged, s.error, s.spend_usd,
        s.approved_at::text AS approved_at, s.published_at::text AS published_at,
        s.built_at::text AS built_at, s.created_at::text AS created_at,
@@ -115,6 +121,7 @@ SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger
 
 export const STORY_FRAMES_SQL = `
 SELECT f.id AS frame_id, f.set_id, f.seq, f.role, f.template, f.backdrop, f.storage_path, f.flagged,
+       to_jsonb(f)->>'poster_path' AS poster_path, to_jsonb(f)->>'media' AS media,
        f.ig_media_id, f.published_at::text AS published_at
   FROM stories.frames f
   JOIN stories.sets s ON s.id = f.set_id
@@ -127,15 +134,19 @@ SELECT i.frame_id, i.captured_at::text AS captured_at, i.final, i.reach, i.views
   FROM stories.insights i
  ORDER BY i.frame_id, i.captured_at`;
 
-/** The open pool: what the next build of each series chooses from. */
-export const STORY_POOL_SQL = `
+const storyPoolSql = (live: string) => `
 SELECT p.id AS pool_id, p.series, p.key, p.origin, p.ref, p.title, p.payload->>'source' AS source,
        p.score, p.refreshed_at::text AS refreshed_at, p.payload->'breakdown' AS breakdown,
        CASE WHEN p.series = 'morning_download' THEN p.payload->'story' END AS story
   FROM stories.pool p
- WHERE p.used_at IS NULL
+ WHERE p.used_at IS NULL${live}
  ORDER BY p.series, p.score DESC NULLS LAST, p.title
  LIMIT 600`;
+
+/** The open pool: what the next build of each series chooses from. Rows the refresh archived (stale, not returned, over the cap) are not in it. */
+export const STORY_POOL_SQL = storyPoolSql(' AND p.archived_at IS NULL');
+/** The same before db/stories_pool_archive.sql adds archived_at (the refresh still deletes then). */
+export const STORY_POOL_LEGACY_SQL = storyPoolSql('');
 
 export async function readStories(q: HubQuery): Promise<StoriesRead> {
   const [sets, frames, insights, pool] = await Promise.all([
@@ -143,10 +154,30 @@ export async function readStories(q: HubQuery): Promise<StoriesRead> {
     q<StoryFrameRow>(STORY_FRAMES_SQL),
     q<StoryInsightRow>(STORY_INSIGHTS_SQL),
     // The pool table arrives with the schema (db/stories_schema.sql); until then the bench is empty, not the vertical broken.
-    q<StoryPoolRow>(STORY_POOL_SQL).catch((err: unknown) => {
-      if (/stories\.pool|does not exist/.test(err instanceof Error ? err.message : String(err))) return { rows: [] as StoryPoolRow[] };
+    q<StoryPoolRow>(STORY_POOL_SQL).catch(async (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      // No archive column yet: the pool as it was read before archiving (nothing is archived then).
+      if (/archived_at/.test(message)) return q<StoryPoolRow>(STORY_POOL_LEGACY_SQL).catch(() => ({ rows: [] as StoryPoolRow[] }));
+      if (/stories\.pool|does not exist/.test(message)) return { rows: [] as StoryPoolRow[] };
       throw err;
     }),
   ]);
   return { sets: sets.rows, frames: frames.rows, insights: insights.rows, pool: pool.rows };
+}
+
+/**
+ * One Stories-format type's part of a read (SS-1): the sets and pool rows of its series (a retired series'
+ * rows read as Morning Download's), with those sets' frames and insights.
+ */
+export function storiesFor(read: StoriesRead, vertical: StoryVertical): StoriesRead {
+  const sets = read.sets.filter((s) => verticalOfSeries(s.series) === vertical);
+  const setIds = new Set(sets.map((s) => s.set_id));
+  const frames = read.frames.filter((f) => setIds.has(f.set_id));
+  const frameIds = new Set(frames.map((f) => f.frame_id));
+  return {
+    sets,
+    frames,
+    insights: read.insights.filter((i) => frameIds.has(i.frame_id)),
+    pool: read.pool.filter((p) => verticalOfSeries(p.series) === vertical),
+  };
 }

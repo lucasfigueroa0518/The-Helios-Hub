@@ -1,30 +1,35 @@
 // lib/social-hub/slots/legacy.ts
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW } from '@/lib/ai-events/config';
+import { FIELD_NOTES_WINDOW } from '@/lib/field-notes/config';
 import { LFD_WINDOW } from '@/lib/lfd/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
+import { isStoryVertical, SERIES_OF_VERTICAL, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { DEFAULT_TIMES } from './times';
-import { isStorySeries, parseSlotId, slotId, type StorySeries } from './types';
+import { parseSlotId, slotId, type StorySeries } from './types';
 
 /**
  * A pre-cutover booking's window id as its free-time key: the window's start
- * minute from each type's window constants, Stories' series at the Stories
- * default time (the slot the seed gave it, R9). Null for anything else. The
+ * minute from each type's window constants, a Stories-format type's series at
+ * its default time (the slot the seed gave it, R9; one series per type, SS-1). Null for anything else. The
  * one legacy-id mapper: slot writes, the schedulers and placement all use it.
  */
-const LEGACY_START: Record<Exclude<Vertical, 'stories'>, ReadonlyArray<{ id: string; startMinute: number }>> = {
+const LEGACY_START: Record<Exclude<Vertical, StoryVertical>, ReadonlyArray<{ id: string; startMinute: number }>> = {
   reels: POSTING_SLOTS,
   explainers: EXPLAINER_WINDOWS,
   carousels: CAROUSEL_SLOTS,
   last_few_days: [LFD_WINDOW],
   ai_events: [AI_EVENTS_WINDOW, AI_EVENTS_NIGHT_WINDOW],
+  field_notes: [FIELD_NOTES_WINDOW],
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS, copied so slot code never imports the drama backend (a test pins it).
+  reel_ai_drama: [{ id: 'evening', startMinute: 1200 }],
 };
 
 export function legacyKey(vertical: Vertical, slot: string): { startMinute: number; series: StorySeries | null } | null {
-  if (vertical === 'stories') return isStorySeries(slot) ? { startMinute: DEFAULT_TIMES.stories[0]!, series: slot } : null;
+  if (isStoryVertical(vertical)) return slot === SERIES_OF_VERTICAL[vertical] ? { startMinute: DEFAULT_TIMES[vertical][0]!, series: SERIES_OF_VERTICAL[vertical] } : null;
   const w = LEGACY_START[vertical]?.find((x) => x.id === slot);
   return w ? { startMinute: w.startMinute, series: null } : null;
 }

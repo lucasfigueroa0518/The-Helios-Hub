@@ -8,18 +8,34 @@
  * The review may move settings only. Before anything is saved, this checks
  * every frame's words are exactly what the build wrote; a change that touched
  * them would throw (it can't by construction; the check keeps it that way).
+ *
+ * Real or AI? is stills (not in VIDEO_SERIES, RA-8): it takes the image path above, and its round image must
+ * come through the review unchanged apart from a crop.
+ *
+ * AI Trivia (VIDEO_SERIES) renders its two frames as MP4s instead (the
+ * question 10 s, the answer 5 s; renderTriviaClips, lib/stories/trivia/render,
+ * one fixed sound, no music or photos): the same review runs on the
+ * clips' posters, a change re-renders the clips, and each frame uploads its
+ * MP4 (storage_path, what Instagram fetches) and its poster JPEG
+ * (poster_path, what the hub shows), media = 'video'.
+ *
+ * Per-hour rule (docs/social-overnight.md): no shared video-render lock
+ * exists, so the clips render inside the Stories worker's build step, one set
+ * at a time. AI Trivia is auto off; its renders happen when a person clicks
+ * Generate, or in the 3:00 Stories hour once auto is on, an hour with no
+ * other video renderer.
  */
 import type { StoriesDb } from '@/lib/stories/db';
-import type { Renderer as RendererHandle } from '@/lib/stories/render/render';
-import { reviewSet, type ReviewCall } from '@/lib/stories/render/review';
-import { framePhoto, MAX_JPEG_BYTES, type Frame, type FrameData, type Series, type Style } from '@/lib/stories/render/types';
-import { getSet, markReady, recordCost, saveFrameRender, type FrameRow } from '@/lib/stories/repository';
+import type { Renderer as RendererHandle, RenderResult } from '@/lib/stories/render/render';
+import { reviewSet, type ReviewCall, type ReviewOutcome } from '@/lib/stories/render/review';
+import { framePhoto, MAX_JPEG_BYTES, MAX_MP4_BYTES, VIDEO_SERIES, type Frame, type FrameData, type Series, type Style } from '@/lib/stories/render/types';
+import { getSet, markReady, recordCost, saveFrameRender, type FrameRow, type StorySet } from '@/lib/stories/repository';
 import { frameObjectPath, type StoriesStorage } from '@/lib/stories/storage';
 
-/** The words of a frame: every string in its data except photo and layout settings. */
+/** The words of a frame: every string in its data except its photo or logo. */
 export function wordsOf(d: FrameData): string {
-  const { photo: _p, logo: _l, family: _f, ...rest } = d as FrameData & { photo?: unknown; logo?: unknown; family?: unknown };
-  void _p; void _l; void _f;
+  const { photo: _p, logo: _l, ...rest } = d as FrameData & { photo?: unknown; logo?: unknown };
+  void _p; void _l;
   return JSON.stringify(rest, Object.keys(rest).sort());
 }
 
@@ -29,18 +45,40 @@ export function framesFromRows(rows: FrameRow[], series: Series, style: Style): 
 
 export type RenderStageResult = { flagged: boolean; jpegBytes: number[]; reviewUsd: number; log: string[] };
 
-export async function runRenderStage(deps: { db: StoriesDb; storage: StoriesStorage; renderer: RendererHandle; review: ReviewCall; setId: string }): Promise<RenderStageResult> {
+/** One rendered video frame: the MP4 Instagram posts and the poster JPEG the review and the hub look at. */
+export type VideoClip = { role: string; mp4: Buffer; poster: Buffer };
+/** AI Trivia's clip renderer (renderTriviaClips' shape, CONTRACT-2 §3): the set's frames in, one clip per frame out. */
+export type RenderClips = (frames: Frame[]) => Promise<{ clips: VideoClip[] }>;
+
+/** The live renderer, loaded only when a video set renders (HyperFrames and ffmpeg stay out of every other path). */
+const liveRenderClips: RenderClips = async (frames) => {
+  const { renderTriviaClips } = await import('@/lib/stories/trivia/render');
+  const input = frames.map((f) => {
+    if (f.data.role !== 'question' && f.data.role !== 'answer') throw new Error(`an AI Trivia set has no ${f.data.role} frame`);
+    return { role: f.data.role, copy: f.data };
+  });
+  return renderTriviaClips(input);
+};
+
+export type RenderStageDeps = { db: StoriesDb; storage: StoriesStorage; renderer: RendererHandle; review: ReviewCall; setId: string; triviaRender?: RenderClips };
+
+export async function runRenderStage(deps: RenderStageDeps): Promise<RenderStageResult> {
   const got = await getSet(deps.db, deps.setId);
   if (!got) throw new Error(`no set ${deps.setId}`);
   if (got.set.status !== 'building') throw new Error(`set ${deps.setId} is ${got.set.status}, not building`);
   const frames = framesFromRows(got.frames, got.set.series, got.set.style);
+  if (VIDEO_SERIES.has(got.set.series)) return runVideoStage(deps, got, frames);
 
   const render = (f: Frame[]) => deps.renderer.render(f);
+  const log: string[] = [];
   const first = await render(frames);
   const out = await reviewSet({ frames, first, render, call: deps.review });
 
   for (const [i, f] of out.frames.entries()) {
     if (wordsOf(f.data) !== wordsOf(frames[i]!.data)) throw new Error(`frame ${i + 1}: the review changed its words`);
+    // Real or AI?: the image is the round, so the review may never drop or swap it (a crop is fine).
+    const was = frames[i]!.data;
+    if ((was.role === 'roa_question' || was.role === 'roa_reveal') && framePhoto(f.data)?.src !== was.photo.src) throw new Error(`frame ${i + 1}: the review dropped the round's image`);
     const bytes = out.render.frames[i]!.bytes;
     if (bytes > MAX_JPEG_BYTES) throw new Error(`frame ${i + 1}: JPEG is ${bytes} bytes, over Instagram's 8 MB`);
   }
@@ -51,21 +89,117 @@ export async function runRenderStage(deps: { db: StoriesDb; storage: StoriesStor
     const path = frameObjectPath(deps.setId, row.seq, row.role);
     await deps.storage.upload(path, r.jpeg, 'image/jpeg');
     const rv = out.reviews[i]!;
-    const family = 'family' in f.data ? (f.data as { family?: string }).family : undefined;
+    // A story with a clip (MD-LFD D16): the JPEG above is its poster; the MP4 plays the clip in the photo band.
+    const mp4 = await storyVideo(deps, frames[i]!, f).catch((err) => {
+      log.push(`frame ${i + 1}: the video failed, posting the still: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
+    if (mp4) await deps.storage.upload(frameObjectPath(deps.setId, row.seq, row.role, 'mp4'), mp4, 'video/mp4');
     await saveFrameRender(deps.db, row.id, {
-      storagePath: path,
+      ...(mp4 ? { media: 'video' as const, posterPath: path, mediaBytes: mp4.length } : {}),
+      storagePath: mp4 ? frameObjectPath(deps.setId, row.seq, row.role, 'mp4') : path,
       jpegBytes: r.bytes,
       review: { round1: rv.round1, change: rv.change, round2: rv.round2, note: rv.note, problems: r.problems },
       flagged: rv.flagged,
       backdrop: f.backdrop,
-      template: family ?? row.template,
+      template: row.template,
       copy: f.data,
       photo: framePhoto(f.data) ?? null,
     });
   }
+  return finish(deps, { ...out, log: [...out.log, ...log] });
+}
+
+/**
+ * The MP4 of a story frame with a clip: the frame's layers from the renderer, the band clip from the bucket, ffmpeg
+ * between them (lib/video-finder/band.ts). Null when the frame has no clip, the review swapped its photo (the poster),
+ * or the renderer cannot draw layers.
+ */
+async function storyVideo(deps: RenderStageDeps, built: Frame, reviewed: Frame): Promise<Buffer | null> {
+  const d = reviewed.data;
+  if (d.role !== 'story' || built.data.role !== 'story' || !built.data.video || !deps.renderer.layers) return null;
+  if (d.photo?.src !== built.data.photo?.src) throw new Error('the review changed the poster');
+  const video = built.data.video;
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const p = await import('node:path');
+  const { composeFrameVideo } = await import('@/lib/video-finder/band');
+  const dir = fs.mkdtempSync(p.join(os.tmpdir(), 'md-video-frame-'));
+  try {
+    const l = await deps.renderer.layers({ ...reviewed, data: { ...d, video } });
+    const file = (name: string, b: Buffer) => { const f = p.join(dir, name); fs.writeFileSync(f, b); return f; };
+    const band = file('band.mp4', await deps.storage.download(video.path));
+    const out = p.join(dir, 'frame.mp4');
+    await composeFrameVideo({ under: file('under.png', l.under), matte: file('matte.png', l.matte), over: file('over.png', l.over) }, band, l.box, { w: 1080, h: 1920 }, video.seconds, out);
+    const mp4 = fs.readFileSync(out);
+    if (mp4.length > MAX_MP4_BYTES) throw new Error(`MP4 is ${mp4.length} bytes, over Instagram's 100 MB`);
+    return mp4;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+async function finish(deps: Pick<RenderStageDeps, 'db' | 'setId'>, out: ReviewOutcome): Promise<RenderStageResult> {
   for (const c of out.calls) {
     await recordCost(deps.db, { setId: deps.setId, vendor: 'anthropic', component: 'stories-render-review@1', model: c.model, inputTokens: c.inputTokens, outputTokens: c.outputTokens, cacheReadTokens: c.cacheReadTokens, cacheWriteTokens: c.cacheWriteTokens, usd: c.usd });
   }
   await markReady(deps.db, deps.setId, out.flagged);
   return { flagged: out.flagged, jpegBytes: out.render.frames.map((r) => r.bytes), reviewUsd: out.calls.reduce((s, c) => s + c.usd, 0), log: out.log };
+}
+
+/**
+ * A video set (AI Trivia): clips → review on the posters (a change re-renders the clips) → upload each MP4 and its
+ * poster → save each frame as media 'video'.
+ */
+async function runVideoStage(deps: RenderStageDeps, got: { set: StorySet; frames: FrameRow[] }, frames: Frame[]): Promise<RenderStageResult> {
+  const renderClips = deps.triviaRender ?? liveRenderClips;
+  const clipsOf = new Map<RenderResult, VideoClip[]>();
+  const render = async (f: Frame[]): Promise<RenderResult> => {
+    const { clips } = await renderClips(f);
+    if (clips.length !== f.length) throw new Error(`the clip renderer returned ${clips.length} clips for ${f.length} frames`);
+    const result: RenderResult = {
+      ok: true,
+      problems: [],
+      frames: clips.map((c, i) => {
+        const problems = c.role === f[i]!.data.role ? [] : [`clip ${i + 1} is a ${c.role}, the frame a ${f[i]!.data.role}`];
+        return { index: i + 1, role: c.role, problems, jpeg: c.poster, bytes: c.poster.length };
+      }),
+    };
+    result.ok = result.frames.every((r) => !r.problems.length);
+    clipsOf.set(result, clips);
+    return result;
+  };
+  const first = await render(frames);
+  const out = await reviewSet({ frames, first, render, call: deps.review });
+  const clips = clipsOf.get(out.render);
+  if (!clips) throw new Error('the reviewed render has no clips');
+
+  for (const [i, f] of out.frames.entries()) {
+    if (wordsOf(f.data) !== wordsOf(frames[i]!.data)) throw new Error(`frame ${i + 1}: the review changed its words`);
+    if (clips[i]!.mp4.length > MAX_MP4_BYTES) throw new Error(`frame ${i + 1}: MP4 is ${clips[i]!.mp4.length} bytes, over Instagram's 100 MB`);
+  }
+
+  for (const [i, f] of out.frames.entries()) {
+    const row = got.frames[i]!;
+    const clip = clips[i]!;
+    const videoPath = frameObjectPath(deps.setId, row.seq, row.role, 'mp4');
+    const posterPath = frameObjectPath(deps.setId, row.seq, row.role, 'jpg');
+    await deps.storage.upload(videoPath, clip.mp4, 'video/mp4');
+    await deps.storage.upload(posterPath, clip.poster, 'image/jpeg');
+    const rv = out.reviews[i]!;
+    await saveFrameRender(deps.db, row.id, {
+      storagePath: videoPath,
+      jpegBytes: clip.poster.length,
+      media: 'video',
+      posterPath,
+      mediaBytes: clip.mp4.length,
+      review: { round1: rv.round1, change: rv.change, round2: rv.round2, note: rv.note, problems: out.render.frames[i]!.problems },
+      flagged: rv.flagged,
+      backdrop: f.backdrop,
+      template: row.template,
+      copy: f.data,
+      photo: framePhoto(f.data) ?? null,
+    });
+  }
+  return finish(deps, out);
 }

@@ -1,0 +1,103 @@
+{
+ "frame": 5,
+ "id": "05-letter-to-the-ceo",
+ "duration": 6.134,
+ "voice_end": 6.004,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "On",
+   "start": 0.02,
+   "end": 0.066
+  },
+  {
+   "text": "Tuesday,",
+   "start": 0.137,
+   "end": 0.566
+  },
+  {
+   "text": "an",
+   "start": 0.78,
+   "end": 0.851
+  },
+  {
+   "text": "open",
+   "start": 0.923,
+   "end": 1.066
+  },
+  {
+   "text": "letter",
+   "start": 1.137,
+   "end": 1.28
+  },
+  {
+   "text": "to",
+   "start": 1.351,
+   "end": 1.494
+  },
+  {
+   "text": "CEO",
+   "start": 1.566,
+   "end": 1.923
+  },
+  {
+   "text": "Satya",
+   "start": 2.066,
+   "end": 2.316
+  },
+  {
+   "text": "Nadella",
+   "start": 2.351,
+   "end": 2.78
+  },
+  {
+   "text": "drew",
+   "start": 2.963,
+   "end": 3.045
+  },
+  {
+   "text": "more",
+   "start": 3.116,
+   "end": 3.259
+  },
+  {
+   "text": "than",
+   "start": 3.366,
+   "end": 3.474
+  },
+  {
+   "text": "100",
+   "start": 3.545,
+   "end": 3.688
+  },
+  {
+   "text": "employee",
+   "start": 3.831,
+   "end": 4.545
+  },
+  {
+   "text": "signatures",
+   "start": 4.616,
+   "end": 5.045
+  },
+  {
+   "text": "within",
+   "start": 5.116,
+   "end": 5.377
+  },
+  {
+   "text": "hours.",
+   "start": 5.49,
+   "end": 5.902
+  }
+ ],
+ "lines": [
+  {
+   "id": "L5",
+   "start": 0.02,
+   "end": 5.902,
+   "label": "Satya Nadella, Microsoft CEO",
+   "label_kind": null
+  }
+ ]
+}

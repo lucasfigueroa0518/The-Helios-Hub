@@ -338,13 +338,13 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                 maxLength={INSTRUCTION_MAX_CHARS}
                 value={p.text}
                 placeholder={`For example: ${state.example}`}
-                aria-describedby={`${canId} ${countId}`}
+                aria-describedby={state.canChange ? `${canId} ${countId}` : countId}
                 onChange={(e) => p.onText(e.target.value)}
                 onKeyDown={sendOnModEnter(p.onSubmit)}
                 disabled={busy != null}
               />
               <div className="sh-revise__bar">
-                <span className="sh-revise__can" id={canId}>You can change {state.canChange}.</span>
+                {state.canChange ? <span className="sh-revise__can" id={canId}>You can change {state.canChange}.</span> : null}
                 <span className="sh-revise__count" id={countId} aria-live="off">{p.text.length}/{INSTRUCTION_MAX_CHARS}</span>
                 <button type="submit" className="sh-btn sh-btn--primary" disabled={busy != null || !p.text.trim()} data-busy={busy === 'submit' ? '' : undefined}>
                   {busy === 'submit' ? <Loader size={14} aria-hidden="true" /> : null}

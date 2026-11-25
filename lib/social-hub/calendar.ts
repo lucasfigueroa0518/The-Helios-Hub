@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { formatMetricKey, postMetric } from '@/lib/social-hub/metrics';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import type { HubPost, HubStatus, MetricKey } from '@/lib/social-hub/types';
@@ -66,6 +67,6 @@ export function metricLine(post: HubPost): string | null {
 
 export function chipLabel(post: HubPost): string {
   const info = verticalInfo(post.vertical);
-  if (post.vertical === 'stories' && post.media.kind === 'frames') return `${shortName(post, 30)} (${post.media.frames.length})`;
+  if (isStoryVertical(post.vertical) && post.media.kind === 'frames') return `${shortName(post, 30)} (${post.media.frames.length})`;
   return `${info.short}: ${shortName(post, 34)}`;
 }

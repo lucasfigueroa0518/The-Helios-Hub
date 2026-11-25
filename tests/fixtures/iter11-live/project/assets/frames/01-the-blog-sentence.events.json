@@ -1,0 +1,47 @@
+[
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "low murmur of a large indoor hall",
+  "dur": 5
+ },
+ {
+  "t": 4.282,
+  "kind": "foley",
+  "what": "paper card laid down",
+  "dur": 0.4
+ },
+ {
+  "t": 4.282,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 4.582,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.175,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 5.475,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 5.675,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 5.975,
+  "kind": "tick",
+  "kit": true
+ }
+]

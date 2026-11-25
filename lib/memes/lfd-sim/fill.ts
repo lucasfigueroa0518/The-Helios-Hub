@@ -30,6 +30,16 @@ export async function fillStories(
       WHERE canonical_url = ANY($1::text[]) ORDER BY canonical_url, publish_time DESC NULLS LAST`,
     [urls],
   );
+  // Central intake (Phase 2): once Reels reads the intake it writes no reels.sources rows, so a story from after the
+  // switch is an intake item (its key is its canonical URL). A bounded lookup by key: at most FILL_MAX URLs.
+  const notLegacy = urls.filter((u) => !rows.some((r) => r.url === u));
+  if (notLegacy.length) {
+    const intake = await d.hub<{ url: string; headline: string; body: string; source: string | null }>(
+      `SELECT key AS url, headline, body, source_name AS source FROM intake.items WHERE key = ANY($1::text[])`,
+      [notLegacy],
+    ).catch(() => ({ rows: [] as Array<{ url: string; headline: string; body: string; source: string | null }> }));
+    rows.push(...intake.rows);
+  }
   // A carousel-only story has no reels source: read it from the daily runs' shortlists.
   const notReels = urls.filter((u) => !rows.some((r) => r.url === u));
   if (notReels.length) {
@@ -37,8 +47,8 @@ export async function fillStories(
       `SELECT DISTINCT ON (url) url, headline, body, source FROM (
          SELECT COALESCE(e->'representative'->>'sourceUrl', e->>'id') AS url, e->'representative'->>'headline' AS headline,
                 COALESCE(e->'representative'->>'body', e->>'body', '') AS body, e->'representative'->>'source' AS source, r.finished_at
-           FROM social.runs r, jsonb_array_elements(r.record->'selection'->'shortlist') e
-          WHERE r.kind = 'daily' AND jsonb_typeof(r.record->'selection'->'shortlist') = 'array') x
+           FROM social.runs r, jsonb_array_elements(r.shortlist) e
+          WHERE r.kind = 'daily' AND r.shortlist IS NOT NULL) x
         WHERE url = ANY($1::text[]) AND headline IS NOT NULL ORDER BY url, finished_at DESC`,
       [notReels],
     );

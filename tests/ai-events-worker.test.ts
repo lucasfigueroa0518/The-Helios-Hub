@@ -13,7 +13,7 @@ import { HOOK_KEYS } from '@/lib/ai-events/hooks';
 import { excludePoolEvent, clearPoolEvent, pinPoolEvent, poolWeekKey, queueRebuild, shownPoolWeekKey } from '@/lib/ai-events/pool';
 import { postDateFor } from '@/lib/ai-events/run';
 import { claimRun, requestRun, type ClaimedRun } from '@/lib/ai-events/store';
-import { carryOutAiEventsRun, withAiEventsTimeout, type CarryOutDeps } from '@/lib/ai-events/worker';
+import { carryOutAiEventsRun, type CarryOutDeps } from '@/lib/ai-events/worker';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 import { addEvent, openAiEventsDb, seedAiEventsPost, stubEngine, stubJev, SUN_NOON, WEEK, type StubEngine } from './fixtures/ai-events/seed';
@@ -146,6 +146,8 @@ test('a city with fewer than 2 ranked events gets no post; the other city still 
 
 test('publishing live: Miami books Sunday 6:00–7:00 PM and Boston 7:00–8:00 PM', async () => {
   const { query } = await openAiEventsDb({ publishingLive: true });
+  // Live (D16) is Generate on with publishing_live on; Live with Generate off reads as paused and books nothing.
+  await query(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   await seedWeek(query);
   const { w } = worker(query, stubEngine(query, stubJev()));
   const out = await carryOutAiEventsRun(w, await claimed(query));
@@ -238,6 +240,7 @@ test('pool actions and Rebuild post: pins and excludes decide, Jev is not asked 
 
 test('the Sunday clock never redoes a city that already has a post; a published week is never rebuilt', async () => {
   const { query } = await openAiEventsDb();
+  await query(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   await seedWeek(query);
   await seedAiEventsPost(query, { metro: 'miami' });
   await seedAiEventsPost(query, { metro: 'boston' });
@@ -246,7 +249,9 @@ test('the Sunday clock never redoes a city that already has a post; a published 
   const out = await carryOutAiEventsRun(w, await claimed(query, 'scheduled'));
   assert.equal(out.status, 'skipped');
   assert.match((await query<{ stop_reason: string }>(`SELECT stop_reason FROM ai_events.runs`)).rows[0]!.stop_reason, /^post-exists:/);
-  assert.equal(jev.calls.length, 0);
+  // The quota never stops the refill (D3): the week is still ranked into the pool; the posts are untouched.
+  assert.ok(jev.calls.length > 0, 'the refill ranked the week');
+  assert.deepEqual((await posts(query)).map((p) => p.caption), ['Caption', 'Caption']);
 
   await query(`UPDATE ai_events.posts SET status = 'published'`);
   await queueRebuild(query, 'editor@example.com', SUN_NOON);
@@ -257,6 +262,8 @@ test('the Sunday clock never redoes a city that already has a post; a published 
 
 test('the Sunday clock makes only the city still missing its post', async () => {
   const { query } = await openAiEventsDb();
+  // Making posts (D16): the scheduled run renders only while Generate is on.
+  await query(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   await seedWeek(query);
   const miami = await seedAiEventsPost(query, { metro: 'miami' });
   const { w } = worker(query, stubEngine(query, stubJev()));
@@ -315,12 +322,6 @@ test('a snapshot failure never fails the run; it is recorded', async () => {
   assert.ok(logs.includes('ai_events_snapshot_failed'));
   const record = (await query<{ record: { snapshot: { ok: boolean; error: string } } }>(`SELECT record FROM ai_events.runs`)).rows[0]!.record;
   assert.deepEqual(record.snapshot, { ok: false, error: 'bucket not found' });
-});
-
-test('withAiEventsTimeout answers with onTimeout when the work hangs', async () => {
-  const hung = new Promise<string>(() => undefined);
-  assert.equal(await withAiEventsTimeout(hung, 5, () => 'timed out'), 'timed out');
-  assert.equal(await withAiEventsTimeout(Promise.resolve('done'), 1000, () => 'timed out'), 'done');
 });
 
 test('mid-week pool actions act on the week the hub shows, never a week the event is not in', async () => {

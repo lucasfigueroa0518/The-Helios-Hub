@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { isVertical } from '@/lib/social-hub/verticals';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -16,20 +17,25 @@ export type ParsedHubId = { vertical: Vertical; kind: HubIdKind; ref: string };
 
 const REF = /^[0-9A-Za-z-]{1,64}$/;
 
-/** Which id kinds each vertical uses (D7). Stories posts are always sets. */
+/** Which id kinds each vertical uses (D7). Stories-format posts are always sets. */
 const KINDS: Record<Vertical, readonly HubIdKind[]> = {
   reels: ['content', 'idea', 'attempt', 'schedule'],
   explainers: ['content', 'attempt', 'schedule', 'job'],
+  reel_ai_drama: ['content', 'attempt', 'schedule', 'job'],
   carousels: ['content', 'attempt', 'schedule', 'post'],
   stories: ['content', 'set'],
+  ai_trivia: ['content', 'set'],
+  real_or_ai: ['content', 'set'],
   last_few_days: ['content', 'attempt', 'schedule', 'post'],
   ai_events: ['content', 'attempt', 'schedule', 'post'],
+  field_notes: ['content', 'attempt', 'schedule', 'post'],
 };
 
 export function hubId(vertical: Vertical, kind: HubIdKind, ref: string): string {
   if (!REF.test(ref)) throw new Error(`invalid ${vertical} ref: ${ref}`);
   if (!KINDS[vertical].includes(kind)) throw new Error(`${vertical} has no ${kind} ids`);
-  if (vertical === 'stories') return `stories:${ref}`;
+  // Every Stories-format type's set keeps the `stories:<set id>` id it always had (SS-1; D46: ids never change).
+  if (isStoryVertical(vertical)) return `stories:${ref}`;
   if (kind === 'attempt' || kind === 'content') return `${vertical}:${ref}`;
   return `${vertical}:${kind}:${ref}`;
 }

@@ -38,10 +38,10 @@ test('weekFromOverrides: each date\'s person keys are its person overrides only,
   assert.ok(days[3]!.slots.some((s) => s.startMinute === 1140));
 });
 
-test('each Stories chip names its series; other types use their short name', () => {
-  assert.deepEqual(chipNames('stories', 'morning_download'), { short: 'Morning Dl', full: 'Morning Download' });
-  assert.deepEqual(chipNames('stories', 'guess_the_number'), { short: 'Guess #', full: 'Guess the Number' });
-  assert.deepEqual(chipNames('stories', 'free_vs_paid'), { short: 'Free/Paid', full: 'Free vs. Paid' });
+test('each Stories-format chip names its type (SS-1); other types use their short name', () => {
+  assert.deepEqual(chipNames('stories', 'morning_download'), { short: 'Morning', full: 'Morning Download' });
+  assert.deepEqual(chipNames('ai_trivia', 'ai_trivia'), { short: 'Trivia', full: 'Are you smarter than AI?' });
+  assert.deepEqual(chipNames('real_or_ai', 'real_or_ai'), { short: 'Real/AI', full: 'Real or AI?' });
   assert.deepEqual(chipNames('reels', null), { short: 'Text', full: 'Text on Screen' });
 });
 
@@ -49,16 +49,16 @@ test('the Switch on confirm says what changes the moment it is on (ruling R8)', 
   const lfdDays = lfdWeekdays(seedTemplate(DEFAULT_SEED_INPUTS));
   assert.deepEqual(lfdDays, [2, 5]);
   assert.equal(switchOnCopy({ templateEmpty: true, lfdPaused: false, lfdDays }), 'From now on the calendar decides what posts when. Today’s pattern is copied in.');
+  // Carousels are opt-in, so a paused Last Few Days costs no Carousels days and the copy no longer says so.
   assert.equal(
     switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays }),
-    'From now on the calendar decides what posts when. Today’s pattern is copied in. Last Few Days is paused, so Tuesdays and Fridays (its days) will have no Carousels until you edit the calendar.',
+    'From now on the calendar decides what posts when. Today’s pattern is copied in.',
   );
   assert.equal(
     switchOnCopy({ templateEmpty: false, lfdPaused: false, lfdDays }),
     'From now on the calendar decides what posts when. Your saved calendar from last time comes back, not a fresh copy of today’s settings.',
   );
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays: [] }), /Carousels/, 'no LFD days, nothing lost');
-  assert.match(switchOnCopy({ templateEmpty: false, lfdPaused: true, lfdDays: [1, 3, 5] }), /Mondays, Wednesdays and Fridays/);
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays }), /nothing changes/);
 });
 

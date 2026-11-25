@@ -1,6 +1,8 @@
 import type { HubQuery } from '@/lib/social-hub/db';
+import { typeOfSetlessComponent, verticalOfSeries } from '@/lib/social-hub/story-types';
 import { toMicros, type LedgerRow, type Pool } from '@/lib/social-hub/cost';
 import { klingClipUsdSql } from '@/lib/reels/insights';
+import { readDramaCosts, type DramaCostEventRow, type DramaRenderedRow } from '@/lib/reel-ai-drama/hub-read';
 
 /**
  * Ledger reads for the cost model (§8a), SELECT only. The only money
@@ -36,12 +38,18 @@ export type CostReads = {
     ny_date: string;
     posts: Array<{ storyId?: string; costUsd?: number }> | null;
   }>;
-  storyEvents: Array<{ id: string; set_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string }>;
-  storySets: Array<{ set_id: string; ny_date: string; spend_usd: string }>;
+  /** `series`: the event's set's series (null without a set, or in an older fixture), which names its type (SS-1). */
+  storyEvents: Array<{ id: string; set_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string; series?: string | null }>;
+  storySets: Array<{ set_id: string; ny_date: string; spend_usd: string; series?: string | null }>;
   /** Last Few Days runs with the post each made (null: it made none). Optional: older callers build reads without it. */
   lfdRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
   /** AI Events runs with the week's post (null: it made none). Optional the same way. */
   aiEventsRuns?: Array<{ id: string; jev_usd: string; ny_date: string; post_id: string | null }>;
+  /** Field Notes runs with the post each made (null: it made none). Optional the same way. */
+  fieldNotesRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
+  /** AI Drama Reels cost_events and finished jobs (lib/reel-ai-drama/hub.ts readDramaCosts), on the explainers handle. Optional the same way. */
+  dramaEvents?: DramaCostEventRow[];
+  dramaRendered?: DramaRenderedRow[];
 };
 
 /** Trial Reels activities whose spend belongs to one post idea (lib/reels/analytics/rollups.ts). */
@@ -74,17 +82,18 @@ export const COST_SQL = {
   explainerRendered: `SELECT id AS job_id, ${day('finished_at')} AS ny_date, spend_usd::text AS spend_usd
                         FROM explainers.jobs WHERE status = 'ok' AND finished_at IS NOT NULL`,
   carouselRuns: `SELECT id, kind, (trigger <> 'cli') AS production, total_usd::text AS total_usd, claude_usd::text AS claude_usd,
-                        record->'jev'->>'costUsd' AS jev_usd,
+                        jev_usd::text AS jev_usd,
                         ${day('COALESCE(started_at, requested_at)')} AS ny_date,
-                        CASE WHEN jsonb_typeof(record->'result'->'posts') = 'array'
+                        -- post_summaries, not record: record is ~1 MB a row (db/perf_2026_11_24_social_runs_summary.sql).
+                        CASE WHEN post_summaries IS NOT NULL
                              THEN (SELECT jsonb_agg(jsonb_build_object('storyId', e->>'storyId', 'costUsd', (e->>'costUsd')::float8))
-                                     FROM jsonb_array_elements(record->'result'->'posts') e)
+                                     FROM jsonb_array_elements(post_summaries) e)
                         END AS posts
                    FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
   storyEvents: `SELECT e.id, e.set_id, e.component, e.vendor, e.usd::text AS usd, ${day('e.created_at')} AS ny_date,
-                       (COALESCE(s.mode, 'production') = 'production') AS production
+                       (COALESCE(s.mode, 'production') = 'production') AS production, s.series
                   FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id`,
-  storySets: `SELECT id AS set_id, ny_date::text AS ny_date, spend_usd::text AS spend_usd
+  storySets: `SELECT id AS set_id, ny_date::text AS ny_date, spend_usd::text AS spend_usd, series
                 FROM stories.sets WHERE status NOT IN ('requested', 'building')`,
   lfdRuns: `SELECT r.id::text AS id, r.claude_usd::text AS claude_usd, r.jev_usd::text AS jev_usd,
                    ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
@@ -98,6 +107,11 @@ export const COST_SQL = {
                           WHERE p.run_id = r.id OR (r.week_key IS NOT NULL AND p.week_key = r.week_key)
                           ORDER BY (p.run_id = r.id) DESC NULLS LAST, (p.status <> 'rejected') DESC, p.created_at DESC LIMIT 1) AS post_id
                    FROM ai_events.runs r WHERE r.status IN ('ok', 'partial', 'failed', 'skipped')`,
+  // A rebuild re-renders its post in place (run_id moves to the newest run), so a run's post is the one it last rendered.
+  fieldNotesRuns: `SELECT r.id::text AS id, r.claude_usd::text AS claude_usd, r.jev_usd::text AS jev_usd,
+                          ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
+                          (SELECT p.id::text FROM field_notes.posts p WHERE p.run_id = r.id ORDER BY p.created_at DESC LIMIT 1) AS post_id
+                     FROM field_notes.runs r WHERE r.status IN ('ok', 'partial', 'failed')`,
 } as const;
 
 const EXPLAINER_KEYS = new Set<keyof typeof COST_SQL>(['explainerEvents', 'explainerRendered']);
@@ -115,11 +129,15 @@ export async function readCosts(q: HubQuery, explainersQ: Promise<HubQuery> | Hu
   });
   const results = await Promise.all(keys.map((key) => {
     // A database without the lfd schema reads as no Last Few Days spend, never as a cost-read failure.
-    if (key === 'lfdRuns' || key === 'aiEventsRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
+    if (key === 'lfdRuns' || key === 'aiEventsRuns' || key === 'fieldNotesRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
     if (!EXPLAINER_KEYS.has(key)) return q(COST_SQL[key]);
     return eq ? eq(COST_SQL[key]) : Promise.resolve({ rows: [] });
   }));
   const reads = Object.fromEntries(keys.map((key, i) => [key, results[i]!.rows])) as unknown as CostReads;
+  // AI Drama Reels share the explainers handle. A database without the drama schema reads as no drama spend.
+  const drama = eq ? await readDramaCosts(eq).catch(() => ({ events: [], rendered: [] })) : { events: [], rendered: [] };
+  reads.dramaEvents = drama.events;
+  reads.dramaRendered = drama.rendered;
   return missing ? { ...reads, explainersMissing: missing } : reads;
 }
 
@@ -181,6 +199,24 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     });
   }
 
+  // ── AI Drama Reels: the Explainers rule. Rows with a job are direct; development rows split across that day's reels.
+  const dramaByDay = new Map<string, string[]>();
+  for (const j of r.dramaRendered ?? []) dramaByDay.set(j.ny_date, [...(dramaByDay.get(j.ny_date) ?? []), `reel_ai_drama:${j.job_id}`]);
+  for (const [d, items] of dramaByDay) pools.push({ key: `reel_ai_drama:day:${d}`, items: items.map((item) => ({ item })) });
+  for (const e of r.dramaEvents ?? []) {
+    rows.push({
+      id: `reel_ai_drama:ce:${e.id}`,
+      vertical: 'reel_ai_drama',
+      nyDate: e.ny_date,
+      micros: toMicros(e.usd),
+      target: e.job_id ? { kind: 'item', item: `reel_ai_drama:${e.job_id}` } : { kind: 'pool', pool: `reel_ai_drama:day:${e.ny_date}` },
+      label: e.component,
+      vendor: e.vendor,
+      mode: mode(e.production),
+      ...(e.unknown ? { unknown: true } : {}),
+    });
+  }
+
   // ── Carousels: each run's per-story costs are direct; the rest of total_usd splits across the run's posts.
   // A preview run's stories never post: their spend stays on a preview item (unshipped), not on the
   // daily post for the same story id (D22).
@@ -201,17 +237,24 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     }
   }
 
-  // ── Stories: rows with a set are direct; rows without split across that day's sets.
-  const setsByDay = new Map<string, string[]>();
-  for (const s of r.storySets) setsByDay.set(s.ny_date, [...(setsByDay.get(s.ny_date) ?? []), `stories:${s.set_id}`]);
-  for (const [d, items] of setsByDay) pools.push({ key: `stories:day:${d}`, items: items.map((item) => ({ item })) });
+  // ── Stories engine (SS-1): a row with a set is direct and counts under its set's type (its series' type); a row
+  // without a set counts under its component's type (AI Trivia's daily writer, Real or AI?'s candidate maker; the
+  // rest is Morning Download's) and splits across that type's sets that day. Morning Download keeps its pool key.
+  const storyPool = (v: string, d: string) => (v === 'stories' ? `stories:day:${d}` : `${v}:day:${d}`);
+  const setsByPool = new Map<string, string[]>();
+  for (const s of r.storySets) {
+    const key = storyPool(verticalOfSeries(s.series), s.ny_date);
+    setsByPool.set(key, [...(setsByPool.get(key) ?? []), `stories:${s.set_id}`]);
+  }
+  for (const [key, items] of setsByPool) pools.push({ key, items: items.map((item) => ({ item })) });
   for (const e of r.storyEvents) {
+    const type = e.set_id ? verticalOfSeries(e.series) : typeOfSetlessComponent(e.component);
     rows.push({
       id: `stories:ce:${e.id}`,
-      vertical: 'stories',
+      vertical: type,
       nyDate: e.ny_date,
       micros: toMicros(e.usd),
-      target: e.set_id ? { kind: 'item', item: `stories:${e.set_id}` } : { kind: 'pool', pool: `stories:day:${e.ny_date}` },
+      target: e.set_id ? { kind: 'item', item: `stories:${e.set_id}` } : { kind: 'pool', pool: storyPool(type, e.ny_date) },
       label: e.component,
       vendor: e.vendor,
       mode: mode(e.production),
@@ -234,6 +277,16 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     if (!run.post_id) pools.push({ key: pool, items: [] });
     const jev = toMicros(run.jev_usd);
     if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'ai_events', nyDate: run.ny_date, micros: jev, target, label: 'event ranking (jev)', vendor: 'jev', mode: 'production' });
+  }
+  // ── Field Notes: a run's Claude and Jev spend belongs to the post it made; a run with no post stays unattributed.
+  for (const run of r.fieldNotesRuns ?? []) {
+    const pool = `field_notes:run:${run.id}`;
+    const target: LedgerRow['target'] = run.post_id ? { kind: 'item', item: `field_notes:${run.post_id}` } : { kind: 'pool', pool };
+    if (!run.post_id) pools.push({ key: pool, items: [] });
+    const claude = toMicros(run.claude_usd);
+    const jev = toMicros(run.jev_usd);
+    if (claude > 0) rows.push({ id: `${pool}:claude`, vertical: 'field_notes', nyDate: run.ny_date, micros: claude, target, label: 'writing and editing', vendor: 'anthropic', mode: 'production' });
+    if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'field_notes', nyDate: run.ny_date, micros: jev, target, label: 'tip scoring (jev)', vendor: 'jev', mode: 'production' });
   }
   return { rows, pools };
 }

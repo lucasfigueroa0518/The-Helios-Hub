@@ -1,0 +1,44 @@
+[
+ {
+  "out": "/private/tmp/claude-501/-Users-lucasfigueroa--claude-spares-spare-IbG1Hb/20ca182e-e5c1-46bd-982f-0ddc91797092/scratchpad/aud2/tokenization-1.mp4",
+  "opener": "scissors",
+  "palette": {
+   "seed": "tokenization-1",
+   "break": "dropins/deep-impacts-sound-fx/extra-deep-low-impact.mp3",
+   "swish": "dropins/ultimate-whooshes-sound-fx/deep-bulb-whoosh.mp3",
+   "cut": "dropins/risers-sound-fx/low-rumble-riser.mp3"
+  },
+  "cutAt": 2.5,
+  "problems": [],
+  "ok": true,
+  "notes": []
+ },
+ {
+  "out": "/private/tmp/claude-501/-Users-lucasfigueroa--claude-spares-spare-IbG1Hb/20ca182e-e5c1-46bd-982f-0ddc91797092/scratchpad/aud2/tokenization-2.mp4",
+  "opener": "scissors",
+  "palette": {
+   "seed": "tokenization-2",
+   "break": "dropins/deep-impacts-sound-fx/deep-simple-hit.mp3",
+   "swish": "dropins/ultimate-whooshes-sound-fx/click-whoosh-cut-off.mp3",
+   "cut": "dropins/ultimate-whooshes-sound-fx/curious-short-whoosh.mp3"
+  },
+  "cutAt": 2.5,
+  "problems": [],
+  "ok": true,
+  "notes": []
+ },
+ {
+  "out": "/private/tmp/claude-501/-Users-lucasfigueroa--claude-spares-spare-IbG1Hb/20ca182e-e5c1-46bd-982f-0ddc91797092/scratchpad/aud2/tokenization-3.mp4",
+  "opener": "scissors",
+  "palette": {
+   "seed": "tokenization-3",
+   "break": "dropins/deep-impacts-sound-fx/strange-impact.mp3",
+   "swish": "dropins/ultimate-whooshes-sound-fx/cyber-whoosh.mp3",
+   "cut": "dropins/ultimate-whooshes-sound-fx/deep-wind-object-whoosh.mp3"
+  },
+  "cutAt": 2.5,
+  "problems": [],
+  "ok": true,
+  "notes": []
+ }
+]

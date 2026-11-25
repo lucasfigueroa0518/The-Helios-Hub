@@ -1,0 +1,63 @@
+/* Field Notes panels. Same tokens and surfaces as the hub (.rh scope): white cards, 16px radius, orange only for action. */
+.fn-top { display: grid; gap: 18px; margin: 0 0 22px; }
+
+.fn-drop { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1.5px dashed var(--rh-line-strong); border-radius: 18px; background: var(--rh-surface); transition: border-color 200ms var(--rh-ease), background 200ms var(--rh-ease); }
+.fn-drop.is-over { border-color: var(--rh-accent); background: var(--rh-accent-soft); }
+.fn-drop__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.fn-drop__text .rh-muted { margin: 2px 0 0; }
+
+.fn-results { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.fn-result { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--rh-line); border-radius: 12px; background: var(--rh-surface); font-size: 12.5px; }
+.fn-result svg { flex: none; }
+.fn-result--stored svg { color: var(--rh-ok); }
+.fn-result--duplicate svg { color: var(--rh-warn); }
+.fn-result--refused svg { color: var(--rh-bad); }
+.fn-result__name { font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fn-result__what { flex: 1; color: var(--rh-body); }
+.fn-result__match { border-radius: 8px; object-fit: cover; }
+
+.fn-pool { display: grid; gap: 12px; padding: 16px 18px; border: 1px solid var(--rh-line); border-radius: 18px; background: var(--rh-surface); }
+.fn-pool__head { display: flex; align-items: center; gap: 10px; }
+.fn-pool__counts { margin: 0; }
+.fn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.fn-photo { display: grid; align-content: start; gap: 6px; }
+.fn-photo__img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 14px; background: var(--rh-media); }
+.fn-photo--retired .fn-photo__img { opacity: 0.45; }
+.fn-photo--resting .fn-photo__img { opacity: 0.8; }
+.fn-photo__meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.fn-photo__meta .rh-muted, .fn-photo__line { margin: 0; }
+.fn-chip--live { background: var(--rh-accent-soft); color: var(--rh-accent-ink); }
+.fn-reject { display: grid; gap: 6px; }
+.rh .fn-reject .helios-field-input { width: 100%; max-width: none; height: 36px; padding: 0 10px; box-sizing: border-box; }
+.fn-reject__actions { display: flex; gap: 6px; }
+
+.fn-tagrow { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 10px 0 0; }
+.fn-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.fn-kind { cursor: pointer; border: 1px solid var(--rh-line); background: var(--rh-surface); }
+.fn-kind.is-on { background: var(--rh-accent-soft); color: var(--rh-accent-ink); border-color: var(--rh-accent); }
+.fn-star.is-on { background: var(--rh-accent-soft); color: var(--rh-accent-ink); }
+.fn-star svg { vertical-align: -2px; }
+.fn-photo__tags { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.fn-kind-select { cursor: pointer; border: 1px solid var(--rh-line); }
+.fn-pool__variety, .fn-pool__warn { margin: 0; }
+.fn-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.fn-review { display: grid; gap: 12px; }
+.fn-review__post { display: grid; gap: 16px; }
+.fn-slides { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.fn-slide { flex: none; height: 280px; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 14px; background: var(--rh-media); }
+.fn-review__body { display: grid; gap: 4px; }
+.fn-review__body p { margin: 4px 0 0; }
+.fn-review__caption { white-space: pre-wrap; }
+.fn-review__source { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--rh-accent-ink); font-size: 12.5px; }
+.fn-review__tips { margin: 0; padding-left: 18px; display: grid; gap: 10px; }
+.fn-review__tags { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.fn-review__tags .rh-chip { font-size: 11.5px; }
+.fn-review__actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 720px) {
+  .fn-drop { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fn-drop { transition: none; }
+}

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BOX_HINTS, canChangeText } from '@/lib/revisions/box-hints';
+import { BOX_HINTS, MADE_TOGETHER, canChangeText } from '@/lib/revisions/box-hints';
 import { VERTICAL_LABELS } from '@/lib/revisions/labels';
 import { descriptionFor } from '@/lib/revisions/registry';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -15,8 +15,11 @@ const VERTICALS = Object.keys(VERTICAL_LABELS) as Vertical[];
 test('every content type has hints, and the fixes it lists are exactly the ones its description implements', () => {
   for (const v of VERTICALS) {
     const d = descriptionFor(v);
-    assert.ok(d, v);
     const listed = BOX_HINTS[v].can.map((c) => c.kind).sort();
+    if (!d || MADE_TOGETHER.has(v)) {
+      assert.deepEqual(listed, [], `${v}: a type that takes no frame fix lists nothing`);
+      continue;
+    }
     assert.deepEqual(listed, [...d.fixKinds].sort(), `${v}: the box lists what the type can do`);
     assert.equal(new Set(listed).size, listed.length, `${v}: no fix listed twice`);
   }

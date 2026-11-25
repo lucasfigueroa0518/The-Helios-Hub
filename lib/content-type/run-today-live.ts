@@ -6,16 +6,19 @@
  */
 import { dbQuery } from '@/lib/db';
 import { loadSettings as loadCarouselSettings, requestManualRun } from '@/lib/carousels/overview';
-import { readPosting } from '@/lib/content-type/posting';
+import { readPosting, type ContentType, type PostingState } from '@/lib/content-type/posting';
+import { seriesLabel } from '@/lib/content-type/story-series';
 import { explainersDb } from '@/lib/explainers/connection';
 import { requestRender } from '@/lib/explainers/repository';
 import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings';
 import { pendingRun, requestRun } from '@/lib/reels/repository';
-import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
+import { requestFinish, slateOnDayFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
-import { isAiEventsDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
+import { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
-import { aiEventsDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
+import { cachedCostPart, loadHubDataset } from '@/lib/social-hub/views/cached-dataset';
+import { aiEventsDueToday, fieldNotesDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
+import { SERIES_OF_VERTICAL, STORY_VERTICALS, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -31,6 +34,20 @@ import { DEFAULT_AI_EVENTS_RUN_CAP_USD } from '@/lib/ai-events/config';
 import { queueManualAiEventsRun } from '@/lib/ai-events/manual';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
 import { comingWeek } from '@/lib/networking/pick/week';
+import { queueManualFieldNotesRun } from '@/lib/field-notes/manual';
+import { readFieldNotesSettings } from '@/lib/field-notes/settings';
+import { FIELD_NOTES_DEFAULT_SETTINGS } from '@/lib/field-notes/types';
+import { DRAMA_REFUSAL_TEXT, dramaInFlightPitchIds, dramaRunCostUsd, requestDramaJobs } from '@/lib/reel-ai-drama/hub';
+
+/** AI Drama Reels for Run now: pitches in flight and the per-reel cap, on the explainers handle. Unreadable (schema not applied): no step. */
+async function liveDrama(db: Awaited<ReturnType<typeof explainersDb>>): Promise<{ ok: boolean; inFlight: string[]; cap: number }> {
+  try {
+    const [inFlight, cap] = await Promise.all([dramaInFlightPitchIds(db), dramaRunCostUsd(db)]);
+    return { ok: true, inFlight, cap };
+  } catch {
+    return { ok: false, inFlight: [], cap: 0 };
+  }
+}
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
@@ -82,15 +99,42 @@ async function liveAiEvents(today: string, anyDay: boolean, now: Date): Promise<
 }
 
 /**
- * `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button).
- * `aiEventsAnyDay`: the same for AI Events' Generate.
+ * Field Notes for Run now: due when today has its calendar slot and its auto_run is on (any day from
+ * its own Generate), made when today already has a post that wasn't rejected (for Generate: one
+ * already published, since Generate re-renders a post still in review), in flight when a run is
+ * queued or running. Unreadable (schema not applied): no step.
  */
-export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean } = {}): Promise<RunPlan> {
+async function liveFieldNotes(today: string, anyDay: boolean): Promise<{ day: RunInputs['fieldNotes']; inFlight: boolean; cap: number }> {
+  try {
+    const [s, plan, made, flight] = await Promise.all([
+      readFieldNotesSettings(liveHubQuery),
+      slotPlan(liveHubQuery, today, 1).catch(() => null),
+      dbQuery<{ status: string }>(`SELECT status FROM field_notes.posts WHERE ny_date = $1::date AND status <> 'rejected'`, [today]),
+      dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM field_notes.runs WHERE status IN ('requested', 'running')`),
+    ]);
+    const due = fieldNotesDueToday(s, today, anyDay, plan ? isFieldNotesDay(plan, today) : null);
+    const has = made.rows.some((r) => (anyDay ? r.status === 'published' : true));
+    return { day: { due, made: has }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd };
+  } catch {
+    return { day: undefined, inFlight: false, cap: FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd };
+  }
+}
+
+/**
+ * `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button).
+ * `aiEventsAnyDay`: the same for AI Events' Generate. `fieldNotesAnyDay`: and for Field Notes'.
+ * `cachedHub`: read posts, slots and quotas from the hub pages' shared dataset (up to 60 s old, cleared
+ * by every hub action) instead of a fresh read. Only the GET preview uses it; a run always plans fresh.
+ */
+export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean; fieldNotesAnyDay?: boolean; cachedHub?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
-  const [lfd, aiEvents] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now)]);
-  const [dataset, stories, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
-    loadDataset(liveHubQuery, now),
-    readPosting('stories', now),
+  const [lfd, aiEvents, fieldNotes] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now), liveFieldNotes(today, opts.fieldNotesAnyDay === true)]);
+  const [dataset, storyPostings, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
+    // The plan reads posts, slots and quotas, never the cost ledger, so it takes the cached cost
+    // part the hub pages use instead of re-reading and re-allocating every ledger on each open.
+    opts.cachedHub ? loadHubDataset() : loadDataset(liveHubQuery, now, cachedCostPart()),
+    // Each Stories-format type's own settings (SS-1); one that can't be read makes nothing today.
+    Promise.all(STORY_VERTICALS.map((v) => readPosting(v as ContentType, now).catch(() => null))),
     storiesSlotsOn(liveHubQuery, today).catch(() => null),
     pendingRun(),
     dbQuery<{ post_idea_id: string }>(`SELECT post_idea_id::text FROM reels.finish_requests WHERE status = 'active'`),
@@ -99,20 +143,21 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
     loadCarouselSettings(),
     explainersDb(),
   ]);
-  const [jobs, exSettings, sets] = await Promise.all([
+  const [jobs, exSettings, sets, drama] = await Promise.all([
     exDb.query<{ topic_id: string }>(`SELECT topic_id::text FROM explainers.jobs WHERE status IN ('requested', 'running')`),
     loadExplainerSettings(exDb),
     liveStoriesDb.query<{ series: string }>(`SELECT series FROM stories.sets WHERE ny_date = $1::date AND status NOT IN ('rejected', 'failed', 'skipped')`, [today]),
+    liveDrama(exDb),
   ]);
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
-  const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
+  const day = (v: 'reels' | 'carousels' | 'explainers' | 'reel_ai_drama') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v] ?? DEFAULT_DAY_QUOTAS[v]!, capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
   // Stories: each series due today by its own settings, or (template mode) a series while it has an
   // open slot today (capped, not passed, not held), the slots the 4 AM worker would still request.
   const open = storySlots ? await openStorySlots(liveStoriesDb, storySlots, now).catch(() => null) : null;
   const dueOn = open ? (id: string) => (open.get(id as Series)?.open.length ?? 0) > 0 : null;
   const held = open ? new Set<string>() : new Set(sets.rows.map((r) => r.series));
-  const series = seriesDueToday(stories.series ?? [], today, held, dueOn);
+  const series = seriesDueToday(storySeriesStates(storyPostings), today, held, dueOn);
   return planFrom({
     today,
     reels: { ...day('reels'), slateToday: Number(slate.rows[0]?.n ?? 0) > 0 },
@@ -121,6 +166,8 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
     series,
     ...(lfd.day ? { lastFewDays: lfd.day } : {}),
     ...(aiEvents.day ? { aiEvents: aiEvents.day } : {}),
+    ...(fieldNotes.day ? { fieldNotes: fieldNotes.day } : {}),
+    ...(drama.ok ? { reelAiDrama: day('reel_ai_drama') } : {}),
     inFlight: {
       reelsRun: Boolean(reelsPending),
       reelsBuilding: building.rows.map((r) => r.post_idea_id),
@@ -128,9 +175,27 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
       explainerTopics: jobs.rows.map((r) => r.topic_id),
       lfdRun: lfd.inFlight,
       aiEventsRun: aiEvents.inFlight,
+      fieldNotesRun: fieldNotes.inFlight,
+      dramaPitches: drama.inFlight,
     },
-    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap },
+    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap, fieldNotesCap: fieldNotes.cap, dramaCap: drama.cap },
   });
+}
+
+/**
+ * The series Run now considers, one per Stories-format type (SS-1): a type's posting state names its series'
+ * days (and, where it still lists its series, their switches). Unread types are left out.
+ */
+export function storySeriesStates(postings: ReadonlyArray<PostingState | null>): Array<{ id: string; label: string; enabled: boolean; days: readonly number[] }> {
+  const out = new Map<string, { id: string; label: string; enabled: boolean; days: readonly number[] }>();
+  const listedAll = postings.flatMap((p) => p?.series ?? []);
+  STORY_VERTICALS.forEach((vertical, i) => {
+    const id = SERIES_OF_VERTICAL[vertical];
+    const listed = listedAll.find((s) => s.id === id && verticalOfSeries(s.id) === vertical);
+    if (listed) out.set(id, { id, label: seriesLabel(id), enabled: listed.enabled, days: listed.days });
+    else if (postings[i]) out.set(id, { id, label: seriesLabel(id), enabled: true, days: postings[i]!.days ?? [] });
+  });
+  return [...out.values()];
 }
 
 export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: boolean; note: string };
@@ -163,7 +228,8 @@ export async function requestStorySets(series: readonly string[], by: string, no
  * runs just that card.
  */
 export async function runToday(by: string, now = new Date(), only?: Vertical, target?: string): Promise<{ plan: RunPlan; results: StepResult[] }> {
-  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days', aiEventsAnyDay: only === 'ai_events' });
+  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days', aiEventsAnyDay: only === 'ai_events', fieldNotesAnyDay: only === 'field_notes' });
+  const today = nyDateOf(now)!;
   const results: StepResult[] = [];
   for (const step of stepsFor(plan, only, target)) {
     if (step.action === 'none') continue;
@@ -173,7 +239,8 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
         const notes: string[] = [];
         let started = 0;
         for (const ideaId of step.targets) {
-          const slateId = await todaySlateFor(ideaId, now);
+          // Run now makes the day it was clicked (Bald-Eagle D4): today's slate only, never one made ahead.
+          const slateId = await slateOnDayFor(ideaId, today);
           if (!slateId) {
             notes.push('one idea is not on today’s slate');
             continue;
@@ -200,6 +267,11 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
           else refused.push(r.reason.replaceAll('_', ' '));
         }
         done(queued > 0, `${queued} render${queued === 1 ? '' : 's'} queued${refused.length ? `; refused: ${[...new Set(refused)].join(', ')}` : ''}.`);
+      } else if (step.action === 'drama_jobs') {
+        // The click approves these jobs (CLAUDE.md Rule 1); the drama worker runs them under the daily render and spend caps.
+        const out = await requestDramaJobs(await explainersDb(), step.targets, { by, now });
+        const refused = [...new Set(out.refused.map((r) => DRAMA_REFUSAL_TEXT[r.reason] ?? r.reason))];
+        done(out.queued.length > 0, `${out.queued.length} reel${out.queued.length === 1 ? '' : 's'} queued${refused.length ? `; refused: ${refused.join(' ')}` : ''}.`);
       } else if (step.action === 'lfd_run') {
         // The click approves this run's spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
         const out = await queueManualLfdRun(liveHubQuery);
@@ -207,6 +279,10 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
       } else if (step.action === 'ai_events_run') {
         // The click approves this run's Jev spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
         const out = await queueManualAiEventsRun(liveHubQuery, by);
+        done(out.ok, out.note);
+      } else if (step.action === 'field_notes_run') {
+        // The click approves this run's Claude spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
+        const out = await queueManualFieldNotesRun(liveHubQuery, by);
         done(out.ok, out.note);
       } else if (step.action === 'story_sets') {
         const made = await requestStorySets(step.targets, by, now);

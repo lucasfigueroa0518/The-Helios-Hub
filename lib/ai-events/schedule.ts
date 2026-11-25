@@ -5,6 +5,7 @@
  * reject, unschedule, Hard publish and the due-slot release use the same spine helpers as
  * Carousels and Last Few Days (lib/social/overnight/schedule.ts, modelled on lib/lfd/schedule.ts).
  */
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex, type PostingWindow } from '@/lib/instagram/window';
@@ -33,9 +34,9 @@ import { readAiEventsSettings } from './settings';
 export const AI_EVENTS_NOT_APPROVED_NOTE = 'Nobody approved this AI Events post before its slot, so it was not posted.';
 export const AI_EVENTS_REJECTED_NOTE = 'This AI Events post was rejected, so it was not posted.';
 export const AI_EVENTS_HARD_PUBLISH_NOTE = 'Hard published from the Social Hub (posted now, outside its slot).';
-export const AI_EVENTS_APPROVED_OFF_NOTE = 'Approved. It will be scheduled when AI Events publishing is on.';
+export const AI_EVENTS_APPROVED_OFF_NOTE = 'Approved. AI Events is Paused, so it stays in the Made tab. Place it in a slot once it’s in Approval or Live (its Settings tab).';
 export const AI_EVENTS_DAY_PASSED_NOTE = 'Its Sunday has passed; use Place to pick a day with an AI Events slot.';
-export const AI_EVENTS_PUBLISHING_OFF_NOTE = 'AI Events publishing is off. Turn it on before publishing.';
+export const AI_EVENTS_PUBLISHING_OFF_NOTE = 'AI Events isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 export const AI_EVENTS_MISSED_NOTE = 'Missed its window; place it again to post.';
 
 const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
@@ -117,18 +118,20 @@ export async function scheduleAiEventsPost(
 /** Approve's outcome: booked, approved without a slot (with why), or refused. */
 export type AiEventsApproveOutcome = ScheduleOutcome | { scheduled: false; approved: true; note: string };
 
-const publishingLive = (query: Query) => readAiEventsSettings(query).then((s) => s.publishingLive).catch(() => false);
+/** The type's state (D16): stateOf(auto_run, publishing_live), never the raw Live key. Unreadable: paused. */
+const aiEventsState = (query: Query): Promise<TypeState> =>
+  readAiEventsSettings(query).then((s) => stateOf(s.autoRun, s.publishingLive).state).catch(() => 'paused' as const);
 
 /**
- * A person approves a post. While ai_events publishing_live is on it is booked in its own
- * Sunday's city window only (ai_events.posts.ny_date); when that window has passed or is taken
- * it is approved without a slot (Place picks another day). While publishing is off it is
- * approved and nothing is booked.
+ * A person approves a post. In Approval or Live (holdsSlots, contract §4.3) it is booked in its
+ * own Sunday's city window only (ai_events.posts.ny_date); when that window has passed or is
+ * taken it is approved without a slot (Place picks another day). Only Live posts it. Paused: it
+ * is approved and stays in the Made tab (D17).
  */
 export async function approveAiEventsPost(query: Query, postId: string, now = new Date()): Promise<AiEventsApproveOutcome> {
   const itemId = await aiEventsItemId(query, postId);
   if (!itemId) return { scheduled: false, note: 'The post is gone.' };
-  if (!(await publishingLive(query))) {
+  if (!holdsSlots(await aiEventsState(query))) {
     await approveItem(query, itemId, 'user');
     return { scheduled: false, approved: true, note: AI_EVENTS_APPROVED_OFF_NOTE };
   }
@@ -159,8 +162,8 @@ export async function unscheduleAiEventsPost(query: Query, postId: string): Prom
 
 /** Hard publish (SH-15/SH-17): approved by the click, its waiting slot closed, a force attempt queued. */
 export async function hardPublishAiEventsPost(query: Query, postId: string): Promise<Queued> {
-  // While publishing_live is off nothing is approved, closed or queued: a force attempt would wait unclaimed.
-  if (!(await publishingLive(query))) return { queued: false, note: AI_EVENTS_PUBLISHING_OFF_NOTE, terminal: true };
+  // Only Live posts (D16): otherwise nothing is approved, closed or queued; a force attempt would wait unclaimed.
+  if (!postsToInstagram(await aiEventsState(query))) return { queued: false, note: AI_EVENTS_PUBLISHING_OFF_NOTE, terminal: true };
   const itemId = await aiEventsItemId(query, postId);
   if (itemId) await forceApproveItem(query, itemId, AI_EVENTS_HARD_PUBLISH_NOTE);
   return queueAiEventsPublish(query, postId, 'force');

@@ -9,6 +9,10 @@ description: >-
 
 # Explainer caption
 
+> **Current rules live in `lib/explainers/caption.ts` (`explainer-caption-v15`).** This file predates
+> v9 to v15: there is no save ask and no model-written Helios line. The caption is a short explanation,
+> then a code-built "Want to learn more?" prompt for the viewer's own AI, then the Helios line and hashtags.
+
 The caption is the Instagram text under a 45-second Explainer Reel (AI Brain
 Break). Write it the way the best AI tips pages do: a hook that names a problem
 the viewer already has, a short why in the viewer's world, one clear ask (save
@@ -27,7 +31,7 @@ type uses.
 
 Code adds the opening line when the reel publishes. Do not write an episode
 number. `lib/explainers/publish/publish.ts` counts how many explainers have
-`published` and stamps `AI Brain Break Episode N:` on the way to Instagram.
+`published` and stamps `AI 101 Episode N:` on the way to Instagram.
 
 This follows the Trial Reels caption skill (`lib/reels/copy/skill.ts`,
 copy-caption-v30) where the two products share a rule, and changes the job of
@@ -46,7 +50,7 @@ you show it.
 ## What carries over from Trial Reels
 
 - Instagram shows about the first 125 characters, then "more". Code will put
-  `AI Brain Break Episode N:` and a blank line in front of your hook. The hook
+  `AI 101 Episode N:` and a blank line in front of your hook. The hook
   has to stay short enough that the episode line, the blank line, and the hook
   still fit in that count (keep the hook under 96 characters). The hook has to
   make sense if someone never taps "more". Do not spend it on a greeting, a
@@ -80,7 +84,7 @@ Explainer Reel has already taught the thought. The caption's job is still a
 full post: make a scroller stop, keep the idea, and give them a reason to save
 or send it.
 
-- Do not write the episode line. Code fills `AI Brain Break Episode N:` at
+- Do not write the episode line. Code fills `AI 101 Episode N:` at
   publish time from the number of explainers already published.
 - The hook, your first paragraph, names a problem or situation the viewer has
   that this concept explains: a chat that forgets how it started, an answer
@@ -135,7 +139,7 @@ or send it.
 6. Run the humanizer pass. Cut anything that restates the video beat by beat,
    and cut a caption that is only a restatement of the thesis.
 7. Show one caption. Above it, note the character count of
-   `AI Brain Break Episode 1:`, the blank line, and the hook together. Do not
+   `AI 101 Episode 1:`, the blank line, and the hook together. Do not
    put that episode line in the caption itself.
 
 ## Shape
@@ -174,7 +178,7 @@ A law firm pasting a long contract into a chat feels this first. At Helios we'd 
 #contextwindow #tokens #ai
 ```
 
-When this posts, code puts `AI Brain Break Episode 1:` above the hook. That
+When this posts, code puts `AI 101 Episode 1:` above the hook. That
 line, the blank line, and the hook are 94 characters. The hook names the
 viewer's problem and does not repeat the thesis. Helios appears once, in the
 Helios line just before the hashtags, which picks a business type from the

@@ -1146,14 +1146,6 @@
 .lfd-kicker { margin: 28px 0 0; font-family: var(--font-body); font-weight: 700; font-size: 22px; line-height: 26px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--lfd-muted); }
 
 .lfd-story { position: absolute; inset: 0; font-family: var(--font-body); }
-/* Frosted glass with a top highlight; the sun orb gets a halo. */
-.lfd-chip {
-  position: absolute; top: 48px; right: var(--lfd-margin); height: 60px; display: flex; align-items: center; gap: 14px; padding: 0 24px 0 8px; border-radius: 9999px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 100%); border: 1px solid rgba(255,255,255,0.16);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22); backdrop-filter: blur(14px);
-}
-.lfd-chip img { display: block; width: 44px; height: 44px; border-radius: 9999px; object-fit: contain; background: #0A0A0A; box-shadow: 0 0 18px 2px rgba(255,106,42,0.35); }
-.lfd-chip span { font-weight: 700; font-size: 24px; line-height: 28px; }
 .lfd-story-body { position: absolute; top: 140px; left: var(--lfd-margin); right: var(--lfd-margin); bottom: 140px; display: flex; flex-direction: column; gap: 48px; }
 .lfd-text { flex: none; }
 .lfd-setup { margin: 0 0 16px; font-weight: 700; font-size: 34px; line-height: 44px; max-height: 88px; overflow-wrap: normal; word-break: normal; }
@@ -1192,3 +1184,103 @@
 .lfd-media--meme { flex: 0 1 auto; width: 100%; aspect-ratio: var(--meme-aspect); min-height: 0; background: none; border-radius: 0; overflow: visible; container-type: size; display: flex; align-items: center; justify-content: center; box-shadow: none; }
 .lfd-media--meme::after { content: none; }
 .lfd-media--meme .lfd-meme { flex: none; width: min(100cqw, 100cqh * var(--meme-aspect)); height: min(100cqh, 100cqw / var(--meme-aspect)); border-radius: 24px; object-fit: fill; box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 8px 18px rgba(0,0,0,0.35); }
+
+/* ── Last Few Days design profiles (2026-11-23, DRAFT for Lucas) ──────────────────────────────
+   Black (above) is the reference. Green, orange and white recolour the same LFD layouts and share
+   Morning Download's backdrop recipes (lib/stories/render/stories.css .st-bd-*): green is MD's
+   flooded green, orange is a quiet logo-gradient field, white is paper with the Explainers'
+   72 px drafting grid, darker here (ink at 10%) so it reads on a phone. Selectors carry the LFD kind so they beat the generic canvas rules. */
+.helios-slide--lfd_cover:is([data-canvas="green"], [data-canvas="orange"], [data-canvas="white"]) .lfd-tile::after,
+.helios-slide--lfd_story:is([data-canvas="green"], [data-canvas="orange"], [data-canvas="white"]) .lfd-tile::after { background: none; }
+
+/* Green: MD's flooded green, white type, white accents. */
+.helios-slide--lfd_cover[data-canvas="green"],
+.helios-slide--lfd_story[data-canvas="green"] {
+  --lfd-muted: rgba(255, 255, 255, 0.82);
+  color: #FFFFFF;
+  background:
+    radial-gradient(62% 42% at 100% 0%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 70%),
+    linear-gradient(168deg, #1B9C17 0%, #138510 46%, #0E690C 100%);
+}
+.helios-slide--lfd_cover[data-canvas="green"] {
+  background:
+    radial-gradient(58% 26% at 50% 80%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 72%),
+    radial-gradient(62% 42% at 100% 0%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 70%),
+    linear-gradient(168deg, #1B9C17 0%, #138510 46%, #0E690C 100%);
+}
+[data-canvas="green"] .lfd-hl { color: #FFFFFF; text-shadow: none; text-decoration: underline; text-decoration-color: #FFFFFF; text-decoration-thickness: 0.08em; text-underline-offset: 0.14em; }
+[data-canvas="green"] .lfd-name { color: #FFFFFF; font-weight: 700; }
+[data-canvas="green"] .lfd-hook span:last-child { color: #FF7A2E; text-shadow: 0 2px 22px rgba(0,30,0,0.35); }
+[data-canvas="green"] .lfd-tile { background: #0E690C; }
+[data-canvas="green"] .lfd-media { background: #0E690C; box-shadow: 0 30px 60px -24px rgba(0,30,0,0.75), 0 8px 18px rgba(0,30,0,0.30); }
+[data-canvas="green"] .lfd-swipe { color: #138510; background: #FFFFFF; box-shadow: 0 8px 22px rgba(0,30,0,0.35); }
+[data-canvas="green"] .lfd-brand-rule span::before, [data-canvas="green"] .lfd-brand-rule span::after { background: #FFFFFF; box-shadow: 0 0 10px 2px rgba(255,255,255,0.45); }
+
+/* Orange: a quiet field in the logo's light (direction A). Off-black type, white accents (MD S-36). */
+.helios-slide--lfd_cover[data-canvas="orange"],
+.helios-slide--lfd_story[data-canvas="orange"] {
+  --lfd-muted: rgba(23, 23, 23, 0.80);
+  color: #171717;
+  background: var(--lfd-orange-ground,
+    radial-gradient(90% 38% at 50% 0%, rgba(255,178,120,0.62) 0%, rgba(255,178,120,0) 100%),
+    radial-gradient(80% 34% at 50% 100%, rgba(222,50,60,0.42) 0%, rgba(222,50,60,0) 100%),
+    #FF5E1A);
+}
+[data-canvas="orange"] .lfd-hl { color: #FFFFFF; text-shadow: none; }
+[data-canvas="orange"] .lfd-name { color: #171717; font-weight: 700; }
+[data-canvas="orange"] .lfd-hook span:last-child { color: #FFFFFF; text-shadow: none; }
+[data-canvas="orange"] .lfd-brand-rule::before { background: linear-gradient(90deg, rgba(23,23,23,0) 0%, rgba(23,23,23,0.30) 100%); }
+[data-canvas="orange"] .lfd-brand-rule::after { background: linear-gradient(90deg, rgba(23,23,23,0.30) 0%, rgba(23,23,23,0) 100%); }
+[data-canvas="orange"] .lfd-brand-rule span::before, [data-canvas="orange"] .lfd-brand-rule span::after { background: #FFFFFF; box-shadow: none; }
+[data-canvas="orange"] .lfd-tile { background: #E8501F; }
+[data-canvas="orange"] .lfd-media { background: #E8501F; box-shadow: 0 30px 60px -24px rgba(80,18,0,0.60), 0 8px 18px rgba(80,18,0,0.25); }
+[data-canvas="orange"] .lfd-swipe { color: #FF5E1A; background: #FFFFFF; box-shadow: 0 8px 22px rgba(80,18,0,0.30); }
+
+/* White: paper with the Explainers' drafting grid, off-black type, orange highlight, green names. */
+.helios-slide--lfd_cover[data-canvas="white"],
+.helios-slide--lfd_story[data-canvas="white"] {
+  --lfd-muted: #525252;
+  color: #171717;
+  background:
+    linear-gradient(rgba(23,23,23,0.10) 1.5px, transparent 1.5px) 0 -0.75px / 72px 72px,
+    linear-gradient(90deg, rgba(23,23,23,0.10) 1.5px, transparent 1.5px) -0.75px 0 / 72px 72px,
+    radial-gradient(62% 42% at 100% 0%, rgba(255,106,42,0.07) 0%, rgba(255,106,42,0) 72%),
+    #FFFFFF;
+}
+[data-canvas="white"] .lfd-hl { color: #FF5E1A; text-shadow: none; }
+[data-canvas="white"] .lfd-name { color: #138510; }
+[data-canvas="white"] .lfd-hook span:last-child { color: #FF5E1A; text-shadow: none; }
+[data-canvas="white"] .lfd-kicker { color: #737373; }
+[data-canvas="white"] .lfd-brand-rule::before { background: linear-gradient(90deg, rgba(23,23,23,0) 0%, rgba(23,23,23,0.22) 100%); }
+[data-canvas="white"] .lfd-brand-rule::after { background: linear-gradient(90deg, rgba(23,23,23,0.22) 0%, rgba(23,23,23,0) 100%); }
+[data-canvas="white"] .lfd-tile { background: #EDEDED; }
+[data-canvas="white"] .lfd-media { background: #F2F2F2; box-shadow: 0 30px 60px -24px rgba(23,23,23,0.35), 0 0 0 1px #EDEDED; }
+[data-canvas="white"] .lfd-media::after { border-color: rgba(23,23,23,0.06); box-shadow: none; }
+[data-canvas="white"] .lfd-swipe { box-shadow: 0 8px 22px rgba(255,94,26,0.25); }
+
+/* ── LFD AI cover (DRAFT 2026-11-23): AI image on top, the hook block ≥ 40% of the slide below. ── */
+.lfd-cover--ai .lfd-cover-art { position: relative; flex: none; height: 690px; overflow: hidden; }
+/* The photo itself fades out (mask), so it melts into whatever ground the canvas paints; eased stops, no hard edge. */
+.lfd-cover--ai .lfd-cover-art .lfd-img {
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 42%, rgba(0,0,0,0.92) 52%, rgba(0,0,0,0.74) 62%, rgba(0,0,0,0.5) 72%, rgba(0,0,0,0.28) 81%, rgba(0,0,0,0.12) 89%, rgba(0,0,0,0.03) 95%, rgba(0,0,0,0) 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 42%, rgba(0,0,0,0.92) 52%, rgba(0,0,0,0.74) 62%, rgba(0,0,0,0.5) 72%, rgba(0,0,0,0.28) 81%, rgba(0,0,0,0.12) 89%, rgba(0,0,0,0.03) 95%, rgba(0,0,0,0) 100%);
+}
+/* Brand mark: no side rules; a small sun orb and the wordmark, centred. */
+.lfd-cover--ai .lfd-brand-rule { position: relative; margin-top: -36px; padding: 0; justify-content: center; gap: 0; }
+.lfd-cover--ai .lfd-brand-rule::before, .lfd-cover--ai .lfd-brand-rule::after { content: none; }
+.lfd-cover--ai .lfd-brand-rule span { padding-left: 24px; font-size: 24px; line-height: 24px; letter-spacing: 0.32em; }
+.lfd-cover--ai .lfd-brand-rule span::after { content: none; }
+.lfd-cover--ai .lfd-brand-rule span::before { left: 0; width: 12px; height: 12px; margin-top: -6px; }
+/* Hook fills the lower half: starts very large and shrinks only as far as the region needs. */
+.lfd-cover-copy--ai { justify-content: center; padding: 14px 40px 88px; }
+.lfd-hook--ai { width: 100%; max-height: 520px; font-size: 200px; line-height: 0.94; letter-spacing: -0.04em; text-wrap: balance; overflow-wrap: normal; word-break: normal; }
+.lfd-hook--ai .lfd-hl { color: #FF6A2A; text-shadow: 0 0 36px rgba(255,94,26,0.28); }
+.lfd-cover--ai .lfd-kicker { margin-top: 20px; }
+[data-canvas="green"] .lfd-cover--ai { --lfd-art-fade: #0F730D; }
+[data-canvas="green"] .lfd-hook--ai .lfd-hl { color: #FF7A2E; text-decoration: none; text-shadow: 0 2px 22px rgba(0,30,0,0.35); }
+[data-canvas="orange"] .lfd-cover--ai { --lfd-art-fade: #F2541C; }
+[data-canvas="orange"] .lfd-hook--ai .lfd-hl { color: #FFFFFF; text-shadow: none; }
+[data-canvas="white"] .lfd-cover--ai { --lfd-art-fade: #FFFFFF; }
+[data-canvas="white"] .lfd-hook--ai .lfd-hl { color: #FF5E1A; text-shadow: none; }
+.lfd-hook--ai span, .lfd-hook--ai span:last-child { display: inline; white-space: normal; }
+.helios-slide .lfd-cover--ai .lfd-hook--ai span:not(.lfd-hl) { color: inherit; text-shadow: none; }

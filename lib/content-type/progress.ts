@@ -1,5 +1,9 @@
 import { dbQuery } from '@/lib/db';
-import type { ContentType } from '@/lib/content-type/posting';
+import { seriesLabel } from '@/lib/content-type/story-series';
+import { isStoryVertical, verticalOfSeries } from '@/lib/social-hub/story-types';
+import type { Vertical } from '@/lib/social-hub/types';
+import { explainersHubQuery } from '@/lib/social-hub/db';
+import { readDramaProgress } from '@/lib/reel-ai-drama/hub-read';
 
 /**
  * What a content type is making right now, for the "it's working" strip on
@@ -24,8 +28,6 @@ export type ProgressItem = {
   typicalSeconds: number | null;
 };
 
-const SERIES: Record<string, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
-
 const median = (xs: number[]): number | null => {
   const s = xs.filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
   return s.length >= 2 ? Math.round(s[Math.floor(s.length / 2)]!) : null;
@@ -36,20 +38,34 @@ async function typical(sql: string, params: unknown[] = []): Promise<number | nu
   return median(rows.map((r) => Number(r.secs)));
 }
 
-export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
-  if (type === 'stories') {
+/** The usual running time depends only on the key (series or run kind), so ask once per key, not once per item in flight. */
+function typicalByKey(sql: string): (key: string) => Promise<number | null> {
+  const seen = new Map<string, Promise<number | null>>();
+  return (key) => {
+    let secs = seen.get(key);
+    if (!secs) {
+      secs = typical(sql, [key]);
+      seen.set(key, secs);
+    }
+    return secs;
+  };
+}
+
+export async function readProgress(type: Vertical): Promise<ProgressItem[]> {
+  // Each Stories-format type shows its own series' sets (SS-1); a retired series' set reads as Morning Download's.
+  if (isStoryVertical(type)) {
     const { rows } = await dbQuery(
       `SELECT id::text, series, status, created_at::text AS requested_at, claimed_at::text AS started_at
          FROM stories.sets WHERE status IN ('requested', 'building') ORDER BY created_at`,
     );
     const out: ProgressItem[] = [];
-    for (const r of rows) {
-      const secs = await typical(
-        `SELECT extract(epoch FROM built_at - claimed_at) AS secs FROM stories.sets
-          WHERE series = $1 AND built_at IS NOT NULL AND claimed_at IS NOT NULL ORDER BY created_at DESC LIMIT 15`,
-        [r.series],
-      );
-      out.push({ id: r.id, label: SERIES[r.series] ?? r.series, state: r.status === 'building' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
+    const typicalFor = typicalByKey(
+      `SELECT extract(epoch FROM built_at - claimed_at) AS secs FROM stories.sets
+        WHERE series = $1 AND built_at IS NOT NULL AND claimed_at IS NOT NULL ORDER BY created_at DESC LIMIT 15`,
+    );
+    for (const r of rows.filter((x) => verticalOfSeries(x.series) === type)) {
+      const secs = await typicalFor(r.series);
+      out.push({ id: r.id, label: seriesLabel(r.series), state: r.status === 'building' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
     }
     return out;
   }
@@ -112,15 +128,41 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
     if (!rows.length) return [];
     // A rebuild re-renders from cached scores, so it times against other rebuilds; a build against builds.
     const out: ProgressItem[] = [];
+    const typicalFor = typicalByKey(
+      `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM ai_events.runs
+        WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
+    );
     for (const r of rows) {
-      const secs = await typical(
-        `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM ai_events.runs
-          WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
-        [r.kind],
-      );
+      const secs = await typicalFor(r.kind);
       out.push({ id: r.id, label: r.kind === 'rebuild' ? 'AI Events rebuild' : 'AI Events run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
     }
     return out;
+  }
+  if (type === 'field_notes') {
+    const { rows } = await dbQuery(
+      `SELECT id::text, kind, status, requested_at::text AS requested_at, started_at::text AS started_at
+         FROM field_notes.runs WHERE status IN ('requested', 'running') ORDER BY requested_at`,
+    );
+    if (!rows.length) return [];
+    // A rebuild only re-renders, so it times against other rebuilds; a build against builds.
+    const out: ProgressItem[] = [];
+    const typicalFor = typicalByKey(
+      `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM field_notes.runs
+        WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
+    );
+    for (const r of rows) {
+      const secs = await typicalFor(r.kind);
+      out.push({ id: r.id, label: r.kind === 'rebuild' ? 'Field Notes rebuild' : 'Field Notes run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
+    }
+    return out;
+  }
+  if (type === 'reel_ai_drama') {
+    // AI Drama Reels live on the explainers handle (schema reel_ai_drama); the pitch is the idea.
+    const { rows, typicalSeconds } = await readDramaProgress(await explainersHubQuery());
+    return rows.map((r) => ({
+      id: r.id, label: r.label, state: r.state, stage: r.stage, error: r.error, topicId: r.pitchId,
+      requestedAt: r.requestedAt, startedAt: r.startedAt, typicalSeconds: r.state === 'failed' ? null : typicalSeconds,
+    }));
   }
   return [];
 }
@@ -129,11 +171,16 @@ export type AllProgress = Record<'carousels' | 'stories' | 'explainers', Progres
   /** Optional, so a progress map built for the first three types (tests/social-hub-run-for.test.ts) still holds; missing reads as none. */
   last_few_days?: ProgressItem[];
   ai_events?: ProgressItem[];
+  field_notes?: ProgressItem[];
+  reel_ai_drama?: ProgressItem[];
+  /** The Stories-format types split out of Stories (SS-1); missing reads as none. */
+  ai_trivia?: ProgressItem[];
+  real_or_ai?: ProgressItem[];
 };
 
 /** Every type's runs in flight, for the Content page's cards and tiles. A type that cannot be read shows nothing in flight. */
 export async function readAllProgress(): Promise<AllProgress> {
-  const one = (t: ContentType) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
-  const [carousels, stories, explainers, lastFewDays, aiEvents] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events')]);
-  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents };
+  const one = (t: Vertical) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
+  const [carousels, stories, explainers, lastFewDays, aiEvents, fieldNotes, drama, trivia, roa] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events'), one('field_notes'), one('reel_ai_drama'), one('ai_trivia'), one('real_or_ai')]);
+  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: drama, ai_trivia: trivia, real_or_ai: roa };
 }

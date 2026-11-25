@@ -1,0 +1,36 @@
+[
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "quiet office hum",
+  "dur": 8
+ },
+ {
+  "t": 2.168,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 2.468,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 4.811,
+  "kind": "foley",
+  "what": "paper card dropped on kraft",
+  "dur": 0.4
+ },
+ {
+  "t": 4.811,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 5.111,
+  "kind": "tick",
+  "kit": true
+ }
+]

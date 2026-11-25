@@ -10,6 +10,7 @@ import { clockLabel, GRID, LAST_START, DAY_START } from '@/lib/social-hub/slots/
 import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { chipNames, CARD_MINUTES, laterNote, type BoardCard, type BoardColumn, type BoardPost } from '@/lib/social-hub/views/week';
 import { WEEKDAY_LONG } from '@/lib/social-hub/views/week-edit';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 /**
  * One slot on the week board (spec decisions 3, 4, 9): a one-line card at its
@@ -18,7 +19,13 @@ import { WEEKDAY_LONG } from '@/lib/social-hub/views/week-edit';
  * column, scroll box or later card can cover or clip it.
  */
 
-export type SlimPost = BoardPost & { name: string; refs: Record<string, string>; thumb: string | null };
+export type SlimPost = BoardPost & {
+  name: string;
+  refs: Record<string, string>;
+  thumb: string | null;
+  /** A posted post's lead number vs typical ("13.6K", "2.1×"), and the words for its label; null before it posts or before insights land. */
+  lead?: { value: string; vs: string | null; label: string } | null;
+};
 
 const AXIS = 21 * 60 - 8 * 60;
 
@@ -70,6 +77,27 @@ export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragP
     right: '4px',
   };
   const canFlip = editable && !card.locked && card.feedMode != null && !select;
+  // A post that went out opens its analytics in one click (the post drawer), on any day.
+  const posted = card.status === 'posted' && card.booked && !select ? card.booked : null;
+  const lead = posted?.lead ?? null;
+  const face = (
+    <>
+      {select?.selected ? <Check size={11} className="sh-board__check" aria-hidden="true" /> : null}
+      <span className="sh-board__time" aria-hidden="true">{shortClock(card.startMinute)}</span>
+      <span className="sh-board__name" aria-hidden="true">
+        <span className="sh-board__dot" />
+        <span className="sh-board__short">{names.short}</span>
+      </span>
+      {lead ? (
+        <span className="sh-board__lead" aria-hidden="true">
+          {lead.value}
+          {lead.vs ? <span className="sh-board__vs">{lead.vs}</span> : null}
+        </span>
+      ) : null}
+      {card.booked && !posted ? <span className="sh-board__mark" aria-hidden="true" title="A post is booked for this slot" /> : null}
+      {card.locked && card.status !== 'posted' ? <Lock size={11} className="sh-board__lock" aria-hidden="true" /> : null}
+    </>
+  );
   const activate = (el: HTMLElement) => (select ? select.onToggle() : onOpen(el));
   return (
     <div
@@ -88,29 +116,28 @@ export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragP
       // In select mode the whole card toggles, the Trial / Main tag included.
       onClick={select ? () => select.onToggle() : undefined}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        className="sh-board__open"
-        aria-label={cardLabel(card, when)}
-        aria-haspopup={select ? undefined : 'dialog'}
-        aria-expanded={select ? undefined : open}
-        aria-pressed={select ? select.selected : undefined}
-        title={`${names.full} · ${clockLabel(card.startMinute)}`}
-        onClick={select ? undefined : (e) => onOpen(e.currentTarget)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(e.currentTarget); }
-        }}
-      >
-        {select?.selected ? <Check size={11} className="sh-board__check" aria-hidden="true" /> : null}
-        <span className="sh-board__time" aria-hidden="true">{shortClock(card.startMinute)}</span>
-        <span className="sh-board__name" aria-hidden="true">
-          <span className="sh-board__dot" />
-          <span className="sh-board__short">{names.short}</span>
-        </span>
-        {card.booked ? <span className="sh-board__mark" aria-hidden="true" title="A post is booked for this slot" /> : null}
-        {card.locked && card.status !== 'posted' ? <Lock size={11} className="sh-board__lock" aria-hidden="true" /> : null}
-      </div>
+      {posted ? (
+        <PostLink id={posted.id} className="sh-board__open" label={`${cardLabel(card, when)}${lead ? `, ${lead.label}` : ''}. Open its analytics`}>
+          {face}
+        </PostLink>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          className="sh-board__open"
+          aria-label={cardLabel(card, when)}
+          aria-haspopup={select ? undefined : 'dialog'}
+          aria-expanded={select ? undefined : open}
+          aria-pressed={select ? select.selected : undefined}
+          title={`${names.full} · ${clockLabel(card.startMinute)}`}
+          onClick={select ? undefined : (e) => onOpen(e.currentTarget)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(e.currentTarget); }
+          }}
+        >
+          {face}
+        </div>
+      )}
       {/* No tag on a locked card: it can't flip, and the lock needs the room (Trial / Main stays in the label and panel). */}
       {card.feedMode && !card.locked && select ? (
         <span className="sh-board__tag" data-mode={card.feedMode} aria-hidden="true">{card.feedMode === 'trial' ? 'Trial' : 'Main'}</span>
@@ -253,7 +280,7 @@ export function SlotPanel({ card, column, anchor, flip, editable, dayOptions, ti
   const [to, setTo] = useState(card.day);
   const [minute, setMinute] = useState(card.startMinute);
   const canEdit = editable && !card.locked;
-  const what = card.vertical === 'stories' ? `Story · ${names.full}` : names.full;
+  const what = isStoryVertical(card.vertical) ? `Story · ${names.full}` : names.full;
   const later = laterNote(card);
   return (
     <Floating anchor={anchor} flip={flip} label={what} onClose={onClose}>

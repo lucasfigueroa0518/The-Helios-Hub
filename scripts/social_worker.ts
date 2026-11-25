@@ -4,14 +4,22 @@
  *
  *   npm run social:worker
  *
- * 3:00 AM New York: when social.settings.auto_run is on, queue the day's run.
+ * 3:00 AM New York: queue the day's carousel run, every night and in every state
+ * (settings standard D16, CONTRACT.md §4). Refill is not a control: the run's
+ * selection (fetch or intake read, Jev scoring) writes the shortlist the carousel
+ * pool reads, so it runs even while Carousels is paused, on a Last Few Days day or
+ * when people already placed the day's quota (D3). Those nights the run makes no
+ * story (`--stories 0`) and is held to pool_refill_cap_usd; it ends with
+ * `refill_capped` when the cap stops it. Making posts follows makesPosts(state)
+ * and the quota; booking slots follows holdsSlots(state) (Approval and Live) and
+ * posting follows postsToInstagram(state) (Live only).
  * A queued run (3 AM or manual) is carried out by scripts/social_daily.ts in a
  * child process (--run-id), so a Chromium crash or memory spike ends the
  * child, not the worker. After it: each shipped post's slides are rendered to
  * JPEGs in Storage, and the best posts take today's windows (9:00–10:00 AM, 2:30–3:30 PM).
  * Daily fill (D54): carousels a person placed for today count toward
- * posts_per_day, so the run makes (and schedules) only the rest, and is
- * skipped with the reason when nothing is left.
+ * posts_per_day, so the run makes (and schedules) only the rest; when nothing
+ * is left it still refills the pool and makes nothing (D3).
  *
  * A one-story rerun the Social Hub queued (Regenerate, social.rerun_requests,
  * D51) is claimed when no run is queued or running: it opens its own run and
@@ -23,21 +31,35 @@
  * (lfd.settings.days, Tue/Fri) with its auto_run on, a Last Few Days run is
  * queued instead of the carousel run. Its runs (3:00, or the hub's "Make Last
  * Few Days now") are claimed in this loop, so they never overlap a carousel
- * run; a finished post joins the spine and, while lfd publishing_live is on,
+ * run; a finished post joins the spine and, in Approval or Live (holdsSlots),
  * takes its day's 9:00–10:00 AM window. Its posts publish and its insights are
  * read here like carousels until the single publisher drives the type.
  *
  * AI Events This Week (planning/AI Events/DECISIONS.md, AE-08) shares this
- * process too: at 12:00 PM on its days (ai_events.settings.days, Sunday) with
- * its auto_run on, a run is queued that ranks the coming week's events (Jev
- * event-pick@1, capped at run_cap_usd), renders the carousel and, while
- * ai_events publishing_live is on, books the Sunday 6:00–7:00 PM window. Its
+ * process too: at 12:00 PM on its days (ai_events.settings.days, Sunday), in
+ * every state, a run is queued that ranks the coming week's events (Jev
+ * event-pick@1; the refill, D16) and, while AI Events makes posts, renders the
+ * carousel (capped at run_cap_usd) and, in Approval or Live, books the Sunday
+ * 6:00–7:00 PM window; paused, it only ranks, under pool_refill_cap_usd. Its
  * runs (the clock, the hub's Generate or Rebuild post) are claimed after Last
  * Few Days', under the same 30-minute timeout. Its posts publish and their
  * insights are read here until the single publisher drives the type.
  *
- * Nothing is scheduled or published unless social.settings.publishing_live is
- * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
+ * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 2:00 AM, while it
+ * makes posts (auto_run on), a run is queued for its next unfilled day that refills the tip pool and picks the tips,
+ * writes the slides (live Claude and Jev, capped at run_cap_usd) and renders the carousel on the photo
+ * pool; otherwise a Field Notes day (Tuesday, Friday) queues a refill-only run in every state (D16). In
+ * Approval or Live an approved post books the afternoon 2:30–3:30 PM window. Its runs (the clock, the hub's Generate or Rebuild post) are claimed after AI Events', under
+ * the same 30-minute timeout. Its posts publish and their insights are read here until the single
+ * publisher drives the type. Each poll also runs Field Notes' face check on new uploads (Vercel has no
+ * Chromium): up to 10 photos queued 'pending' at upload, one shared headless browser per batch, no model
+ * call (lib/field-notes/photos/faces-worker.ts).
+ *
+ * Slots are booked in Approval and Live (contract §4.3); nothing is published
+ * unless the type's state is Live (stateOf auto_run + publishing_live; Generate
+ * off with Live on reads as paused and logs state_mismatch). A slot that passes
+ * unposted goes back to Made (publisher sweep, D17). Every post needs a person's approval: require_approval is never
+ * read as off (D16). Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
  * Once social_hub.settings publisher_mode is 'live', releasing, posting and
  * the 30-minute insights reads belong to the single publisher (D40).
  *
@@ -49,14 +71,17 @@
  * social_hub.health_reports, capped at 10 minutes so a hung query can't stall
  * this loop (a timeout logs health_report_failed).
  *
- * LIVE when auto_run is on: Claude, web search, Jev (~$2 a night, capped by
- * the run's cap_usd). The worker never turns either switch on.
+ * LIVE when Carousels makes posts (Approval or Live): Claude, web search, Jev (~$2
+ * a night, capped by the run's cap_usd). Every night otherwise: the refill only
+ * (Jev selection, capped by pool_refill_cap_usd, $0.25 by default). The worker
+ * never changes a state.
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import type { HubQuery } from '@/lib/social-hub/db';
+import { beginRefill, settleRefill, type RefillGrant } from '@/lib/content-type/refill-total';
 
 function loadEnvFile(envPath: string): void {
   if (!fs.existsSync(envPath)) return;
@@ -81,13 +106,14 @@ async function main(): Promise<void> {
   const { calendarDateKey, nextRunAt } = await import('@/lib/instagram/clock');
   const cfg = await import('@/lib/social/overnight/config');
   const { socialQuery } = await import('@/lib/social/store');
-  const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
+  const { getSocialSetting } = await import('@/lib/social/overnight/settings');
+  const { logRefillCapped, readTypeGate } = await import('@/lib/social/refill');
+  const { carouselNight, threeAmRequests } = await import('@/lib/social/overnight/night');
   const runs = await import('@/lib/social/overnight/runs');
   const { carouselFill, nightStoriesFor, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
   const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
   const { readTonightMoves } = await import('@/lib/social-hub/moves-store');
   const { finishNightPlacements } = await import('@/lib/social-hub/queue-store');
-  const { QUEUE_LIVE } = await import('@/lib/social-hub/queue');
   const { ideaRef } = await import('@/lib/social-hub/views/moves');
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
   const { createLiveCarouselClient, metaConfigured } = await import('@/lib/social/overnight/meta');
@@ -103,10 +129,12 @@ async function main(): Promise<void> {
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const lfdSettings = await import('@/lib/lfd/settings');
   const lfdStore = await import('@/lib/lfd/store');
-  const { carryOutLfdRun, withLfdTimeout } = await import('@/lib/lfd/worker');
-  const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
+  const { carryOutLfdRun } = await import('@/lib/lfd/worker');
+  const { tapProcessOutput, withHangGuard } = await import('@/lib/content-runs/hang-guard');
+  // Every log line counts as progress for the content-run hang guard.
+  tapProcessOutput();
   const { threeAmQueue } = await import('@/lib/lfd/clock');
-  const { isAiEventsDay, isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
+  const { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
   const { readSlotSource } = await import('@/lib/social-hub/slots/load');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
   const { liveMemesForPost } = await import('@/lib/memes/lfd-post-live');
@@ -114,21 +142,45 @@ async function main(): Promise<void> {
   const { releaseDueLfd } = await import('@/lib/lfd/schedule');
   const aiEventsSettings = await import('@/lib/ai-events/settings');
   const aiEventsStore = await import('@/lib/ai-events/store');
-  const { carryOutAiEventsRun, withAiEventsTimeout } = await import('@/lib/ai-events/worker');
-  const { AI_EVENTS_RUN_TIMEOUT_MS, AI_EVENTS_SPINE_VERTICAL } = await import('@/lib/ai-events/config');
+  const { carryOutAiEventsRun } = await import('@/lib/ai-events/worker');
+  const { AI_EVENTS_SPINE_VERTICAL } = await import('@/lib/ai-events/config');
   const { firstAiEventsCheckAt, nextAiEventsRunAt, noonQueue } = await import('@/lib/ai-events/clock');
   const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { claimAndPublishAiEvents } = await import('@/lib/ai-events/publish');
   const { releaseDueAiEvents } = await import('@/lib/ai-events/schedule');
+  const fieldNotesSettings = await import('@/lib/field-notes/settings');
+  const fieldNotesStore = await import('@/lib/field-notes/store');
+  const { carryOutFieldNotesRun } = await import('@/lib/field-notes/worker');
+  const { FIELD_NOTES_SPINE_VERTICAL } = await import('@/lib/field-notes/config');
+  const { firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue: fieldNotesNoonQueue, refillNight: fieldNotesRefillNight } = await import('@/lib/field-notes/clock');
+  const { fillDates, leadDaysFor } = await import('@/lib/social-hub/lead');
+  const { liveFieldNotesDeps } = await import('@/lib/field-notes/live');
+  const { claimAndPublishFieldNotes } = await import('@/lib/field-notes/publish');
+  const { releaseDueFieldNotes } = await import('@/lib/field-notes/schedule');
+  const { openLiveFaceDetector, runFacesStep } = await import('@/lib/field-notes/photos/faces-worker');
+  const { PHOTO_BANK_BUCKET } = await import('@/lib/media-library/types');
   const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
   const { newAnthropic } = await import('@/lib/anthropic-client');
+  const intakeTypes = await import('@/lib/intake/types');
+  const intakeRun = await import('@/lib/intake/run');
   const query = await socialQuery();
   /** The same connection, typed for lib/lfd (it takes the hub's query shape). */
   const lfdQuery = query as unknown as HubQuery;
+  /** The same connection, typed for the central intake (object with .query). */
+  const intakeQuery: import('@/lib/intake/types').IntakeQuery = { query: (text, params) => lfdQuery(text, params) };
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
   const standDown = () => publisherOwnsPublishing(query, 'carousels');
   /** The public calendar snapshot after an AI Events run or post (plan M3). */
   const aiEventsSnapshot = liveAiEventsSnapshot(lfdQuery);
+  // LFD, AI Events and Field Notes runs only run inside this process: any still 'running' at boot died with the last one.
+  // Reaped here instead of by age, so a long live run is never failed for taking long (CI decision 2026-11-10).
+  for (const [name, store] of [['lfd', lfdStore], ['ai_events', aiEventsStore], ['field_notes', fieldNotesStore]] as const) {
+    const reaped = await store.reapRunsAtStartup(lfdQuery).catch((error) => (log(`${name}_startup_reap_failed`, { error: errorText(error) }), 0));
+    if (reaped) log(`${name}_startup_reaped`, { runs: reaped });
+  }
+  // Carousel (social.runs) runs are this daemon's children too (CI-33).
+  const carouselReaped = await runs.reapRunsAtStartup(query).catch((error) => (log('carousel_startup_reap_failed', { error: errorText(error) }), 0));
+  if (carouselReaped) log('carousel_startup_reaped', { runs: carouselReaped });
   /**
    * Targeted Revisions: the live Haiku call behind the interpreter. Its system block arrives
    * already cached (lib/revisions/interpret.ts, cachedSystemText); the client is made on first use.
@@ -154,6 +206,7 @@ async function main(): Promise<void> {
   const nextSweep = () => nextRunAt(new Date(), cfg.SOCIAL_INSIGHTS_HOUR_LOCAL, cfg.SOCIAL_INSIGHTS_MINUTE_LOCAL);
   const nextHubSweep = () => nextRunAt(new Date(), cfg.HUB_SWEEP_HOUR_LOCAL, cfg.HUB_SWEEP_MINUTE_LOCAL);
   const nextHealthReport = () => nextRunAt(new Date(), cfg.HEALTH_REPORT_HOUR_LOCAL, cfg.HEALTH_REPORT_MINUTE_LOCAL);
+  const nextIgPhotoSync = () => nextRunAt(new Date(), cfg.IG_PHOTO_SYNC_HOUR_LOCAL, cfg.IG_PHOTO_SYNC_MINUTE_LOCAL);
   const health = await import('@/lib/social-hub/health/job');
   const { explainersHubQuery } = await import('@/lib/social-hub/db');
   const { readPosting } = await import('@/lib/content-type/posting');
@@ -174,6 +227,24 @@ async function main(): Promise<void> {
     }
     await hub.finishHubRefresh(query, id, stats, failure).catch((error) => log('hub_refresh_record_failed', { error: errorText(error) }));
     log('hub_sweep_complete', { id, failure, ...(stats ? { days: stats.days, demographics: stats.demographics, onlineHours: stats.onlineHours, quota: stats.quota, errors: stats.errors.slice(0, 5) } : {}) });
+  }
+
+  /**
+   * The 3:00 AM decision (LFD-02) with each type's state (D16): whether Last Few Days or Carousels makes posts
+   * tonight. Reading the gates logs state_mismatch. Used at 3:00 and again when the run is claimed, so a queued
+   * scheduled run knows whether it makes stories or only refills the pool.
+   */
+  async function threeAmSlot(at: Date) {
+    const lfd = await lfdSettings.readLfdSettings(lfdQuery).catch((error) => {
+      log('lfd_settings_failed', { error: errorText(error) });
+      return null;
+    });
+    const carousel = await readTypeGate(lfdQuery, 'carousels', log);
+    await readTypeGate(lfdQuery, 'last_few_days', log);
+    // Template mode: the calendar says whether today is a Last Few Days day (null while legacy).
+    const today = calendarDateKey(at);
+    const plan = await slotPlan(lfdQuery, today, 1).catch(() => null);
+    return { lfd, carousel, slot: threeAmQueue(today, lfd, carousel.makes, plan ? isLfdDay(plan, today) : null) };
   }
 
   /** The daily script in a child process. Resolves with its exit code and the end of its stderr. */
@@ -220,29 +291,54 @@ async function main(): Promise<void> {
   async function carryOutRun(run: { id: string; capUsd: number; storyIds?: string[]; trigger?: string }, rerun?: { requestId: string; postId: string }): Promise<void> {
     const pinned = run.storyIds ?? [];
     let stories = pinned.length || 1;
+    let capUsd = run.capUsd;
+    /** Set when the run only refills the pool (D3, D16): it makes no story and is held to the refill cap. */
+    let refillOnly: string | null = null;
+    let refillGrant: RefillGrant | null = null;
     let movesReadAt: Date | undefined;
     let moves: { pinIds: string[]; demoteIds: string[]; archiveIds: string[]; placed: Array<readonly [string, number]> } = { pinIds: [], demoteIds: [], archiveIds: [], placed: [] };
     if (!rerun && pinned.length) {
       log('run_pinned', { runId: run.id, storyIds: pinned });
     } else if (!rerun) {
+      // A scheduled run makes stories only when tonight is Carousels' (D16: makesPosts, and not a Last Few Days day);
+      // otherwise, or when the day's quota is full, it only refills the pool (D3). A person's manual run works in every state.
+      const night = run.trigger === 'scheduled' ? await threeAmSlot(new Date()) : null;
+      const refillCap = night?.carousel.refillCapUsd ?? (await readTypeGate(lfdQuery, 'carousels', log)).refillCapUsd;
       // Daily fill (D54): what people placed for today counts toward posts_per_day; the run makes only the rest.
       const runStories = (await getSocialSetting<number>('run_stories')) ?? cfg.DEFAULT_RUN_STORIES;
       // A failed read never strands the claimed run: it makes run_stories, as before the rule.
-      const fill = await carouselFill(query).catch((error) => {
+      const fill = night && night.slot.queue !== 'carousels' ? null : await carouselFill(query).catch((error) => {
         log('fill_failed', { runId: run.id, error: errorText(error) });
         return null;
       });
       // Template mode: the day's carousel slots are the knob, so run_stories never cuts the fill.
-      stories = fill ? nightStoriesFor(fill, runStories, await readSlotSource(query)) : runStories;
-      if (fill) reportFill(fill, log, { runId: run.id, runStories, stories });
-      if (fill && stories < 1) {
-        const note = `${quotaFilledNote(fill, 'carousel')} The run made nothing new.`;
-        await runs.skipRun(query, run.id, note);
-        log('run_skipped', { runId: run.id, reason: 'quota_filled', note });
-        return;
-      }
-      // Shared queue: the 3 AM run makes tonight's carousel promote first and sinks demoted stories (a failed read: no moves).
-      if (run.trigger === 'scheduled') {
+      const fillStories = fill ? nightStoriesFor(fill, runStories, await readSlotSource(query)) : runStories;
+      if (fill) reportFill(fill, log, { runId: run.id, runStories, stories: fillStories });
+      const plan = carouselNight({
+        slot: night?.slot ?? null,
+        fill: fill ? { stories: fillStories, note: `${quotaFilledNote(fill, 'carousel')} The run made nothing new.` } : null,
+        runStories,
+        runCapUsd: run.capUsd,
+        refillCapUsd: refillCap,
+      });
+      stories = plan.stories;
+      capUsd = plan.capUsd;
+      refillOnly = plan.refillOnly;
+      if (refillOnly) {
+        log('run_refill_only', { runId: run.id, reason: refillOnly, capUsd });
+        // The nightly total of all refills (D19), for the clock's runs: the cap is cut to what is left of it; no room
+        // skips tonight's refill (the pool refills next night).
+        if (run.trigger === 'scheduled') {
+          refillGrant = await beginRefill(lfdQuery, 'carousels', capUsd, { ref: `run:${run.id}`, log });
+          if (!refillGrant) {
+            await query(`UPDATE social.runs SET status = 'skipped', finished_at = now(), stop_reason = $2 WHERE id = $1 AND status = 'running'`, [run.id, `refill-total-capped: ${refillOnly}`.slice(0, 2000)]).catch((error) => log('run_note_failed', { runId: run.id, error: errorText(error) }));
+            log('run_refill_complete', { runId: run.id, status: 'skipped', stopReason: 'refill-total-capped' });
+            return;
+          }
+          capUsd = refillGrant.capUsd;
+        }
+      } else if (run.trigger === 'scheduled') {
+        // Shared queue: the 3 AM run makes tonight's carousel promote first and sinks demoted stories (a failed read: no moves).
         movesReadAt = new Date();
         const tonight = await readTonightMoves(query, 'carousels');
         moves = {
@@ -254,14 +350,24 @@ async function main(): Promise<void> {
         if (moves.pinIds.length || moves.demoteIds.length || moves.archiveIds.length || moves.placed.length) log('run_moves', { runId: run.id, ...moves });
       }
     }
-    log('run_started', { runId: run.id, stories, capUsd: run.capUsd, ...(rerun ? { rerunOf: rerun.postId, rerunRequest: rerun.requestId } : {}) });
-    const { code, tail } = await runDailyScript(run.id, stories, run.capUsd, rerun?.postId, pinned, moves);
+    log('run_started', { runId: run.id, stories, capUsd, ...(refillOnly ? { refillOnly: true } : {}), ...(rerun ? { rerunOf: rerun.postId, rerunRequest: rerun.requestId } : {}) });
+    const { code, tail } = await runDailyScript(run.id, stories, capUsd, rerun?.postId, pinned, moves);
     // The script finishes the run itself; one still `running` means it died first.
     await runs.failRun(query, run.id, `The daily script exited (${code}) before finishing the run. ${tail}`);
-    const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;
+    const done = (await query(`SELECT status, stop_reason FROM social.runs WHERE id = $1`, [run.id])).rows[0];
+    const status = done?.status;
     log('run_complete', { runId: run.id, exitCode: code, status });
+    if (refillOnly) {
+      // The refill's spend stays on the run (status as the script left it, so the cost pages count it); its reason says why no story.
+      if (done?.stop_reason === 'cost-cap') logRefillCapped(log, 'carousels', { capUsd, step: 'selection', runId: run.id });
+      else if (status !== 'failed') await query(`UPDATE social.runs SET stop_reason = $2 WHERE id = $1`, [run.id, `refill-only: ${refillOnly}`.slice(0, 2000)]).catch((error) => log('run_note_failed', { runId: run.id, error: errorText(error) }));
+      const spent = Number((await query(`SELECT total_usd FROM social.runs WHERE id = $1`, [run.id]).catch(() => ({ rows: [] as any[] }))).rows[0]?.total_usd ?? capUsd);
+      await settleRefill(lfdQuery, refillGrant, Number.isFinite(spent) ? spent : capUsd, log);
+      log('run_refill_complete', { runId: run.id, status, stopReason: done?.stop_reason ?? null });
+      return;
+    }
     // The scheduled night ran to a finish: hand placements are used up and the stories compete by score again (a run that died keeps them).
-    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed' && QUEUE_LIVE.has('carousels')) await finishNightPlacements(query, 'carousels', undefined, movesReadAt);
+    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed') await finishNightPlacements(query, 'carousels', undefined, movesReadAt);
 
     for (const post of await runs.postsMissingSlides(query, run.id)) {
       try {
@@ -274,8 +380,9 @@ async function main(): Promise<void> {
       }
     }
 
-    // A rerun's new version waits in Content ready for a person; only the nightly run fills today's windows.
-    if (!rerun && (await publishingLive())) {
+    // A rerun's new version waits in Content ready for a person; only the nightly run fills today's windows, in Approval or
+    // Live (holdsSlots, contract §4.3). Only Live posts them: the release below is gated on Live (D16).
+    if (!rerun && (await readTypeGate(lfdQuery, 'carousels', log)).holds) {
       for (const scheduled of await scheduleRunPosts(query, run.id)) {
         log('schedule', scheduled.scheduled ? { runId: run.id, publishAt: scheduled.publishAt } : { runId: run.id, note: scheduled.note });
       }
@@ -292,6 +399,8 @@ async function main(): Promise<void> {
     if (force || lfd.considered > 0) log('lfd_insights_complete', { ...lfd });
     const aiEvents = await pollCarouselInsights(query, client, new Date(), 200, 'ai_events');
     if (force || aiEvents.considered > 0) log('ai_events_insights_complete', { ...aiEvents });
+    const fieldNotes = await pollCarouselInsights(query, client, new Date(), 200, 'field_notes');
+    if (force || fieldNotes.considered > 0) log('field_notes_insights_complete', { ...fieldNotes });
   }
 
   // Targeted Revisions left `running` by the previous process (deploy, OOM, systemd restart) end
@@ -303,6 +412,7 @@ async function main(): Promise<void> {
     let sweepAt = nextSweep();
     let hubSweepAt = nextHubSweep();
     let healthAt = nextHealthReport();
+    let igPhotoSyncAt = nextIgPhotoSync();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
     let lastRevisionsError: string | null = null;
@@ -310,41 +420,101 @@ async function main(): Promise<void> {
     // Started after today's noon: check once now, so a Sunday-afternoon restart still runs the week.
     let aiEventsAt = firstAiEventsCheckAt(new Date());
     let lastAiEventsError: string | null = null;
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
+    // The same for Field Notes' 2:00 AM check (auto_run ships off, so it queues nothing until a person turns it on).
+    let fieldNotesAt = firstFieldNotesCheckAt(new Date());
+    // Central intake (night schedule v2): main at 12:00 AM, top-up at 2:40 AM, Jev only. A worker
+    // that starts before 2:00 AM checks the main run right away; mainRanToday keeps it to once a day.
+    const nextIntakeMain = () => nextRunAt(new Date(), intakeTypes.INTAKE_MAIN_HOUR_NY, 0);
+    const nextIntakeTopup = () => nextRunAt(new Date(), intakeTypes.INTAKE_TOPUP_HOUR_NY, intakeTypes.INTAKE_TOPUP_MINUTE_NY);
+    const nyHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+    let intakeMainAt = nyHour < intakeTypes.INTAKE_TOPUP_HOUR_NY ? new Date() : nextIntakeMain();
+    let intakeTopupAt = nextIntakeTopup();
+    let lastFieldNotesError: string | null = null;
+    let lastFieldNotesFacesError: string | null = null;
+    const photoBank = mediaBucket(PHOTO_BANK_BUCKET);
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextIntakeMainAt: intakeMainAt.toISOString(), nextIntakeTopupAt: intakeTopupAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), nextIgPhotoSyncAt: igPhotoSyncAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
+      if (Date.now() >= igPhotoSyncAt.getTime()) {
+        // 11:45 PM: the Instagram photo read (CI-32). Today's published posts' photos go into the 20-day ledger
+        // before the midnight builds pick. Reads Instagram only, no model call; a failure only logs.
+        if (!metaConfigured()) {
+          log('ig_photo_sync_skipped', { reason: 'META_USER_ACCESS_TOKEN / META_IG_BUSINESS_ACCOUNT_ID not set' });
+        } else {
+          const { liveIgSyncDeps, syncPublishedPhotos } = await import('@/lib/photos/ig-sync');
+          // Capped so it can't hold up the midnight builds; a cut-off read resumes the next night (ig-sync.ts).
+          const out = await withHangGuard(
+            liveIgSyncDeps(query, (line) => log('ig_photo_sync_note', { line }))
+              .then(syncPublishedPhotos)
+              .then(({ matches: _matches, ...report }) => ({ ok: true as const, report }))
+              .catch((error) => ({ ok: false as const, error: errorText(error) })),
+            { backstopMs: cfg.IG_PHOTO_SYNC_TIMEOUT_MS, onHang: (reason) => ({ ok: false as const, error: `stopped (${reason}); resumes next night` }) },
+          );
+          if (out.ok) log('ig_photo_sync_complete', out.report);
+          else log('ig_photo_sync_failed', { error: out.error });
+        }
+        igPhotoSyncAt = nextIgPhotoSync();
+        continue;
+      }
+
+      if (Date.now() >= intakeMainAt.getTime()) {
+        // 12:00 AM: the central intake's main run (fetch, group, score; Jev only, $0.50 cap). Never twice a day.
+        try {
+          if (await intakeRun.mainRanToday(intakeQuery, new Date())) {
+            log('intake_main_skipped', { reason: 'main already ran today' });
+          } else {
+            const { runId, record } = await intakeRun.runIntake(await intakeRun.liveIntakeDeps(intakeQuery, 'main'), 'main');
+            log('intake_main_complete', { runId, orders: record.orders, usd: record.usd, stopReason: record.stopReason ?? null, grouping: record.grouping });
+          }
+        } catch (error) {
+          log('intake_main_failed', { error: errorText(error) });
+        }
+        intakeMainAt = nextIntakeMain();
+        continue;
+      }
+
+      if (Date.now() >= intakeTopupAt.getTime()) {
+        // 2:40 AM: the intake top-up (fresh news for the 3:00 pair; $0.15 cap).
+        try {
+          const { runId, record } = await intakeRun.runIntake(await intakeRun.liveIntakeDeps(intakeQuery, 'topup'), 'topup');
+          log('intake_topup_complete', { runId, orders: record.orders, usd: record.usd, stopReason: record.stopReason ?? null, grouping: record.grouping });
+        } catch (error) {
+          log('intake_topup_failed', { error: errorText(error) });
+        }
+        intakeTopupAt = nextIntakeTopup();
+        continue;
+      }
+
       if (Date.now() >= runAt.getTime()) {
-        // 3:00 AM: on a Last Few Days day with its auto_run on, its run takes the carousel run's slot (LFD-02).
-        const lfd = await lfdSettings.readLfdSettings(lfdQuery).catch((error) => {
-          log('lfd_settings_failed', { error: errorText(error) });
-          return null;
+        // 3:00 AM: on a Last Few Days day with Last Few Days making posts, its run takes the carousel run's slot (LFD-02).
+        const { lfd, carousel, slot } = await threeAmSlot(new Date());
+        // The carousel run is queued every night too (D3, D16): it makes stories on Carousels' nights and only refills the
+        // pool otherwise (carryOutRun decides again at claim time), so the quota or a pause never leaves the pool stale.
+        const making = slot.queue === 'carousels';
+        const req = threeAmRequests(slot, {
+          lfdRunCapUsd: lfd?.runCapUsd ?? null,
+          carouselRunCapUsd: making ? (await getSocialSetting<number>('run_cap_usd')) ?? cfg.DEFAULT_RUN_CAP_USD : 0,
+          refillCapUsd: carousel.refillCapUsd,
         });
-        // Template mode: the calendar says whether today is a Last Few Days day (null while legacy).
-        const today = calendarDateKey(new Date());
-        const plan = await slotPlan(lfdQuery, today, 1).catch(() => null);
-        const slot = threeAmQueue(today, lfd, await autoRunOn().catch(() => false), plan ? isLfdDay(plan, today) : null);
-        if (slot.queue === 'last_few_days' && lfd?.runCapUsd != null) {
+        if (req.lfd && lfd?.runCapUsd != null) {
           const id = await lfdStore.requestRun(lfdQuery, 'scheduled', lfd.runCapUsd).catch((error) => {
             log('lfd_request_failed', { error: errorText(error) });
             return null;
           });
           log('lfd_run_requested', { runId: id, trigger: 'scheduled' });
-        } else if (slot.queue === 'carousels') {
-          const capUsd = (await getSocialSetting<number>('run_cap_usd')) ?? cfg.DEFAULT_RUN_CAP_USD;
-          const id = await runs.requestRun(query, 'scheduled', { capUsd, hookPass: true }).catch((error) => {
-            log('request_failed', { error: errorText(error) });
-            return null;
-          });
-          log('run_requested', { runId: id, trigger: 'scheduled' });
-        } else {
-          log('run_skipped', { reason: slot.reason });
         }
+        const id = await runs.requestRun(query, 'scheduled', { capUsd: req.carousel.capUsd, hookPass: true }).catch((error) => {
+          log('request_failed', { error: errorText(error) });
+          return null;
+        });
+        log('run_requested', { runId: id, trigger: 'scheduled', mode: req.carousel.mode, state: carousel.state, ...(making ? {} : { reason: req.carousel.reason }) });
         runAt = nextRun();
         continue;
       }
 
       if (Date.now() >= aiEventsAt.getTime()) {
-        // 12:00 PM: on an AI Events day (Sunday) with its auto_run on, the week's run is queued (AE-08).
+        // 12:00 PM: on an AI Events day (Sunday) the week's run is queued in every state (AE-08; D3, D16): the ranking is the
+        // refill. It renders the posts only while AI Events makes posts; otherwise it ranks under the refill cap.
         const ae = await aiEventsSettings.readAiEventsSettings(lfdQuery).catch((error) => {
           log('ai_events_settings_failed', { error: errorText(error) });
           return null;
@@ -353,16 +523,66 @@ async function main(): Promise<void> {
         const aeToday = calendarDateKey(new Date());
         const aePlan = await slotPlan(lfdQuery, aeToday, 1).catch(() => null);
         const noon = noonQueue(new Date(), ae, aePlan ? isAiEventsDay(aePlan, aeToday) : null);
-        if (noon.queue && ae?.runCapUsd != null) {
-          const id = await aiEventsStore.requestRun(lfdQuery, 'scheduled', ae.runCapUsd).catch((error) => {
+        if (noon.queue) {
+          const aeGate = await readTypeGate(lfdQuery, 'ai_events', log);
+          const aeCap = noon.make && ae?.runCapUsd != null ? ae.runCapUsd : aeGate.refillCapUsd;
+          const id = await aiEventsStore.requestRun(lfdQuery, 'scheduled', aeCap).catch((error) => {
             log('ai_events_request_failed', { error: errorText(error) });
             return null;
           });
-          log('ai_events_run_requested', { runId: id, trigger: 'scheduled' });
+          log('ai_events_run_requested', { runId: id, trigger: 'scheduled', mode: noon.make ? 'make' : 'refill', reason: noon.reason });
         } else {
           log('ai_events_run_skipped', { reason: noon.reason });
         }
         aiEventsAt = nextAiEventsRunAt(new Date());
+        continue;
+      }
+
+      if (Date.now() >= fieldNotesAt.getTime()) {
+        // 2:00 AM: while Field Notes makes posts (auto_run on), a run is queued for the earliest unfilled Field Notes day in
+        // the next 2 days (Bald-Eagle D4, lib/field-notes/clock.ts); it refills the tip pool first. Otherwise a Field Notes
+        // day queues a refill-only run, in every state (D3, D16).
+        const fn = await fieldNotesSettings.readFieldNotesSettings(lfdQuery).catch((error) => {
+          log('field_notes_settings_failed', { error: errorText(error) });
+          return null;
+        });
+        // Never twice a night (a restart after the check): a scheduled run already queued today says no.
+        const fnToday = await fieldNotesStore.scheduledRunToday(lfdQuery, calendarDateKey(new Date())).catch((error) => {
+          log('field_notes_today_check_failed', { error: errorText(error) });
+          return null;
+        });
+        // Template mode: the calendar says which dates in the fill window have a Field Notes slot (null while legacy).
+        const fnDate = calendarDateKey(new Date());
+        const fnDates = fillDates(fnDate, leadDaysFor('field_notes'));
+        const fnPlan = await slotPlan(lfdQuery, fnDate, 1 + leadDaysFor('field_notes')).catch(() => null);
+        // Dates in the window that already have a post, booking or queued run: skipped (one post per Field Notes day).
+        const fnFilled = await fieldNotesStore.fieldNotesFilledDates(lfdQuery, fnDates).catch((error) => {
+          log('field_notes_filled_check_failed', { error: errorText(error) });
+          return new Set(fnDates);
+        });
+        const fnNoon = fieldNotesNoonQueue(new Date(), fn, fnToday, fnPlan ? (d: string) => isFieldNotesDay(fnPlan, d) : null, fnFilled);
+        if (fnNoon.queue && fn?.runCapUsd != null) {
+          const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fn.runCapUsd, { nyDate: fnNoon.target ?? null }).catch((error) => {
+            log('field_notes_request_failed', { error: errorText(error) });
+            return null;
+          });
+          log('field_notes_run_requested', { runId: id, trigger: 'scheduled', nyDate: fnNoon.target });
+        } else {
+          log('field_notes_run_skipped', { reason: fnNoon.reason });
+          // No post run tonight (paused, or the days ahead are filled): a Field Notes day still refills its tip pool (D3, D16).
+          const refill = fieldNotesRefillNight(new Date(), fn, fnToday, fnPlan ? (d: string) => isFieldNotesDay(fnPlan, d) : null);
+          if (refill.queue) {
+            const fnGate = await readTypeGate(lfdQuery, 'field_notes', log);
+            const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fnGate.refillCapUsd, { refillOnly: true }).catch((error) => {
+              log('field_notes_request_failed', { error: errorText(error) });
+              return null;
+            });
+            log('field_notes_run_requested', { runId: id, trigger: 'scheduled', mode: 'refill', reason: refill.reason });
+          } else {
+            log('field_notes_refill_skipped', { reason: refill.reason });
+          }
+        }
+        fieldNotesAt = nextFieldNotesRunAt(new Date());
         continue;
       }
 
@@ -426,10 +646,10 @@ async function main(): Promise<void> {
       });
       if (lfdClaimed) {
         // The engine is built with the cap carryOutLfdRun read and validated (lfd.settings.run_cap_usd).
-        // A hung run must not stall this loop (3:00, publishing, insights, hub sweeps): past LFD_RUN_TIMEOUT_MS
-        // it is failed and the loop goes on. The cut-off promise is not cancelled and may keep running in the
-        // background (accepted; real runs take 3–8 minutes).
-        const out = await withLfdTimeout(
+        // Long runs are normal and never cut off (CI decision, 2026-11-10). Only a HUNG run is failed, so it can't
+        // stall this loop (3:00, publishing, insights, hub sweeps): no output for RUN_QUIET_LIMIT_MS (45 min), or the
+        // 12 h backstop (lib/content-runs/hang-guard.ts). The hung promise is not cancelled.
+        const out = await withHangGuard(
           carryOutLfdRun(
             {
               query: lfdQuery,
@@ -441,11 +661,12 @@ async function main(): Promise<void> {
             },
             lfdClaimed,
           ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) })),
-          LFD_RUN_TIMEOUT_MS,
-          async () => {
-            log('lfd_run_timeout', { runId: lfdClaimed.id });
-            await lfdStore.failRun(lfdQuery, lfdClaimed.id, 'timed out after 30 minutes').catch((error) => log('lfd_fail_failed', { runId: lfdClaimed.id, error: errorText(error) }));
-            return { runId: lfdClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          {
+            onHang: async (reason) => {
+              log('lfd_run_hung', { runId: lfdClaimed.id, reason });
+              await lfdStore.failRun(lfdQuery, lfdClaimed.id, reason).catch((error) => log('lfd_fail_failed', { runId: lfdClaimed.id, error: errorText(error) }));
+              return { runId: lfdClaimed.id, status: 'failed' as const, note: reason };
+            },
           },
         );
         log('lfd_run_result', { ...out });
@@ -461,8 +682,8 @@ async function main(): Promise<void> {
         return null;
       });
       if (aeClaimed) {
-        // Past AI_EVENTS_RUN_TIMEOUT_MS the run is failed and the loop goes on (the cut-off promise is not cancelled).
-        const out = await withAiEventsTimeout(
+        // Never cut off for length; only a hung run (no progress for 45 min, or the 12 h backstop) is failed.
+        const out = await withHangGuard(
           carryOutAiEventsRun(
             {
               query: lfdQuery,
@@ -473,14 +694,47 @@ async function main(): Promise<void> {
             },
             aeClaimed,
           ).catch((error) => ({ runId: aeClaimed.id, status: 'failed' as const, note: errorText(error) })),
-          AI_EVENTS_RUN_TIMEOUT_MS,
-          async () => {
-            log('ai_events_run_timeout', { runId: aeClaimed.id });
-            await aiEventsStore.failRun(lfdQuery, aeClaimed.id, 'timed out after 30 minutes').catch((error) => log('ai_events_fail_failed', { runId: aeClaimed.id, error: errorText(error) }));
-            return { runId: aeClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          {
+            onHang: async (reason) => {
+              log('ai_events_run_hung', { runId: aeClaimed.id, reason });
+              await aiEventsStore.failRun(lfdQuery, aeClaimed.id, reason).catch((error) => log('ai_events_fail_failed', { runId: aeClaimed.id, error: errorText(error) }));
+              return { runId: aeClaimed.id, status: 'failed' as const, note: reason };
+            },
           },
         );
         log('ai_events_run_result', { ...out });
+        continue;
+      }
+
+      // Field Notes runs (the noon clock, or the hub's Generate and Rebuild post), after AI Events' and in this same process.
+      const fnClaimed = await fieldNotesStore.claimRun(lfdQuery).catch((error) => {
+        // Logged once per distinct error (e.g. before the field_notes schema is applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastFieldNotesError) log('field_notes_claim_failed', { error: text });
+        lastFieldNotesError = text;
+        return null;
+      });
+      if (fnClaimed) {
+        // Never cut off for length; only a hung run (no progress for 45 min, or the 12 h backstop) is failed.
+        const out = await withHangGuard(
+          carryOutFieldNotesRun(
+            {
+              query: lfdQuery,
+              now: () => new Date(),
+              log,
+              engine: (_run, capUsd) => liveFieldNotesDeps(lfdQuery, { capUsd }),
+            },
+            fnClaimed,
+          ).catch((error) => ({ runId: fnClaimed.id, status: 'failed' as const, note: errorText(error) })),
+          {
+            onHang: async (reason) => {
+              log('field_notes_run_hung', { runId: fnClaimed.id, reason });
+              await fieldNotesStore.failRun(lfdQuery, fnClaimed.id, reason).catch((error) => log('field_notes_fail_failed', { runId: fnClaimed.id, error: errorText(error) }));
+              return { runId: fnClaimed.id, status: 'failed' as const, note: reason };
+            },
+          },
+        );
+        log('field_notes_run_result', { ...out });
         continue;
       }
 
@@ -513,14 +767,15 @@ async function main(): Promise<void> {
         continue;
       }
 
-      if (!(await standDown()) && (await publishingLive().catch(() => false))) {
-        const due = await releaseDueSchedules(query, { requireApproval: await requireApproval() }).catch((error) => {
+      // Posting only while Live (D16), and only approved posts: require_approval is never read as off.
+      if (!(await standDown()) && (await readTypeGate(lfdQuery, 'carousels', log)).posts) {
+        const due = await releaseDueSchedules(query, { requireApproval: true }).catch((error) => {
           log('schedule_release_failed', { error: errorText(error) });
           return 0;
         });
         if (due > 0) log('schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('publish_failed', { error: errorText(error) });
             return null;
           });
@@ -531,16 +786,15 @@ async function main(): Promise<void> {
         }
       }
 
-      // Last Few Days posts the same way while the single publisher doesn't drive it (D40, D41).
-      const lfdNow = await lfdSettings.readLfdSettings(lfdQuery).catch(() => null);
-      if (lfdNow?.publishingLive && !(await publisherOwnsPublishing(query, 'last_few_days'))) {
-        const due = await releaseDueLfd(query, { requireApproval: lfdNow.requireApproval }).catch((error) => {
+      // Last Few Days posts the same way while the single publisher doesn't drive it (D40, D41), only while Live (D16).
+      if ((await readTypeGate(lfdQuery, 'last_few_days', log)).posts && !(await publisherOwnsPublishing(query, 'last_few_days'))) {
+        const due = await releaseDueLfd(query, { requireApproval: true }).catch((error) => {
           log('lfd_schedule_release_failed', { error: errorText(error) });
           return 0;
         });
         if (due > 0) log('lfd_schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('lfd_publish_failed', { error: errorText(error) });
             return null;
           });
@@ -552,16 +806,15 @@ async function main(): Promise<void> {
       }
 
       // AI Events posts the same way while the single publisher doesn't drive it; a post republishes the calendar snapshot.
-      const aeNow = await aiEventsSettings.readAiEventsSettings(lfdQuery).catch(() => null);
-      if (aeNow?.publishingLive && !(await publisherOwnsPublishing(query, AI_EVENTS_SPINE_VERTICAL))) {
-        const due = await releaseDueAiEvents(query, { requireApproval: aeNow.requireApproval }).catch((error) => {
+      if ((await readTypeGate(lfdQuery, 'ai_events', log)).posts && !(await publisherOwnsPublishing(query, AI_EVENTS_SPINE_VERTICAL))) {
+        const due = await releaseDueAiEvents(query, { requireApproval: true }).catch((error) => {
           log('ai_events_schedule_release_failed', { error: errorText(error) });
           return 0;
         });
         if (due > 0) log('ai_events_schedule_due', { released: due });
         if (metaConfigured()) {
           const published = await claimAndPublishAiEvents(
-            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) },
+            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} },
             { snapshot: aiEventsSnapshot, log },
           ).catch((error) => {
             log('ai_events_publish_failed', { error: errorText(error) });
@@ -572,6 +825,39 @@ async function main(): Promise<void> {
             continue;
           }
         }
+      }
+
+      // Field Notes posts the same way while the single publisher doesn't drive it.
+      if ((await readTypeGate(lfdQuery, 'field_notes', log)).posts && !(await publisherOwnsPublishing(query, FIELD_NOTES_SPINE_VERTICAL))) {
+        const due = await releaseDueFieldNotes(query, { requireApproval: true }).catch((error) => {
+          log('field_notes_schedule_release_failed', { error: errorText(error) });
+          return 0;
+        });
+        if (due > 0) log('field_notes_schedule_due', { released: due });
+        if (metaConfigured()) {
+          const published = await claimAndPublishFieldNotes({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
+            log('field_notes_publish_failed', { error: errorText(error) });
+            return null;
+          });
+          if (published) {
+            log('field_notes_publish_complete', { ...published });
+            continue;
+          }
+        }
+      }
+
+      // Field Notes face check: new uploads only (finalize queues them 'pending'; Vercel has no Chromium). Up to one
+      // batch per poll, one shared browser opened only when a photo was claimed; never a sweep of older pool rows.
+      const fnFaces = await runFacesStep({ db: query as never, download: (p: string) => photoBank.download(p), openDetector: openLiveFaceDetector }).catch((error) => {
+        // Logged once per distinct error (e.g. before the faces columns are applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastFieldNotesFacesError) log('field_notes_faces_failed', { error: text });
+        lastFieldNotesFacesError = text;
+        return null;
+      });
+      if (fnFaces && fnFaces.claimed > 0) {
+        lastFieldNotesFacesError = null;
+        log('field_notes_faces_batch', { ...fnFaces });
       }
 
       if (Date.now() - lastInsights >= INSIGHTS_EVERY_MS && !(await standDown())) {

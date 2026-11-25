@@ -1,0 +1,36 @@
+<template>
+  <div id="root" data-composition-id="13-close" data-width="1080" data-height="1920" data-start="0" data-duration="2.5">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      #root { position: absolute; inset: 0; container-type: size; overflow: hidden; }
+      #f13_close-world { position: absolute; inset: 0; overflow: hidden; background: #0D0B0A; }
+    </style>
+    <script>
+      window.__hf = window.__hf || {};
+      window.__hf.buildReady = window.__hf.buildReady || {};
+      window.__hf.buildReady['13-close'] = new Promise(function (resolve) { window.__ready_f13_close = resolve; });
+    </script>
+    <div id="f13_close-world" class="clip" data-start="0" data-duration="2.5" data-track-index="0" data-layout-allow-overflow></div>
+    <script type="module">
+      import * as nk from './assets/kit/components/index.js';
+      import scene from './assets/frames/13-close.js';
+      nk.installKit(document, { fonts: 'assets/fonts/' });
+      const host = document.getElementById('f13_close-world');
+      // The reel's first frame: its main picture is on from the first instant (anchor.js isOpening).
+      if (false) host.setAttribute('data-opening', '');
+      const ctx = Object.assign({"id":"13-close","duration":2.5,"treatment":"close","timing":{"frame":13,"id":"13-close","duration":2.5,"voice_end":2.169,"hold":0.331,"words":[{"text":"Should","start":0.035,"end":0.178},{"text":"Microsoft","start":0.428,"end":0.678},{"text":"have","start":0.749,"end":0.821},{"text":"walked","start":0.892,"end":1.107},{"text":"away","start":1.249,"end":1.392},{"text":"from","start":1.464,"end":1.535},{"text":"ICE?","start":1.607,"end":2.035}],"lines":[]},"media":{},"objects":{"drawing":{},"person-sketch":{}}}, { nk, assets: 'assets/' });
+      await Promise.all(["700 40px \"Pragmatica Extended\"","400 40px Roboto","500 40px Roboto","700 40px Roboto","400 40px \"Patrick Hand\"","700 40px \"Playfair Display\"","400 40px \"Courier Prime\"","400 40px Tinos","700 40px Tinos","italic 400 40px Tinos"].map((f) => document.fonts.load(f).catch(() => null)));
+      scene.build(host, ctx);
+      await nk.settleImages(host, ctx.assets);
+      // One clock (seek-safe): a single tween drives t; the frame is a pure function of t.
+      const draw = (t) => { scene.render(t); };
+      const clock = { t: 0 };
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo(clock, { t: 0 }, { t: 2.5, duration: 2.5, ease: 'none', onUpdate: () => draw(clock.t) }, 0);
+      draw(0);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['13-close'] = tl;
+      window.__ready_f13_close();
+    </script>
+  </div>
+</template>

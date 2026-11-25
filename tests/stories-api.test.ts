@@ -8,7 +8,7 @@ import test from 'node:test';
 import { ApiError, approve, generate, listView, monthOverview, publishNow, regenerate, reject, setDetail, updateSeries } from '@/lib/stories/api';
 import { claimNextRequested, markReady, recordCost, recordFramePublished, recordInsights, saveBuild } from '@/lib/stories/repository';
 import { storiesRoute } from '@/lib/stories/route';
-import { loadSettings } from '@/lib/stories/settings';
+import { loadSettings, saveSeriesSetting, saveTypeSetting } from '@/lib/stories/settings';
 
 import { harnessDb } from './stories-harness';
 
@@ -16,7 +16,7 @@ const NOW = new Date('2026-10-08T16:00:00Z');
 
 async function readySet(slotMinute: number | null = null) {
   const { db } = await harnessDb();
-  const { set } = await generate(db, 'free_vs_paid', 'lucas@x', NOW, slotMinute);
+  const { set } = await generate(db, 'real_or_ai', 'lucas@x', NOW, slotMinute);
   await claimNextRequested(db);
   await saveBuild(db, set.id, { payload: {}, frames: [{ seq: 1, role: 'intro', backdrop: 'black', copy: { role: 'intro' } }, { seq: 2, role: 'paid', backdrop: 'black', copy: { role: 'paid', tool: 'P', price: '$1', period: 'a month', tease: 't' } }], candidates: [{ origin: 'generated', ref: 'p|f', score: 0.8, chosen: true }] });
   await markReady(db, set.id, false);
@@ -42,8 +42,10 @@ test('Generate: today (New York), one live set per series per day, unknown or di
   assert.equal(a.set.style, 'polished');
   assert.equal((await generate(db, 'morning_download', 'lucas@x', NOW)).created, false);
   await assert.rejects(generate(db, 'reels', 'x'), (e: ApiError) => e.status === 400);
-  await updateSeries(db, { series: 'guess_the_number', enabled: false }, 'lucas@x');
-  await assert.rejects(generate(db, 'guess_the_number', 'x', NOW), (e: ApiError) => e.status === 409);
+  // Guess the Number is retired (AT-14): not requestable. A disabled series is refused with 409.
+  await assert.rejects(generate(db, 'guess_the_number', 'x', NOW), (e: ApiError) => e.status === 400);
+  await updateSeries(db, { series: 'ai_trivia', enabled: false }, 'lucas@x');
+  await assert.rejects(generate(db, 'ai_trivia', 'x', NOW), (e: ApiError) => e.status === 409);
 });
 
 test('Approve, Reject with tags, Regenerate, Publish now', async () => {
@@ -53,6 +55,11 @@ test('Approve, Reject with tags, Regenerate, Publish now', async () => {
   const detail = await setDetail(db, id);
   assert.equal(detail.candidates.length, 1);
 
+  // Publish now posts only for a Live type (D16): refused, and nothing changes, until Real or AI? is Live.
+  await assert.rejects(publishNow(db, id, NOW), (e: ApiError) => e.status === 409 && /isn’t Live/.test(e.message));
+  assert.equal((await setDetail(db, id)).set.status, 'ready');
+  await saveSeriesSetting(db, 'real_or_ai', { auto: true });
+  await saveTypeSetting(db, 'real_or_ai', { publishingLive: true });
   const s = await publishNow(db, id, NOW);
   assert.equal(s.status, 'scheduled');
   assert.equal(new Date(s.publish_at!).toISOString(), NOW.toISOString());
@@ -75,7 +82,7 @@ test('Regenerate keeps the set\'s slot (R28); a legacy set regenerates before th
   const again = await regenerate(db, id, 'lucas@x');
   assert.equal(again.created, true);
   assert.equal(again.set.slot_minute, 510);
-  assert.equal(again.set.series, 'free_vs_paid');
+  assert.equal(again.set.series, 'real_or_ai');
 
   const { db: old, id: oldId } = await readySet();
   await old.query(`ALTER TABLE stories.sets DROP COLUMN slot_minute CASCADE`);
@@ -86,9 +93,9 @@ test('Regenerate keeps the set\'s slot (R28); a legacy set regenerates before th
 
 test('Settings: auto needs confirmation; history shows completion and early exits', async () => {
   const { db, id } = await readySet();
-  await assert.rejects(updateSeries(db, { series: 'free_vs_paid', auto: true }, 'l'), /needs confirmation/);
-  await updateSeries(db, { series: 'free_vs_paid', auto: true, confirm: true }, 'l');
-  assert.equal((await loadSettings(db)).series.free_vs_paid.auto, true);
+  await assert.rejects(updateSeries(db, { series: 'real_or_ai', auto: true }, 'l'), /needs confirmation/);
+  await updateSeries(db, { series: 'real_or_ai', auto: true, confirm: true }, 'l');
+  assert.equal((await loadSettings(db)).series.real_or_ai.auto, true);
 
   await db.query(`UPDATE stories.sets SET status = 'published' WHERE id = $1`, [id]);
   const frames = (await db.query<{ id: string }>(`SELECT id FROM stories.frames WHERE set_id = $1 ORDER BY seq`, [id])).rows;
@@ -99,6 +106,8 @@ test('Settings: auto needs confirmation; history shows completion and early exit
   const [h] = await listView(db, 'history');
   assert.deepEqual(h!.insights, { completion: 0.75, exitsFirst3: 15, replies: 2, reachFirst: 200 });
   await recordCost(db, { setId: id, vendor: 'anthropic', component: 'md-headlines@1', usd: 0.05 });
+  // cost_events.created_at defaults to the real now(): put it on the test's clock, or the month reads empty outside October.
+  await db.query(`UPDATE stories.cost_events SET created_at = $1`, [NOW]);
   const m = await monthOverview(db, NOW);
   assert.equal(m.month, '2026-10');
   assert.equal(m.total, 0.05);

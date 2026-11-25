@@ -1,16 +1,13 @@
 'use server';
 
 import { dbQuery } from '@/lib/db';
+import { activityEntry, iso, type ActivityRow } from '@/lib/trello/card-details';
 import { ensureTrelloProfile } from '@/lib/trello/ensure-profile';
 import { hueFromString, requireTrelloSession } from '@/lib/trello/session';
 import type {
   ActivityEntry,
-  Attachment,
   Board,
   Card,
-  Checklist,
-  ChecklistItem,
-  Comment,
   List,
   User,
   UserProfile,
@@ -31,11 +28,6 @@ export type LoadedWorkspace = {
   favoriteBoardIds: string[];
   readNotificationIds: string[];
 };
-
-function iso(value: Date | string | null | undefined): string {
-  if (!value) return new Date().toISOString();
-  return value instanceof Date ? value.toISOString() : String(value);
-}
 
 function isoDate(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -130,43 +122,36 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
   const cardTrackersRowsQuery = dbQuery<{ card_id: string; user_id: string }>(
     'SELECT card_id, user_id FROM boards.card_trackers',
   );
-  const checklistsRowsQuery = dbQuery<{
-    id: string;
-    card_id: string;
-    title: string;
-    position: number;
-  }>('SELECT id, card_id, title, position FROM boards.checklists ORDER BY position');
-  const checklistItemsRowsQuery = dbQuery<{
-    id: string;
-    checklist_id: string;
-    text: string;
-    completed: boolean;
-    position: number;
-    due_date: Date | null;
-  }>('SELECT id, checklist_id, text, completed, position, due_date FROM boards.checklist_items ORDER BY position');
-  const commentsRowsQuery = dbQuery<{
-    id: string;
-    card_id: string;
-    user_id: string;
-    body: string;
-    created_at: Date;
-  }>('SELECT id, card_id, user_id, body, created_at FROM boards.comments WHERE deleted_at IS NULL ORDER BY created_at');
-  const attachmentsRowsQuery = dbQuery<{
-    id: string;
-    card_id: string;
-    file_name: string;
-    mime_type: string;
-    file_url: string;
-    created_at: Date;
-  }>('SELECT id, card_id, file_name, mime_type, file_url, created_at FROM boards.attachments ORDER BY created_at');
-  const activityRowsQuery = dbQuery<{
-    id: string;
-    user_id: string;
-    card_id: string | null;
-    action_type: string;
-    data: { detail?: string } | string | null;
-    created_at: Date;
-  }>('SELECT id, user_id, card_id, action_type, data, created_at FROM boards.activity ORDER BY created_at DESC');
+  // A card's checklists, attachments, comments and activity load when it opens
+  // (app/trello/actions/cardDetails.ts). The board needs only their counts, the
+  // viewer's latest activity per card (Home's recent boards), and the last 14 days
+  // of activity on cards the viewer tracks (notifications).
+  const checklistCountsQuery = dbQuery<{ card_id: string; total: number; done: number }>(
+    `SELECT cl.card_id, count(i.id)::int AS total, count(i.id) FILTER (WHERE i.completed)::int AS done
+       FROM boards.checklists cl
+       JOIN boards.checklist_items i ON i.checklist_id = cl.id
+      GROUP BY cl.card_id`,
+  );
+  const commentCountsQuery = dbQuery<{ card_id: string; n: number }>(
+    'SELECT card_id, count(*)::int AS n FROM boards.comments WHERE deleted_at IS NULL GROUP BY card_id',
+  );
+  const attachmentCountsQuery = dbQuery<{ card_id: string; n: number }>(
+    'SELECT card_id, count(*)::int AS n FROM boards.attachments GROUP BY card_id',
+  );
+  const myLastActivityQuery = dbQuery<{ card_id: string; at: Date }>(
+    `SELECT card_id, max(created_at) AS at FROM boards.activity
+      WHERE user_id = $1 AND card_id IS NOT NULL
+      GROUP BY card_id`,
+    [meId],
+  );
+  const trackedActivityQuery = dbQuery<ActivityRow & { card_id: string }>(
+    `SELECT a.id, a.user_id, a.card_id, a.action_type, a.data, a.created_at
+       FROM boards.activity a
+       JOIN boards.card_trackers t ON t.card_id = a.card_id AND t.user_id = $1
+      WHERE a.created_at > now() - interval '14 days'
+      ORDER BY a.created_at DESC`,
+    [meId],
+  );
   const favoriteRowsQuery = dbQuery<{ board_id: string }>(
     'SELECT board_id FROM boards.favorite_boards WHERE user_id = $1',
     [meId],
@@ -207,11 +192,11 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     cardMembersRows,
     cardLabelsRows,
     cardTrackersRows,
-    checklistsRows,
-    checklistItemsRows,
-    commentsRows,
-    attachmentsRows,
-    activityRows,
+    checklistCountRows,
+    commentCountRows,
+    attachmentCountRows,
+    myLastActivityRows,
+    trackedActivityRows,
     favoriteRows,
     readRows,
     myProfile,
@@ -227,11 +212,11 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     cardMembersRowsQuery,
     cardLabelsRowsQuery,
     cardTrackersRowsQuery,
-    checklistsRowsQuery,
-    checklistItemsRowsQuery,
-    commentsRowsQuery,
-    attachmentsRowsQuery,
-    activityRowsQuery,
+    checklistCountsQuery,
+    commentCountsQuery,
+    attachmentCountsQuery,
+    myLastActivityQuery,
+    trackedActivityQuery,
     favoriteRowsQuery,
     readRowsQuery,
     myProfileQuery,
@@ -282,6 +267,39 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     hue: hueFromString(session.email),
   };
   if (!users.some((u) => u.id === meId)) users.unshift(me);
+
+  // Workspace members can exist without an outreach.users row (local data
+  // does this). They still need to be assignable on a card.
+  const knownUserIds = new Set(users.map((u) => u.id));
+  const missingMemberIds = [
+    ...new Set(workspaceMembersRows.rows.map((m) => m.user_id)),
+  ].filter((id) => !knownUserIds.has(id));
+  if (missingMemberIds.length) {
+    const { rows: profileRows } = await dbQuery<{
+      user_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      role: string | null;
+      hue: number | null;
+    }>(
+      `SELECT user_id, first_name, last_name, role, hue
+         FROM boards.user_profiles
+        WHERE user_id = ANY($1::uuid[])`,
+      [missingMemberIds],
+    );
+    for (const p of profileRows) {
+      const first = p.first_name ?? '';
+      const last = p.last_name ?? '';
+      users.push({
+        id: p.user_id,
+        firstName: first,
+        lastName: last,
+        name: `${first} ${last}`.trim() || 'Member',
+        role: p.role ?? '',
+        hue: p.hue ?? hueFromString(p.user_id),
+      });
+    }
+  }
 
   const workspaces: Workspace[] = workspacesRows.rows
     .filter((w) => visibleWorkspaceIds.has(w.id))
@@ -361,61 +379,16 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     trackersByCard.set(t.card_id, bucket);
   }
 
-  const visibleChecklists = checklistsRows.rows.filter((cl) => visibleCardIds.has(cl.card_id));
-  const visibleChecklistIds = new Set(visibleChecklists.map((cl) => cl.id));
-  const itemsByChecklist = new Map<string, ChecklistItem[]>();
-  for (const it of checklistItemsRows.rows) {
-    if (!visibleChecklistIds.has(it.checklist_id)) continue;
-    const bucket = itemsByChecklist.get(it.checklist_id) ?? [];
-    bucket.push({
-      id: it.id,
-      text: it.text,
-      done: it.completed,
-      due: it.due_date ? iso(it.due_date) : null,
-    });
-    itemsByChecklist.set(it.checklist_id, bucket);
-  }
-  const checklistsByCard = new Map<string, Checklist[]>();
-  for (const cl of visibleChecklists) {
-    const bucket = checklistsByCard.get(cl.card_id) ?? [];
-    bucket.push({ id: cl.id, title: cl.title, items: itemsByChecklist.get(cl.id) ?? [] });
-    checklistsByCard.set(cl.card_id, bucket);
-  }
-
-  const commentsByCard = new Map<string, Comment[]>();
-  for (const cm of commentsRows.rows) {
-    if (!visibleCardIds.has(cm.card_id)) continue;
-    const bucket = commentsByCard.get(cm.card_id) ?? [];
-    bucket.push({ id: cm.id, authorId: cm.user_id, body: cm.body, at: iso(cm.created_at) });
-    commentsByCard.set(cm.card_id, bucket);
-  }
-  const attachmentsByCard = new Map<string, Attachment[]>();
-  for (const at of attachmentsRows.rows) {
-    if (!visibleCardIds.has(at.card_id)) continue;
-    const bucket = attachmentsByCard.get(at.card_id) ?? [];
-    bucket.push({
-      id: at.id,
-      name: at.file_name,
-      mime: at.mime_type,
-      url: at.file_url,
-      addedAt: iso(at.created_at),
-    });
-    attachmentsByCard.set(at.card_id, bucket);
-  }
-  const activityByCard = new Map<string, ActivityEntry[]>();
-  for (const a of activityRows.rows) {
-    if (!a.card_id || !visibleCardIds.has(a.card_id)) continue;
-    const bucket = activityByCard.get(a.card_id) ?? [];
-    bucket.push({
-      id: a.id,
-      authorId: a.user_id,
-      kind: a.action_type as ActivityEntry['kind'],
-      detail:
-        (typeof a.data === 'object' && a.data && 'detail' in a.data ? a.data.detail : null)
-        ?? (typeof a.data === 'string' ? a.data : ''),
-      at: iso(a.created_at),
-    });
-    activityByCard.set(a.card_id, bucket);
+  const checklistCounts = new Map(checklistCountRows.rows.map((r) => [r.card_id, r]));
+  const commentCounts = new Map(commentCountRows.rows.map((r) => [r.card_id, r.n]));
+  const attachmentCounts = new Map(attachmentCountRows.rows.map((r) => [r.card_id, r.n]));
+  const myLastActivity = new Map(myLastActivityRows.rows.map((r) => [r.card_id, iso(r.at)]));
+  const trackedActivityByCard = new Map<string, ActivityEntry[]>();
+  for (const a of trackedActivityRows.rows) {
+    if (!visibleCardIds.has(a.card_id)) continue;
+    const bucket = trackedActivityByCard.get(a.card_id) ?? [];
+    bucket.push(activityEntry(a));
+    trackedActivityByCard.set(a.card_id, bucket);
   }
 
   const cards: Card[] = visibleCards.map((c) => ({
@@ -430,12 +403,20 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     due: isoDate(c.due_date),
     complete: c.due_completed,
     fieldValues: {},
-    checklists: checklistsByCard.get(c.id) ?? [],
-    attachments: attachmentsByCard.get(c.id) ?? [],
-    comments: commentsByCard.get(c.id) ?? [],
-    activity: activityByCard.get(c.id) ?? [],
+    checklists: [],
+    attachments: [],
+    comments: [],
+    activity: trackedActivityByCard.get(c.id) ?? [],
     createdById: c.created_by,
     createdAt: iso(c.created_at),
+    detailsLoaded: false,
+    counts: {
+      checklistItems: checklistCounts.get(c.id)?.total ?? 0,
+      checklistDone: checklistCounts.get(c.id)?.done ?? 0,
+      comments: commentCounts.get(c.id) ?? 0,
+      attachments: attachmentCounts.get(c.id) ?? 0,
+    },
+    myLastActivityAt: myLastActivity.get(c.id) ?? null,
   }));
 
   const profileRow = myProfile.rows[0];

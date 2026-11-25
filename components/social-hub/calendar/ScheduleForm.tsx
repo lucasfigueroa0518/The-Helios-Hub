@@ -31,7 +31,7 @@ export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, 
   view: ScheduleView;
   /** Every other entry's schedule, for the feed warning and the LFD / Carousels confirm. */
   others: TypeSchedule[];
-  /** This type's daily limit (set on its type page). */
+  /** The most times a day this type may have (its fixed maximum, D20). */
   cap: number;
   editable: boolean;
   /** Why the form is read-only (the switch is off), shown on top. */
@@ -58,7 +58,7 @@ export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, 
   const check = formErrors(draft, { cap, others, problems });
   const errors = [...check.errors, ...server.filter((e) => !check.errors.includes(e))];
   const canAdd = canAddTime(draft, cap);
-  const full = entry.vertical === 'last_few_days' && times.length >= 1 ? LFD_ONCE : `${label} can post ${cap} a day. Raise the daily limit on the ${label} page to add more.`;
+  const full = entry.vertical === 'last_few_days' && times.length >= 1 ? LFD_ONCE : `${label} can post at most ${cap} a day.`;
 
   const settle = (minute: number) => setProblems((p) => p.filter((x) => !x.startsWith(`${clockLabel(minute)} `)));
   const edit = (fn: () => void) => { fn(); setServer([]); setDirty(true); };

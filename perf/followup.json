@@ -1,0 +1,264 @@
+{
+  "out": "followup",
+  "startedAt": "2026-11-18T14:42:53.202Z",
+  "commit": "648b45e",
+  "settings": {
+    "runs": 30,
+    "coldCycles": 30,
+    "warmup": 3,
+    "dbOneWayMs": 2.5,
+    "budget": {
+      "ttfbMs": 150,
+      "totalMs": 500,
+      "apiServerMs": 150,
+      "jsKB": 150
+    }
+  },
+  "routes": [
+    {
+      "id": "api:GET:/api/content-type/run-today",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/content-type/run-today",
+      "url": "/api/content-type/run-today",
+      "auth": "session"
+    },
+    {
+      "id": "page:/trello",
+      "kind": "page",
+      "method": "GET",
+      "path": "/trello",
+      "url": "/trello",
+      "auth": "session"
+    }
+  ],
+  "warm": {
+    "api:GET:/api/content-type/run-today": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 2266,
+      "ttfb": {
+        "p50": 126.3,
+        "p95": 139.8,
+        "p99": 141.4
+      },
+      "total": {
+        "p50": 126.5,
+        "p95": 140.1,
+        "p99": 141.6
+      }
+    },
+    "page:/trello": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 4393270,
+      "ttfb": {
+        "p50": 21.6,
+        "p95": 29.1,
+        "p99": 30.4
+      },
+      "total": {
+        "p50": 364.4,
+        "p95": 450.3,
+        "p99": 490.2
+      }
+    }
+  },
+  "cold": {
+    "api:GET:/api/content-type/run-today": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 2266,
+      "ttfb": {
+        "p50": 1440.9,
+        "p95": 1551.5,
+        "p99": 1564.4
+      },
+      "total": {
+        "p50": 1441.4,
+        "p95": 1551.9,
+        "p99": 1564.9
+      }
+    },
+    "page:/trello": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 4398327,
+      "ttfb": {
+        "p50": 134.6,
+        "p95": 198.1,
+        "p99": 198.2
+      },
+      "total": {
+        "p50": 630.7,
+        "p95": 714.3,
+        "p99": 741.1
+      }
+    }
+  },
+  "trace": {
+    "api:GET:/api/content-type/run-today": {
+      "cold": {
+        "ms": 1469.9,
+        "queryCount": 103,
+        "queryMs": 2055.3,
+        "repeated": [
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "n": 8
+          }
+        ],
+        "slowest": [
+          {
+            "sql": "SELECT a.id AS attempt_id, a.vertical, CASE WHEN ci.native_ref ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ci.native_ref END AS content_ref, COALESCE(a.payload->>'post_idea_id', ci.idea_ref) AS idea_ref, a.status, a.trigger, a.requested_at::text AS requested_at, a.finished_at::text AS finished_at, a.media_id, a.permalink, a.error, a.caption, a.payload, s.id AS schedule_",
+            "ms": 240.37,
+            "rows": 648
+          },
+          {
+            "sql": "SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, -- The build log (photo_log and the rest) is for the stories worker. Pages read stories, story, pair, question, url. (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'triviaSkip' - 'log' - 'pool') AS payload, s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS sl",
+            "ms": 118.76,
+            "rows": 175
+          },
+          {
+            "sql": "SELECT media_id, ny_date::text AS ny_date, vertical, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate, follows, profile_visits FROM social_hub.media_insights WHERE vertical = ANY($1::text[]) ORDER BY media_id, ny_date",
+            "ms": 115.26,
+            "rows": 4536
+          },
+          {
+            "sql": "SELECT DISTINCT m.post_idea_id, m.url, m.headline FROM reels.idea_sources_v m WHERE m.role <> 'merged_duplicate' AND m.post_idea_id = ANY($1::uuid[])",
+            "ms": 111.32,
+            "rows": 144
+          },
+          {
+            "sql": "SELECT p.event_id::text AS event_id, p.metro, p.rank, p.score::float8 AS score, p.gate, p.picked, p.pick_rank, p.partner, p.pinned_by, p.pinned_at::text AS pinned_at, p.excluded_by, p.excluded_at::text AS excluded_at, p.updated_at::text AS updated_at, e.title, e.start_at::text AS start_at, e.end_at::text AS end_at, e.timezone, e.organizer_name, e.host_name, e.venue_name, e.city, e.guest_count, e.c",
+            "ms": 93.13,
+            "rows": 0
+          }
+        ]
+      },
+      "warm": {
+        "ms": 127.4,
+        "queryCount": 32,
+        "queryMs": 179.5,
+        "repeated": [
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "n": 7
+          }
+        ],
+        "slowest": [
+          {
+            "sql": "SELECT key, value FROM stories.settings",
+            "ms": 8.35,
+            "rows": 3
+          },
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "ms": 8.13,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT key, value FROM stories.settings",
+            "ms": 7.81,
+            "rows": 3
+          },
+          {
+            "sql": "SELECT key, value FROM ai_events.settings",
+            "ms": 6.43,
+            "rows": 6
+          },
+          {
+            "sql": "SELECT key, value FROM lfd.settings",
+            "ms": 6.37,
+            "rows": 8
+          }
+        ]
+      }
+    },
+    "page:/trello": {
+      "cold": {
+        "ms": 598.6,
+        "queryCount": 21,
+        "queryMs": 248.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT id, board_id, list_id, title, description, position, due_date, due_completed, created_by, created_at FROM boards.cards ORDER BY position",
+            "ms": 41.34,
+            "rows": 4000
+          },
+          {
+            "sql": "SELECT card_id, label_id FROM boards.card_labels",
+            "ms": 34.1,
+            "rows": 5000
+          },
+          {
+            "sql": "SELECT card_id, user_id FROM boards.card_trackers",
+            "ms": 30.34,
+            "rows": 800
+          },
+          {
+            "sql": "SELECT id FROM boards.user_profiles WHERE user_id = $1 LIMIT 1",
+            "ms": 24.85,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT id FROM boards.workspaces WHERE lower(name) = lower($1) LIMIT 1",
+            "ms": 10.87,
+            "rows": 0
+          }
+        ]
+      },
+      "warm": {
+        "ms": 410.3,
+        "queryCount": 21,
+        "queryMs": 197.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT id, board_id, list_id, title, description, position, due_date, due_completed, created_by, created_at FROM boards.cards ORDER BY position",
+            "ms": 25.45,
+            "rows": 4000
+          },
+          {
+            "sql": "SELECT card_id, label_id FROM boards.card_labels",
+            "ms": 23.39,
+            "rows": 5000
+          },
+          {
+            "sql": "SELECT card_id, user_id FROM boards.card_trackers",
+            "ms": 21.33,
+            "rows": 800
+          },
+          {
+            "sql": "SELECT card_id, count(*)::int AS n FROM boards.comments WHERE deleted_at IS NULL GROUP BY card_id",
+            "ms": 15.81,
+            "rows": 3482
+          },
+          {
+            "sql": "SELECT cl.card_id, count(i.id)::int AS total, count(i.id) FILTER (WHERE i.completed)::int AS done FROM boards.checklists cl JOIN boards.checklist_items i ON i.checklist_id = cl.id GROUP BY cl.card_id",
+            "ms": 12.18,
+            "rows": 1223
+          }
+        ]
+      }
+    }
+  },
+  "lighthouse": {},
+  "verdicts": {
+    "api:GET:/api/content-type/run-today": "pass",
+    "page:/trello": "pass"
+  }
+}

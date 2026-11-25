@@ -98,7 +98,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_events_posts_one_per_week_city
 -- One row per candidate event per week, written by lib/networking/pick/rank.ts: rank within
 -- the city (1 = best; NULL once the event drops out of the week's candidates), the score
 -- (NULL when a gate failed), the failed gates, and whether it is a pick. pick_rank is the
--- pick's place in the city (1..3, pins first; NULL when not picked), which the carousel and
+-- pick's place in the city (1..10, the top 10, pins first; NULL when not picked), which the carousel and
 -- the public calendar both show. pinned_* and excluded_* are set by the hub's pool actions
 -- only (lib/ai-events/pool.ts); a ranking run never overwrites them.
 

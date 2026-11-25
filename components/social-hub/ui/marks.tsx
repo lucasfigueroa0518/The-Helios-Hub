@@ -1,19 +1,22 @@
 import type { CSSProperties } from 'react';
 import {
-  ClockAlert,
   Ban,
+  Brain,
   CalendarDays,
+  Camera,
   Check,
   CircleCheck,
   CircleDashed,
   CircleSlash,
   Clapperboard,
   Clock,
+  ClockAlert,
   GalleryHorizontal,
   Hand,
   Loader,
   Newspaper,
   Presentation,
+  ScanEye,
   SkipForward,
   Sparkles,
   TriangleAlert,
@@ -33,6 +36,11 @@ export const TYPE_ICON: Record<Vertical, LucideIcon> = {
   stories: Sparkles,
   last_few_days: Newspaper,
   ai_events: CalendarDays,
+  field_notes: Camera,
+  reel_ai_drama: Clapperboard,
+  // SS-1: the Stories split's two types of their own.
+  ai_trivia: Brain,
+  real_or_ai: ScanEye,
 };
 
 const STATE_ICON: Record<StateIcon, LucideIcon> = {

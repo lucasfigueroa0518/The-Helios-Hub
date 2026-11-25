@@ -10,24 +10,37 @@
  *   logo              its logo by QID, seen within 90 days (a fallback only)
  *   CEO, article, official, event, product   never
  *
- * The 7-day rule holds: a photo is dropped (logos, and headshots off the
- * cover, aside) when any of its source URLs is in the run's recent set or in
- * social.used_photos within NO_REPEAT_DAYS. v1 offers the ORIGINAL URL (the
+ * The used-photo rule holds (CI-32, lib/photos/used.ts): a photo is dropped
+ * (logos off the cover aside: brand assets) when any of its source URLs is in
+ * the run's recent set or in the ledger (published in the last 20 days), or
+ * when its dHash matches a published picture's. v1 offers the ORIGINAL URL (the
  * source fetched most recently, within the last 7 days), not the bank copy,
  * so the renderer and the checks see exactly what the online search would.
  *
+ * Cleared photos only: reuse_ok AND an open or government licence. The bank
+ * also stores company and unknown-licence photos (for Reel AI Drama's credited
+ * news photos, lib/media-library/drama.ts); this reader never offers them.
+ *
  * Gated by media_library.settings.finder_source (off by default).
+ *
+ * AI images (Stories Split, SS-24): Real or AI?'s generated images are banked with licence `generated` (reuse_ok
+ * false). They are never offered to any caller unless it asks with `allowGenerated: true`, which only Real or AI?
+ * does. The rule reads the licence alone, so it holds before db/media_library_stories_split.sql adds `truth`.
  */
 import type { FaceBox } from '@/lib/social/render/fit-check';
 import type { Lane } from '@/lib/social/photos/find';
 import type { VisualKind } from '@/lib/social/writer/draft';
 
-import { SCENE_LANES, words } from './policy';
-import { cachedBankSettings, type BankSettings } from './settings';
-import type { FinderSourceMode, Query } from './types';
+import { EMPTY_LEDGER, readUsedLedger, usedMatch, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
 
-/** The 7-day rule (lib/social/photos/used-photos.ts NO_REPEAT_DAYS; a literal so this module stays SQL-only). */
-export const BANK_NO_REPEAT_DAYS = 7;
+import { REUSABLE_LICENCES, SCENE_LANES, words } from './policy';
+import { cachedBankSettings, type BankSettings } from './settings';
+import { REAL_OR_AI_LANE, type FinderSourceMode, type Query } from './types';
+
+/** The used-photo window (CI-32: one rule for every content type). */
+export const BANK_USED_PHOTO_DAYS = USED_PHOTO_DAYS;
+/** How long one ledger read serves this reader's finds. */
+const LEDGER_TTL_MS = 60_000;
 /** Only sources fetched within this many days are offered (the URL is still live). */
 export const SOURCE_FRESH_DAYS = 7;
 /** Logos come back only when seen this recently. */
@@ -38,11 +51,13 @@ export type BankFind = {
   query: string;
   /** The verified subject's Wikidata id (person, company, logo). */
   qid: string | null;
-  /** URLs used in the last 7 days or earlier in this run. */
+  /** URLs published in the last 20 days or used earlier in this run. */
   recent: Set<string>;
-  /** A cover never repeats a headshot within 7 days. */
+  /** A cover never repeats a logo. */
   cover: boolean;
   limit: number;
+  /** Real or AI? only (SS-24): AI images (licence `generated`) may come back too. Every other caller leaves it unset. */
+  allowGenerated?: boolean;
 };
 
 export type BankHit = {
@@ -53,6 +68,8 @@ export type BankHit = {
   source: string;
   lane: Lane;
   credit: string;
+  /** The photo's licence class: open or government, or `generated` (allowGenerated callers only). */
+  licence?: string;
   title: string;
   date: string | null;
   width: number;
@@ -69,6 +86,8 @@ export type BankHit = {
 export type BankReader = {
   mode(): Promise<FinderSourceMode>;
   find(q: BankFind): Promise<BankHit[]>;
+  /** Drop the cached used-photo ledger, so the next find reads it fresh (a new build or post: an earlier one's picks count). */
+  invalidate?(): void;
 };
 
 type Plan = { lanes: readonly string[]; byQid: boolean; byTags: boolean; visionPass: boolean; logoWindow: boolean };
@@ -90,15 +109,24 @@ export function planFor(kind: VisualKind): Plan | null {
   }
 }
 
-/** By the offered lane, as searchVisual does: logos and headshots skip the 7-day rule except on a cover, where neither repeats (photo spec §4; logos since 2026-10-12). */
-export const exemptFromSevenDays = (lane: string, cover: boolean) => (lane === 'logo' || lane === 'headshot') && !cover;
+/** By the offered lane, as searchVisual does: logos (brand assets) skip the used-photo rule except on a cover, where they never repeat (2026-10-12). Headshots are covered since CI-32. */
+export const exemptFromUsedRule = (lane: string, cover: boolean) => lane === 'logo' && !cover;
 
 export function createBankReader(deps: { query: Query; settings?: () => Promise<BankSettings>; now?: () => Date }): BankReader {
   const settings = deps.settings ?? cachedBankSettings(deps.query);
-  let usedTable: Promise<boolean> | null = null;
-  const hasUsedPhotos = () =>
-    (usedTable ??= deps.query(`SELECT to_regclass('social.used_photos') IS NOT NULL AS ok`).then((r) => Boolean(r.rows[0]?.ok)).catch(() => false));
+  // The used-photo ledger, read at most once a minute. Unreadable (no table, an error): the run's recent set still
+  // holds the ledger's URLs, so only the dHash check is lost.
+  let ledger: { at: number; value: Promise<UsedLedger> } | null = null;
+  const usedLedger = (now: Date) => {
+    if (!ledger || Math.abs(now.getTime() - ledger.at) > LEDGER_TTL_MS) {
+      ledger = { at: now.getTime(), value: readUsedLedger(deps.query, now).catch(() => EMPTY_LEDGER) };
+    }
+    return ledger.value;
+  };
   return {
+    invalidate() {
+      ledger = null;
+    },
     async mode() {
       const s = await settings();
       return s.present ? s.finderSource : 'off';
@@ -109,28 +137,29 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
       if (plan.byQid && !q.qid) return [];
       const want = plan.byTags ? words(q.query) : [];
       if (plan.byTags && !want.length) return [];
-      const checkUsed = await hasUsedPhotos();
-      const now = (deps.now?.() ?? new Date()).toISOString();
-      const params: unknown[] = [[...plan.lanes], now, want, q.qid, plan.visionPass, plan.logoWindow, Math.max(1, q.limit) * 3, SOURCE_FRESH_DAYS, LOGO_SEEN_DAYS, BANK_NO_REPEAT_DAYS];
+      const at = deps.now?.() ?? new Date();
+      const used = await usedLedger(at);
+      const now = at.toISOString();
+      // AI images sit in Real or AI?'s own lane: it joins the request's lanes only for an allowGenerated caller.
+      const lanes = q.allowGenerated === true && plan.byTags ? [...plan.lanes, REAL_OR_AI_LANE] : [...plan.lanes];
+      const params: unknown[] = [lanes, now, want, q.qid, plan.visionPass, plan.logoWindow, Math.max(1, q.limit) * 3, SOURCE_FRESH_DAYS, LOGO_SEEN_DAYS, [...REUSABLE_LICENCES], q.allowGenerated === true];
       const { rows } = await deps.query(
         `WITH offer AS (
            SELECT s.photo_id, s.url, s.source, s.lane, s.credit, s.title, s.date, s.last_ok_at
              FROM media_library.photo_sources s
             WHERE s.status = 'stored' AND s.photo_id IS NOT NULL AND s.lane = ANY($1::text[])
               AND s.last_ok_at > $2::timestamptz - make_interval(days => $8))
-         SELECT p.id, p.width, p.height, p.tags, p.qids, p.subjects,
+         SELECT p.id, p.width, p.height, p.licence, p.tags, p.qids, p.subjects, p.dhash,
                 cardinality(ARRAY(SELECT unnest(p.tags) INTERSECT SELECT unnest($3::text[]))) AS overlap,
                 (SELECT row_to_json(o) FROM offer o WHERE o.photo_id = p.id ORDER BY o.last_ok_at DESC, o.url LIMIT 1) AS pick,
                 (SELECT array_agg(a.url ORDER BY a.url) FROM media_library.photo_sources a WHERE a.photo_id = p.id) AS urls,
                 (SELECT g.faces FROM media_library.sightings g JOIN media_library.photo_sources a ON a.url = g.url
                   WHERE a.photo_id = p.id AND g.faces IS NOT NULL ORDER BY g.at DESC LIMIT 1) AS faces,
                 (SELECT g.plate FROM media_library.sightings g JOIN media_library.photo_sources a ON a.url = g.url
-                  WHERE a.photo_id = p.id AND g.plate IS NOT NULL ORDER BY g.at DESC LIMIT 1) AS plate,
-                ${checkUsed ? `EXISTS (
-                  SELECT 1 FROM social.used_photos u JOIN media_library.photo_sources a ON a.url = u.url
-                   WHERE a.photo_id = p.id AND u.used_at <= $2::timestamptz AND u.used_at > $2::timestamptz - make_interval(days => $10))` : `($10::int IS NULL)`} AS used_recently
+                  WHERE a.photo_id = p.id AND g.plate IS NOT NULL ORDER BY g.at DESC LIMIT 1) AS plate
            FROM media_library.photos p
-          WHERE p.status = 'stored' AND p.reuse_ok
+          WHERE p.status = 'stored'
+            AND ((p.reuse_ok AND p.licence = ANY($10::text[])) OR ($11::boolean AND p.licence = 'generated'))
             AND EXISTS (SELECT 1 FROM offer o WHERE o.photo_id = p.id)
             AND ($4::text IS NULL OR $4::text = ANY(p.qids))
             AND ($5::boolean IS NOT TRUE OR p.vision_pass)
@@ -145,8 +174,9 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
         const pick = typeof r.pick === 'string' ? JSON.parse(r.pick) : r.pick;
         const urls: string[] = r.urls ?? [];
         if (!pick) continue;
-        // The 7-day rule on every URL the photo was found at, unless the offered lane is exempt.
-        if (!exemptFromSevenDays(pick.lane, q.cover) && (r.used_recently === true || urls.some((u) => q.recent.has(u)))) continue;
+        // The used-photo rule on every URL the photo was found at and on its picture (dHash), unless the lane is exempt.
+        const published = urls.some((u) => q.recent.has(u) || usedMatch(used, { url: u })) || usedMatch(used, { dhash: r.dhash ?? null });
+        if (!exemptFromUsedRule(pick.lane, q.cover) && published) continue;
         const faces = typeof r.faces === 'string' ? JSON.parse(r.faces) : r.faces;
         hits.push({
           photoId: r.id,
@@ -155,6 +185,7 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
           source: pick.source ?? 'stock',
           lane: pick.lane as Lane,
           credit: pick.credit ?? '',
+          licence: String(r.licence ?? ''),
           title: pick.title ?? '',
           date: pick.date ?? null,
           width: Number(r.width),

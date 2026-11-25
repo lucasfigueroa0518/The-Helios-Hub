@@ -12,7 +12,7 @@ if [[ -f scripts/gcp/.deploy-env ]]; then
 fi
 
 PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
-ZONE="${GCP_ZONE:-us-west1-a}"
+ZONE="${GCP_ZONE:-northamerica-northeast1-a}"
 INSTANCE="${GCP_INSTANCE:-helios-orch-worker}"
 ENV_FILE="${WORKER_ENV_FILE:-scripts/gcp/worker.env}"
 # GCP_SSH_IAP=1 tunnels scp/ssh through Identity-Aware Proxy (HTTPS on 443),
@@ -98,7 +98,14 @@ fi
 
 ARCHIVE="$(mktemp -t helios-worker-XXXXXX).tgz"
 trap 'rm -f "${ARCHIVE}"' EXIT
-tar -czf "${ARCHIVE}" \
+# macOS tar adds a "._name" AppleDouble file for every file with an extended attribute (all of them:
+# com.apple.provenance). They start with NUL bytes; an explainer render that copied the kit read one and
+# failed (invalid byte sequence 0x00). COPYFILE_DISABLE stops them; the ._* exclude is for other tars.
+# The local worktrees are whole repo copies the workers never use.
+COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
+  --exclude='._*' \
+  --exclude='./.worktrees' \
+  --exclude='./.claude/worktrees' \
   --exclude='./.git' \
   --exclude='./node_modules' \
   --exclude='./.next' \
@@ -106,6 +113,14 @@ tar -czf "${ARCHIVE}" \
   --exclude='./scripts/gcp/worker.env' \
   --exclude='./.cursor' \
   --exclude='./helios_text_engine/.venv' \
+  --exclude='./runs' \
+  --exclude='./Claude outputs' \
+  --exclude='./Content Review 2026-11-08' \
+  --exclude='./.explainers-local' \
+  --exclude='./.stories-local' \
+  --exclude='./.memes-local' \
+  --exclude='./explainers/smoke/.out' \
+  --exclude='./explainers/design/sfx/dropins' \
   .
 
 DEPLOY_ID="$(date +%s)-$$"

@@ -2,6 +2,7 @@
 import { busyFeedTimes } from '@/lib/instagram/feed-spacing';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { uniformIndex } from '@/lib/instagram/window';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { weekdayOf } from '@/lib/social-hub/time';
 import { rebookSlot } from '@/lib/social-hub/placement';
 
@@ -367,7 +368,7 @@ export async function applyScheduleSave(q: SlotQuery, plan: Extract<SavePlan, { 
   for (const [i, m] of p.moves.entries()) {
     const at = times[i]!;
     const b = m.booking;
-    if (b.vertical === 'stories') {
+    if (isStoryVertical(b.vertical)) {
       const setId = b.refs.setId;
       if (!setId) throw new ScheduleConflict(`A Stories booking (${b.id}) has no set to move.`);
       try {

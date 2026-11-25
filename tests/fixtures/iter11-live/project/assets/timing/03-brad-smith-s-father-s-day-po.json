@@ -1,0 +1,133 @@
+{
+ "frame": 3,
+ "id": "03-brad-smith-s-father-s-day-po",
+ "duration": 7.203,
+ "voice_end": 7.073,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "Five",
+   "start": 0.02,
+   "end": 0.123
+  },
+  {
+   "text": "months",
+   "start": 0.195,
+   "end": 0.409
+  },
+  {
+   "text": "later,",
+   "start": 0.48,
+   "end": 0.695
+  },
+  {
+   "text": "over",
+   "start": 0.98,
+   "end": 1.052
+  },
+  {
+   "text": "Father's",
+   "start": 1.123,
+   "end": 1.409
+  },
+  {
+   "text": "Day",
+   "start": 1.48,
+   "end": 1.552
+  },
+  {
+   "text": "weekend,",
+   "start": 1.623,
+   "end": 1.909
+  },
+  {
+   "text": "Microsoft",
+   "start": 2.17,
+   "end": 2.503
+  },
+  {
+   "text": "president",
+   "start": 2.679,
+   "end": 2.931
+  },
+  {
+   "text": "Brad",
+   "start": 3.003,
+   "end": 3.217
+  },
+  {
+   "text": "Smith",
+   "start": 3.36,
+   "end": 3.645
+  },
+  {
+   "text": "wrote",
+   "start": 3.717,
+   "end": 3.86
+  },
+  {
+   "text": "that",
+   "start": 3.931,
+   "end": 4.003
+  },
+  {
+   "text": "keeping",
+   "start": 4.121,
+   "end": 4.36
+  },
+  {
+   "text": "children",
+   "start": 4.431,
+   "end": 4.717
+  },
+  {
+   "text": "with",
+   "start": 4.788,
+   "end": 4.86
+  },
+  {
+   "text": "their",
+   "start": 4.895,
+   "end": 4.931
+  },
+  {
+   "text": "parents",
+   "start": 5.074,
+   "end": 5.431
+  },
+  {
+   "text": "helps",
+   "start": 5.503,
+   "end": 5.717
+  },
+  {
+   "text": "build",
+   "start": 5.849,
+   "end": 5.931
+  },
+  {
+   "text": "a",
+   "start": 6.003,
+   "end": 6.074
+  },
+  {
+   "text": "stronger",
+   "start": 6.145,
+   "end": 6.503
+  },
+  {
+   "text": "country.",
+   "start": 6.65,
+   "end": 7.003
+  }
+ ],
+ "lines": [
+  {
+   "id": "L3",
+   "start": 0.02,
+   "end": 7.003,
+   "label": null,
+   "label_kind": null
+  }
+ ]
+}

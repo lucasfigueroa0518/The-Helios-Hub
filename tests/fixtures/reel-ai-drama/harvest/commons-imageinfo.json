@@ -1,0 +1,13 @@
+{
+  "query": {
+    "pages": {
+      "1": { "title": "File:Sam Altman 2025.jpg", "imageinfo": [{ "url": "https://upload.wikimedia.org/a/Sam_Altman_2025.jpg", "thumburl": "https://upload.wikimedia.org/thumb/a/Sam_Altman_2025.jpg", "width": 2400, "height": 3000, "mime": "image/jpeg",
+        "extmetadata": { "Artist": { "value": "<a href=\"x\">Jane Photographer</a>" }, "LicenseShortName": { "value": "CC BY 4.0" }, "DateTimeOriginal": { "value": "2025-05-20 10:00:00" }, "ImageDescription": { "value": "Sam Altman in 2025" } } }] },
+      "2": { "title": "File:Sam Altman at DevDay 2026.jpg", "imageinfo": [{ "url": "https://upload.wikimedia.org/b/Altman_DevDay.jpg", "width": 3000, "height": 2000, "mime": "image/jpeg",
+        "extmetadata": { "Artist": { "value": "Conference Photos" }, "LicenseShortName": { "value": "CC BY-SA 4.0" }, "DateTimeOriginal": { "value": "2026-10-01" }, "ImageDescription": { "value": "Sam Altman on stage at DevDay" } } }] },
+      "3": { "title": "File:OpenAI office exterior.jpg", "imageinfo": [{ "url": "https://upload.wikimedia.org/c/OpenAI_office.jpg", "width": 2000, "height": 1333, "mime": "image/jpeg",
+        "extmetadata": { "Artist": { "value": "Street Shooter" }, "LicenseShortName": { "value": "CC0" }, "DateTimeOriginal": { "value": "2024-03-01" } } }] },
+      "4": { "title": "File:Pioneer Building diagram.svg", "imageinfo": [{ "url": "https://upload.wikimedia.org/d/diagram.svg", "width": 800, "height": 800, "mime": "image/svg+xml" }] }
+    }
+  }
+}

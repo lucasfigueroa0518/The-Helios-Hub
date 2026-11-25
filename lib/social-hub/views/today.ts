@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { PLACED_STATUSES } from '@/lib/social-hub/fill';
 import { quotaFrom, type Quota } from '@/lib/social-hub/house';
@@ -77,7 +78,7 @@ export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas
   let filled = 0;
   for (const vertical of VERTICAL_IDS) {
     const windows = capacityWindows(vertical, nyDate, dayQuotas?.lfdDays ?? [], placedCount(posts, vertical, nyDate), undefined, dayQuotas?.slots ?? null).length;
-    const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
+    const configured = isStoryVertical(vertical) || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
     const quota = Math.min(Math.max(0, configured), windows);
     slots += quota;
     const held = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && HOLDS_SLOT.has(p.status)).length;
@@ -137,10 +138,11 @@ export function needsGroups(posts: readonly HubPost[], now: Date): NeedsGroup[] 
 export function contentModel(dataset: HubDataset, now: Date): ContentModel {
   const today = nyDateOf(now)!;
   const nowIso = now.toISOString();
-  const needs = needsGroups(dataset.posts, now);
+  const posts = dataset.posts;
+  const needs = needsGroups(posts, now);
   const carouselOff = dataset.dayQuotas?.lfdDays ?? [];
   const slots = dataset.dayQuotas?.slots ?? null;
-  const todays = publishingCandidates(dataset.posts, today, carouselOff, slots);
+  const todays = publishingCandidates(posts, today, carouselOff, slots);
   const bands = new Map<LineupBand['id'], LineupBand>();
   let nowAfter: string | null = null;
   for (const post of todays) {
@@ -155,7 +157,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
   }
   const lineup = (['morning', 'afternoon', 'evening'] as const).map((id) => bands.get(id)).filter((b): b is LineupBand => Boolean(b));
   const unplaced: HubPost[] = [];
-  const next = dataset.posts.filter((p) => (p.status === 'scheduled' || p.status === 'publishing') && (p.publishAt ?? '') > nowIso).sort(bySoonest)[0] ?? null;
+  const next = posts.filter((p) => (p.status === 'scheduled' || p.status === 'publishing') && (p.publishAt ?? '') > nowIso).sort(bySoonest)[0] ?? null;
   return {
     today,
     needs,
@@ -163,8 +165,8 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
     lineup,
     nowAfter,
     unplaced,
-    plan: { ...dayPlan(dataset.posts, today, carouselOff, today, slots), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
-    quota: quotaFrom(dataset.latestQuota, dataset.posts, now),
+    plan: { ...dayPlan(posts, today, carouselOff, today, slots), ...slotsForDay(posts, today, dataset.dayQuotas) },
+    quota: quotaFrom(dataset.latestQuota, posts, now),
     next,
   };
 }

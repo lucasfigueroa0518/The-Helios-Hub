@@ -1,0 +1,210 @@
+{
+ "assets": [
+  {
+   "id": "V45",
+   "kind": "logo",
+   "file": "assets/media/V45.keyed.png",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Flag_of_the_United_States_Immigration_and_Customs_Enforcement.svg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original",
+   "source_page": "https://en.wikipedia.org/wiki/United_States_Immigration_and_Customs_Enforcement",
+   "credit": "Wikipedia (en.wikipedia.org)",
+   "license": null,
+   "shows": "A small U.S. Immigration and Customs Enforcement seal centered on a grey background.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 537,
+   "height": 359,
+   "phash": "9a33698c67399666",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:ice",
+    "logo_keyed",
+    "boxes:media/V45.keyed.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 0.8333
+    },
+    "brightness": 0.6433,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 671,
+    "chroma": 0.1828,
+    "phash": "e3239e8e69399866",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "M1",
+   "kind": "object",
+   "file": "assets/media/M1.png",
+   "url": null,
+   "source_page": null,
+   "credit": "Illustration: Helios",
+   "license": null,
+   "shows": "A marker drawing, made for this reel (not a photograph): Black marker line drawing for a whiteboard: an envelope, a desk calendar page and a small stack of document sheets grouped together, plain office objects; no words, letters or numbers.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1024,
+   "height": 1024,
+   "phash": null,
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "made",
+    "made:drawing",
+    "transparent"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": "drawing",
+   "regions": {
+    "visible": {
+     "x": 0.0449,
+     "y": 0.1074,
+     "w": 0.9063,
+     "h": 0.7598
+    },
+    "brightness": 0.0522,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1280,
+    "focus": null,
+    "phash": "e2c6ec6996259396",
+    "expression": null,
+    "dup_of": null
+   }
+  },
+  {
+   "id": "M2",
+   "kind": "object",
+   "file": "assets/media/M2.png",
+   "url": null,
+   "source_page": null,
+   "credit": "Illustration: Helios",
+   "license": null,
+   "shows": "A marker drawing, made for this reel (not a photograph): Black marker drawing: a simple face outline inside the corner brackets of a facial-recognition scan with a few tracking dots, and a large question mark beside it; no words.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1024,
+   "height": 1024,
+   "phash": null,
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "made",
+    "made:drawing",
+    "transparent"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": "drawing",
+   "regions": {
+    "visible": {
+     "x": 0.1191,
+     "y": 0.1348,
+     "w": 0.8281,
+     "h": 0.707
+    },
+    "brightness": 0.0461,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1280,
+    "focus": null,
+    "phash": "fe2c8193cc4df286",
+    "expression": null,
+    "dup_of": null
+   }
+  },
+  {
+   "id": "M3",
+   "kind": "object",
+   "file": "assets/media/M3.png",
+   "url": null,
+   "source_page": null,
+   "credit": "Illustration: Helios",
+   "license": null,
+   "shows": "A marker drawing, made for this reel (not a photograph): Black marker drawing of a contract sheet seen flat, with blank text lines and a signature scribble at the bottom; no words.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1024,
+   "height": 1024,
+   "phash": null,
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "made",
+    "made:drawing",
+    "transparent"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": "drawing",
+   "regions": {
+    "visible": {
+     "x": 0.2012,
+     "y": 0.0918,
+     "w": 0.6172,
+     "h": 0.8145
+    },
+    "brightness": 0.0716,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1280,
+    "focus": null,
+    "phash": "ee3985c6b1e69432",
+    "expression": null,
+    "dup_of": null
+   }
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useEffect, useState, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus } from 'lucide-react';
+
+import { Drawer } from '@/app/reels/ui';
+import { CarouselSeedForm } from '@/components/content-type/CarouselSeedForm';
+import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
+import { FieldNotesSeedForm } from '@/components/field-notes/FieldNotesSeedForm';
+import { LfdSeedForm } from '@/components/content-type/LfdSeedForm';
+import { ReelSeedForm } from '@/components/content-type/ReelSeedForm';
+import { StorySeedForm } from '@/components/content-type/StorySeedForm';
+import { refreshHubPage } from '@/lib/content-type/refresh-client';
+import { SEED_BUTTON, isSeedable, type SeedVertical } from '@/lib/content-type/seed-verticals';
+import type { Vertical } from '@/lib/social-hub/types';
+
+/** What a seed form tells the button when it is finished: close the drawer, show the note (if any), refresh the page. */
+export type SeedFormProps = { done: (note?: string) => void };
+
+/** Each pool's form. The record is exhaustive over SeedVertical, so a pool added to the seed list without a form will not compile. */
+const FORMS: Record<SeedVertical, ComponentType<SeedFormProps>> = {
+  reels: ReelSeedForm,
+  carousels: CarouselSeedForm,
+  last_few_days: LfdSeedForm,
+  stories: StorySeedForm,
+  explainers: ExplainerSeedForm,
+  field_notes: FieldNotesSeedForm,
+};
+
+/**
+ * "Seed an idea": the one button every idea pool shows, with the same label, drawer, title and result note everywhere.
+ * Only the form inside the drawer differs by type (what that type needs and what it costs). Nothing is made by a seed.
+ * Renders nothing for a pool with no seed path (AI Events).
+ */
+export function SeedButton({ vertical, label = SEED_BUTTON.label, disabled = false, buttonClass = 'rh-btn' }: {
+  vertical: Vertical;
+  /** The button's words where the pool names its items ("Seed a topic"); the drawer keeps its own title. */
+  label?: string;
+  /** Off, with the reason shown beside it by the page (the pool is at its cap). */
+  disabled?: boolean;
+  /** The page's own button class (the pool screen uses `pl-btn`). */
+  buttonClass?: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!isSeedable(vertical)) return null;
+  const Form = FORMS[vertical];
+  const done = (text?: string) => {
+    setOpen(false);
+    if (text) {
+      setNote(text);
+      void refreshHubPage(router);
+    }
+  };
+  return (
+    <>
+      <span className="rh rh--scope">
+        <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}>
+          <Plus size={15} /> {label}
+        </button>
+      </span>
+      {mounted && (open || note)
+        ? createPortal(
+            <div className="rh rh--scope">
+              {open ? (
+                <Drawer label={SEED_BUTTON.title} onClose={() => setOpen(false)}>
+                  <Form done={done} />
+                </Drawer>
+              ) : null}
+              {note ? <p className="rh-toast" role="status">{note}</p> : null}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}

@@ -1,0 +1,168 @@
+/* Resource Tracker: one view per public resource. Built on the hub's card / stat-tile / segmented primitives and
+   matched to the Traffic page's panels. Charts follow the dataviz skill (recessive grid, thin marks). */
+
+.rt { display: flex; flex-direction: column; gap: var(--space-4); }
+.rt-view { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.rt-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.rt-resources .segmented__item { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.rt-note { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.rt-note code { font-size: 0.92em; }
+.rt-muted { margin: 0; color: var(--color-text-muted); }
+.rt-small { font-size: var(--font-size-xs); }
+
+.rt-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+.rt-tile { cursor: default; }
+.rt-tile:hover { box-shadow: none; transform: none; }
+
+.rt-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-4); }
+@media (max-width: 860px) { .rt-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Panels and charts */
+.rt-panel, .rt-chart {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.rt-panel { padding-bottom: var(--space-3); }
+.rt-panel > :not(.rt-panel__head) { margin-left: var(--space-3); margin-right: var(--space-3); }
+.rt-panel__head, .rt-chart__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-3);
+}
+.rt-chart__head { margin-bottom: 0; flex-wrap: wrap; }
+.rt-chart__title { margin: 0; font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text); }
+.rt-chart__sub { margin: 2px 0 0; font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.rt-chart__tools { display: flex; align-items: center; gap: var(--space-3); }
+
+.rt-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; padding: 0; list-style: none; font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.rt-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.rt-legend i, .rt-tip i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+
+.rt-linkbtn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.rt-linkbtn:hover { color: var(--color-text); background: var(--color-surface-2); }
+
+.rt-chart__plot { position: relative; padding: var(--space-2) var(--space-2) 0; }
+.rt-chart__plot svg { display: block; overflow: visible; }
+.rt-chart__empty {
+  position: absolute; inset: 0; display: grid; place-items: center; margin: 0;
+  font-size: var(--font-size-sm); color: var(--color-text-muted); pointer-events: none;
+}
+.rt-grid { stroke: var(--color-border); stroke-width: 1; stroke-dasharray: 2 4; }
+.rt-axis { stroke: var(--color-border-strong); stroke-width: 1; }
+.rt-tick { font-size: 11px; fill: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.rt-endlabel { font-size: 11px; font-weight: 600; fill: var(--color-text); }
+.rt-crosshair { stroke: var(--color-text-subtle); stroke-width: 1; }
+
+.rt-tip {
+  position: absolute;
+  top: var(--space-2);
+  transform: translateX(-50%);
+  min-width: 11rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  font-size: var(--font-size-xs);
+  z-index: 2;
+}
+.rt-tip__date { font-weight: var(--font-weight-semibold); margin-bottom: 4px; color: var(--color-text); }
+.rt-tip dl { margin: 0; display: grid; gap: 2px; }
+.rt-tip dl div { display: flex; justify-content: space-between; gap: var(--space-3); }
+.rt-tip dt { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); }
+.rt-tip dd { margin: 0; font-weight: var(--font-weight-semibold); color: var(--color-text); font-variant-numeric: tabular-nums; }
+
+/* Tables (chart table view, players) */
+.rt-tablewrap { overflow-x: auto; padding: 0 var(--space-3) var(--space-3); }
+.rt-panel .rt-tablewrap { padding: 0; }
+.rt-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); font-variant-numeric: tabular-nums; }
+.rt-table th, .rt-table td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.rt-table th:first-child { text-align: left; }
+.rt-table thead th { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-text-muted); }
+.rt-table tbody th { font-weight: var(--font-weight-medium); color: var(--color-text); }
+
+.rt-players__name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.rt-heat__head { text-align: center !important; min-width: 30px; }
+.rt-heat {
+  text-align: center !important;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--chart-1) var(--heat), var(--color-surface));
+  border: 2px solid var(--color-surface);
+  border-radius: 6px;
+}
+.rt-heat sup { font-size: 9px; margin-left: 1px; }
+.rt-heat--none { background: transparent; color: var(--color-text-subtle); font-weight: var(--font-weight-regular); }
+
+/* Bar lists (top events, cities) */
+.rt-bars { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.rt-bar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 34px; padding: 6px var(--space-3); overflow: hidden; }
+.rt-bar__fill { position: absolute; inset: 0 auto 0 0; background: var(--color-primary-soft); border-radius: var(--radius-sm); pointer-events: none; }
+.rt-bar__label, .rt-bar__value { position: relative; font-size: var(--font-size-sm); }
+.rt-bar__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); }
+.rt-bar__label small { margin-left: var(--space-2); color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.rt-bar__value { font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+
+/* Questions */
+.rt-stepper { display: flex; gap: 4px; }
+.rt-questions { margin: 0; padding: 0; list-style: none; counter-reset: q; display: flex; flex-direction: column; }
+.rt-question { counter-increment: q; position: relative; padding: var(--space-3) 0 var(--space-3) 32px; border-top: 1px solid var(--color-border); }
+.rt-question:first-child { border-top: 0; padding-top: 0; }
+.rt-question::before {
+  content: counter(q);
+  position: absolute; left: 0; top: var(--space-3);
+  width: 22px; height: 22px; border-radius: var(--radius-pill);
+  display: grid; place-items: center;
+  font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
+  background: var(--color-surface-2); color: var(--color-text-muted);
+}
+.rt-question:first-child::before { top: 0; }
+.rt-question__text { font-weight: var(--font-weight-medium); color: var(--color-text); }
+.rt-question__opts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.rt-opt { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--color-surface-2); font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.rt-opt--correct { background: var(--color-positive-soft); color: var(--color-text); font-weight: var(--font-weight-semibold); }
+.rt-question__stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+
+.rt-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--radius-pill); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); background: var(--color-surface-2); color: var(--color-text-muted); }
+.rt-pill--draft { background: var(--color-warning-soft); color: var(--color-text); }
+.rt-pill--ai { background: color-mix(in srgb, var(--chart-2) 14%, var(--color-surface)); color: var(--color-text); }
+.rt-pill--miss { background: var(--color-surface-2); color: var(--color-text-muted); }
+
+.rt-meter { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.rt-meter__track { width: 96px; height: 6px; border-radius: var(--radius-pill); background: var(--color-surface-2); overflow: hidden; }
+.rt-meter__fill { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--chart-1); }
+
+/* Today and tomorrow (game-day review, moved from the content page) */
+.rt-launch { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
+.rt-gameday { border-top: 1px solid var(--color-border); padding-top: var(--space-3); margin-top: var(--space-3); }
+.rt-gameday__title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); }
+.rt-qlist { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--font-size-sm); }
+.rt-qlist__opts { font-size: var(--font-size-xs); margin-top: 2px; }
+.rt-qlist .btn { margin-top: 4px; padding: 2px 10px; font-size: var(--font-size-xs); }
+
+@media (max-width: 640px) {
+  .rt-toolbar { flex-direction: column; align-items: stretch; }
+  .rt-toolbar .segmented { overflow-x: auto; }
+  .rt-panel__head { flex-direction: column; }
+}

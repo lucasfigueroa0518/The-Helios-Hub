@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { chooseDbConnection, dbPoolSettings, resolvePoolMax } from '@/lib/db';
+import { chooseDbConnection, dbPoolSettings, resolveIdleTimeoutMs, resolvePoolMax } from '@/lib/db';
 
 const SESSION = 'postgres://postgres.example:secret@aws-0.pooler.supabase.com:5432/postgres';
 const TRANSACTION = 'postgres://postgres.example:secret@aws-0.pooler.supabase.com:6543/postgres';
@@ -60,4 +60,14 @@ test('a checkout gives up in 3 seconds', () => {
   assert.equal(web.max, 3);
   assert.equal(worker.connectionTimeoutMillis, 3_000);
   assert.equal(worker.max, 6);
+});
+
+test('a worker keeps idle clients past its ~17 s poll; a Vercel isolate lets them go in 10 s', () => {
+  assert.equal(dbPoolSettings('transaction', { VERCEL: '1' }).idleTimeoutMillis, 10_000);
+  assert.equal(dbPoolSettings('transaction', { VERCEL: '1' }).keepAlive, false);
+  assert.equal(dbPoolSettings('transaction', {}).idleTimeoutMillis, 60_000);
+  assert.equal(dbPoolSettings('transaction', {}).keepAlive, true);
+  assert.equal(resolveIdleTimeoutMs({ PG_IDLE_TIMEOUT_MS: '120000' }), 120_000);
+  assert.equal(resolveIdleTimeoutMs({ VERCEL: '1', PG_IDLE_TIMEOUT_MS: 'soon' }), 10_000);
+  assert.equal(resolveIdleTimeoutMs({ PG_IDLE_TIMEOUT_MS: '0' }), 60_000);
 });

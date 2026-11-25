@@ -8,8 +8,8 @@
  * updated or deleted.
  *
  * Parts:
- *   { kind: 'scene', key: <frame module id> }  every frame a frame worker wrote: frame 1's hook
- *       (`01-hook`, under the bank's opener, which code writes) and the storyboard frames 2-7.
+ *   { kind: 'scene', key: <frame module id> }  every frame a frame worker wrote: the storyboard
+ *       frames 2-7. Frame 1 (the bank's opener over the AI 101 card, hx-6) is code's.
  *       The close (frame 8) is the kit's and the same in every reel, so it is not a part.
  *       Fixes wording | photo | color | layout all do the same redo: the person's words become the
  *       resume note naming that frame (job.ts sceneResumeNote), its module is removed, and ONE
@@ -192,12 +192,12 @@ async function publishedAt(db: Queryable, jobId: string): Promise<string | null>
   return rows[0]?.at ?? null;
 }
 
-/** The frames a frame worker wrote, from the stored storyboard: frame 1's hook under a bank opener, never the kit's close. */
+/** The frames a frame worker wrote, from the stored storyboard: never frame 1 under a bank opener, never the kit's close. */
 async function scenesOf(storyboard: string | null, job: JobRow): Promise<Scene[]> {
   return (await framesOf(storyboard, job)).scenes;
 }
 
-/** The worker-written scenes, and the module ids code writes (the bank opener over the hook, the kit's close). */
+/** The worker-written scenes, and the module ids code writes (the bank opener and its AI 101 card, the kit's close). */
 async function framesOf(storyboard: string | null, job: JobRow): Promise<{ scenes: Scene[]; codeWritten: string[] }> {
   if (!storyboard) return { scenes: [], codeWritten: [] };
   const { parseFrames, isClose, HOOK_ID, OPENER_FRAME } = await import('../../../explainers/world-kit/frames.mjs');
@@ -209,15 +209,18 @@ async function framesOf(storyboard: string | null, job: JobRow): Promise<{ scene
       codeWritten.push(f.id);
       continue;
     }
-    const key = f.number === OPENER_FRAME && job.opener ? (HOOK_ID as string) : f.id;
-    if (key !== f.id) codeWritten.push(f.id);
+    // hx-6: under a bank opener, frame 1 is code's (the opener and the AI 101 card it lands on)
+    if (f.number === OPENER_FRAME && job.opener) {
+      codeWritten.push(f.id, HOOK_ID as string);
+      continue;
+    }
+    const key = f.id;
     if (!FRAME_ID.test(key)) continue;
     const said = (v: string | undefined) => (v ?? '').replace(/^["“]|["”]$/g, '').trim();
     const what = [f.fields.scene && `Shows: ${f.fields.scene}`, f.fields.voiceover && `Voice: "${said(f.fields.voiceover)}"`, f.fields.shots && `Shots: ${f.fields.shots}`]
       .filter(Boolean)
       .join(' ');
-    const hook = key !== f.id ? ' (the hook under the series opener)' : '';
-    scenes.push({ key, number: f.number, name: f.name, text: `Frame ${f.number}, ${f.name}${hook}. ${what}`.slice(0, 600) });
+    scenes.push({ key, number: f.number, name: f.name, text: `Frame ${f.number}, ${f.name}. ${what}`.slice(0, 600) });
   }
   return { scenes, codeWritten };
 }

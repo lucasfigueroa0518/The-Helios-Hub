@@ -1,5 +1,7 @@
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
+import { HOLD_REASONS, holdApprovedWhilePaused } from '@/lib/content-type/unslot';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
@@ -25,8 +27,9 @@ import {
 
 /**
  * One reel per posting slot per Eastern day. The nightly run fills the slots
- * only while publishing is live. A person can schedule a reel into the next
- * open slot either way. Force post does not use a slot.
+ * while Text on Screen holds slots (Approval or Live, contract §4.3); only Live
+ * posts them (D16). A person can schedule a reel into the next open slot either
+ * way. Force post does not use a slot.
  *
  * Slots live on the lifecycle spine (social_hub.schedule, vertical 'reels',
  * D39). A slot belongs to the post idea (idea_ref) and gets its video's item
@@ -120,17 +123,31 @@ async function outcome(schedule: StoredSchedule): Promise<ScheduleOutcome> {
   return { scheduled: true, schedule: withMode, note: scheduleNote(withMode) };
 }
 
-/** Live is the switch for the nightly auto-schedule. Off until it is turned on. */
+/**
+ * Whether Text on Screen is Live (D16): posts go to Instagram only in the Live state. Generate off with Live on reads
+ * as paused (stateOf), so it books nothing. Off until it is turned on.
+ */
 export async function publishingLive(): Promise<boolean> {
-  return (await getSetting<boolean>('publishing_live')) === true;
+  return postsToInstagram(await reelsState());
+}
+
+/** Text on Screen's state (D16): stateOf(auto_run, publishing_live). */
+export async function reelsState(): Promise<TypeState> {
+  const [generate, live] = await Promise.all([getSetting<unknown>('auto_run'), getSetting<unknown>('publishing_live')]);
+  return stateOf(generate === true, live === true).state;
+}
+
+/** Whether Text on Screen books slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
+export async function reelsHoldsSlots(): Promise<boolean> {
+  return holdsSlots(await reelsState());
 }
 
 /**
- * Every content type needs a person's approval before it posts (docs/social-overnight.md).
- * On unless the setting says false. An auto-scheduled reel then posts only once approved.
+ * Every post needs a person's approval (settings standard D16: require_approval is always true and is never read
+ * as false). An auto-scheduled reel posts only once approved. Kept async for its callers.
  */
 export async function requireApproval(): Promise<boolean> {
-  return (await getSetting<boolean>('require_approval')) !== false;
+  return true;
 }
 
 export const NOT_APPROVED_NOTE = 'Nobody approved this reel before its slot, so it was not posted.';
@@ -168,9 +185,38 @@ async function takenSlots(fromDate: string): Promise<Set<string>> {
 }
 
 /**
- * Reserve the earliest window that has not ended. `throughDate` limits the
- * search to that Eastern calendar day. A reel that already has a clock time
- * keeps it.
+ * The posting day a reel was made for (Bald-Eagle D4: Text on Screen is made 2 days ahead, and its slate is
+ * keyed by that day): the earliest New York date from today on whose newest slate scoring this idea selected
+ * it. Null when no slate from today on selected it (the bench, or a day that has passed).
+ */
+export async function reelTargetDate(postIdeaId: string, now = new Date()): Promise<string | null> {
+  const { rows } = await dbQuery<{ ny_date: string }>(
+    `SELECT d.ny_date FROM (
+       SELECT DISTINCT ON (sl.ny_date) sl.ny_date::text AS ny_date, s.selected
+         FROM reels.idea_scores s
+         JOIN reels.score_slates sl ON sl.id = s.slate_id
+        WHERE s.post_idea_id = $1::uuid AND sl.ny_date >= $2::date
+        ORDER BY sl.ny_date, sl.scored_at DESC) d
+      WHERE d.selected
+      ORDER BY d.ny_date
+      LIMIT 1`,
+    [postIdeaId, calendarDateKey(now)],
+  );
+  return rows[0]?.ny_date ?? null;
+}
+
+/** The 409 note when nothing could be booked in the range asked for. */
+function noSlotNote(today: string, throughDate?: string): string {
+  if (!throughDate) return 'No posting slot is open in the next two weeks.';
+  if (throughDate === today) return 'No posting window is still open today.';
+  return `No posting slot is open on ${throughDate}.`;
+}
+
+/**
+ * Reserve the earliest window that has not ended, from `fromDate` (default today) through `throughDate`
+ * (default two weeks ahead). A reel that already has a clock time keeps it. A person's Approve with no
+ * range given books the reel's own posting day when that day is still ahead (reelTargetDate; Bald-Eagle D4:
+ * approving keeps the target date and never moves the reel to today).
  */
 export async function schedulePostIdea(
   postIdeaId: string,
@@ -178,6 +224,7 @@ export async function schedulePostIdea(
   videoJobId: string | null,
   now = new Date(),
   throughDate?: string,
+  fromDate?: string,
 ): Promise<ScheduleOutcome> {
   const existing = await activeSchedule(postIdeaId);
   if (existing) {
@@ -191,30 +238,32 @@ export async function schedulePostIdea(
   }
   const itemId = videoJobId ? await reelItemId(videoJobId) : null;
   if (source === 'user' && videoJobId) await approveReel(videoJobId, 'user');
+  const today = calendarDateKey(now);
+  if (throughDate === undefined && fromDate === undefined) {
+    const target = await reelTargetDate(postIdeaId, now);
+    if (target && target > today) {
+      fromDate = target;
+      throughDate = target;
+    }
+  }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const fromDate = calendarDateKey(now);
     // A failed slot read throws: it must not silently book by the old rules (ruling P2).
-    const plan = await slotPlan(hubQ, fromDate);
+    const plan = await slotPlan(hubQ, today);
     let choice: { nyDate: string; slot: SlotId; publishAt: Date } | null;
     // Template: the mode of the slot chosen, from the plan in hand (no second read).
     let feedMode: FeedMode | null = null;
     if (!plan) {
       // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
-      choice = chooseSlot(now, await takenSlots(fromDate), uniformIndex, POSTING_TIME_ZONE, throughDate);
+      choice = chooseSlot(now, await takenSlots(today), uniformIndex, POSTING_TIME_ZONE, throughDate, fromDate);
     } else {
       // The calendar: its slots within the daily cap, at [slot, slot + 15]; Main slots space against feed posts.
       const busy = [...(await busyFeedTimes(hubQ, now, 'reels')), ...(await ownFeedTimes(hubQ, 'reels', now))];
-      const picked = await chooseTemplateSlot(hubQ, plan, 'reels', { now, busy, rng: uniformIndex, throughDate });
+      const picked = await chooseTemplateSlot(hubQ, plan, 'reels', { now, busy, rng: uniformIndex, throughDate, fromDate });
       choice = picked ? { nyDate: picked.nyDate, slot: picked.slot as SlotId, publishAt: picked.publishAt } : null;
       feedMode = picked?.feedMode ?? null;
     }
-    if (!choice) {
-      const note = throughDate
-        ? 'No posting window is still open today.'
-        : 'No posting slot is open in the next two weeks.';
-      return { scheduled: false, status: 409, note };
-    }
+    if (!choice) return { scheduled: false, status: 409, note: noSlotNote(today, throughDate) };
     try {
       const booked = await bookSlot(reelsSpine, {
         vertical: 'reels',
@@ -239,63 +288,51 @@ export async function schedulePostIdea(
 }
 
 export const BENCH_SCHEDULE_NOTE =
-  'Only the reels selected for today go on the clock. The rest stay on the bench.';
+  'Only the reels selected for a day go on the clock. The rest stay on the bench.';
 
 export const MISSED_TODAY_NOTE =
   'This reel missed today’s windows. It carries to tomorrow at its score, instead of being scheduled late.';
 
-/** True when this idea was selected for today's reels. Rank alone leaves it on the bench. */
+/** True when this idea was selected for a day's reels. Rank alone leaves it on the bench. */
 export function isPostingRank(selected: boolean): boolean {
   return selected;
 }
 
-async function selectedOnDate(postIdeaId: string, nyDate: string): Promise<boolean> {
-  const { rows } = await dbQuery<{ selected: boolean }>(
-    `SELECT s.selected
-       FROM reels.idea_scores s
-       JOIN reels.score_slates sl ON sl.id = s.slate_id
-      WHERE s.post_idea_id = $1::uuid
-        AND sl.ny_date = $2::date
-      ORDER BY sl.scored_at DESC
-      LIMIT 1`,
-    [postIdeaId, nyDate],
-  );
-  return rows[0]?.selected === true;
-}
-
-/** How many of today's windows can still take a reel. A started window counts until it ends. */
-export async function windowsStillOpen(now = new Date()): Promise<number> {
-  const today = calendarDateKey(now);
+/**
+ * How many of a New York day's windows can still take a reel (default today). A started window counts
+ * until it ends; a day ahead (Bald-Eagle D4) has every untaken window open.
+ */
+export async function windowsStillOpen(now = new Date(), nyDate = calendarDateKey(now)): Promise<number> {
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
-  const plan = await slotPlan(hubQ, today, 1);
+  const plan = await slotPlan(hubQ, nyDate, 1);
   if (plan) {
-    // Template mode: today's reels slots within the cap, untaken, with a drift minute still ahead.
+    // Template mode: the day's reels slots within the cap, untaken, with a drift minute still ahead.
     const { byDate, taken } = await templateSlots(hubQ, plan, 'reels');
-    return (byDate.get(today) ?? []).filter(
-      (slot) => !taken.has(`${today}|${slotId(slot.startMinute, slot.series)}`) && driftMinute(today, slot, now, [], () => 0) != null,
+    return (byDate.get(nyDate) ?? []).filter(
+      (slot) => !taken.has(`${nyDate}|${slotId(slot.startMinute, slot.series)}`) && driftMinute(nyDate, slot, now, [], () => 0) != null,
     ).length;
   }
-  const taken = await takenSlots(today);
+  const taken = await takenSlots(nyDate);
   return POSTING_SLOTS.filter(
-    (slot) => !taken.has(slotKey(today, slot.id)) && openMinuteRange(today, slot.id, now) != null,
+    (slot) => !taken.has(slotKey(nyDate, slot.id)) && openMinuteRange(nyDate, slot.id, now) != null,
   ).length;
 }
 
 /**
- * A person can put one of today's selected reels into a window still open
- * today. The bench is not scheduled. A day with no window left is a miss,
- * not a tomorrow slot.
+ * A person can put a selected reel into a window on its own posting day (today, or the day it was made
+ * ahead for: reelTargetDate, Bald-Eagle D4). The bench is not scheduled. Today with no window left is a
+ * miss, not a tomorrow slot.
  */
 export async function scheduleVideo(videoJobId: string, now = new Date()): Promise<ScheduleOutcome> {
   const ready = await publishReadiness(videoJobId);
   if (!ready.ok) return { scheduled: false, status: ready.status, note: ready.note };
   const today = calendarDateKey(now);
-  const selected = await selectedOnDate(ready.postIdeaId, today);
-  if (!isPostingRank(selected)) {
+  const target = await reelTargetDate(ready.postIdeaId, now);
+  if (!isPostingRank(target != null)) {
     return { scheduled: false, status: 409, note: BENCH_SCHEDULE_NOTE };
   }
-  const result = await schedulePostIdea(ready.postIdeaId, 'user', videoJobId, now, today);
-  if (!result.scheduled && result.note === 'No posting window is still open today.') {
+  const result = await schedulePostIdea(ready.postIdeaId, 'user', videoJobId, now, target!, target!);
+  if (!result.scheduled && target === today && result.note === 'No posting window is still open today.') {
     return { scheduled: false, status: result.status, note: MISSED_TODAY_NOTE };
   }
   return result;
@@ -303,11 +340,27 @@ export async function scheduleVideo(videoJobId: string, now = new Date()): Promi
 
 /**
  * The reels selected for this slate, best rank first, one per window still
- * open on that slate's Eastern day. A later reel is not scheduled once the
- * day has no window left. Does nothing while publishing is not live.
+ * open on that slate's Eastern day (its posting date: a slate made ahead
+ * books only that day, Bald-Eagle D4). A later reel is not scheduled once the
+ * day has no window left. Does nothing while Text on Screen is Paused (holdsSlots, D17).
  */
+/**
+ * unslottedSql (lib/content-type/unslot.ts) at the idea level: Text on Screen books by post idea, and its slots carry
+ * the idea (idea_ref) with or without a video's content item. True when one of the idea's slots went back to Made
+ * (reason paused / slot-passed), or its reel was approved while Paused (the D18 hold), and none is waiting, posting or
+ * posted. `ideaId` is the SQL expression for the idea id.
+ */
+export function reelIdeaUnslottedSql(ideaId: string): string {
+  const reasons = HOLD_REASONS.map((r) => `'${r}'`).join(', ');
+  const ofIdea = (a: string) =>
+    `${a}.vertical = 'reels' AND (${a}.idea_ref = (${ideaId})::text
+       OR ${a}.content_item_id IN (SELECT ci.id FROM social_hub.content_items ci WHERE ci.vertical = 'reels' AND ci.idea_ref = (${ideaId})::text))`;
+  return `(EXISTS (SELECT 1 FROM social_hub.schedule u WHERE ${ofIdea('u')} AND u.status = 'cancelled' AND u.error IN (${reasons}))
+    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule w WHERE ${ofIdea('w')} AND w.status IN ('scheduled', 'publishing', 'published')))`;
+}
+
 export async function scheduleSelectedSlate(slateId: string, now = new Date()): Promise<{ scheduled: number }> {
-  if (!(await publishingLive())) return { scheduled: 0 };
+  if (!(await reelsHoldsSlots())) return { scheduled: 0 };
   const { rows } = await dbQuery<{ post_idea_id: string; ny_date: string }>(
     `SELECT s.post_idea_id, sl.ny_date::text AS ny_date
        FROM reels.idea_scores s
@@ -318,30 +371,44 @@ export async function scheduleSelectedSlate(slateId: string, now = new Date()): 
           SELECT 1 FROM reels.published_status p
            WHERE p.post_idea_id = s.post_idea_id AND p.published
         )
+        -- Back in Made (D17, D18): an idea unslotted by Pause or a passed slot stays approved, never re-slotted here.
+        AND NOT ${reelIdeaUnslottedSql('s.post_idea_id')}
       ORDER BY s.rank NULLS LAST`,
     [slateId],
   );
   const nyDate = rows[0]?.ny_date;
   let scheduled = 0;
   for (const row of rows) {
-    const result = await schedulePostIdea(row.post_idea_id, 'auto', null, now, nyDate);
+    const result = await schedulePostIdea(row.post_idea_id, 'auto', null, now, nyDate, nyDate);
     if (result.scheduled) scheduled += 1;
   }
   return { scheduled };
 }
 
-/** Today's latest slate, when Live is switched on after the night has already run. */
+/**
+ * Approve while Text on Screen is Paused (D18, 2026-11-20): the reel's video is approved (the hub verb's approveVideo)
+ * and held out of automatic placement, by its item and its idea, so scheduleSelectedSlate / scheduleLatestToday pass it
+ * over once the type is in Approval or Live. A person placing it clears the hold.
+ */
+export async function holdApprovedReel(postIdeaId: string, videoJobId: string, now = new Date()): Promise<boolean> {
+  return holdApprovedWhilePaused(reelsSpine, { vertical: 'reels', itemId: await reelItemId(videoJobId), ideaRef: postIdeaId, now });
+}
+
+/**
+ * When Text on Screen leaves Paused (Approval or Live) after the night has already run: the latest slate of today and of every day
+ * ahead (Text on Screen is made 2 days ahead, Bald-Eagle D4), each booked on its own day. Only the night's fresh picks,
+ * placed for review: a reel approved while Paused, or sent back to Made, is passed over (reelIdeaUnslottedSql, D18).
+ */
 export async function scheduleLatestToday(now = new Date()): Promise<{ scheduled: number }> {
   const { rows } = await dbQuery<{ id: string }>(
-    `SELECT id FROM reels.score_slates
-      WHERE ny_date = $1::date
-      ORDER BY scored_at DESC
-      LIMIT 1`,
+    `SELECT DISTINCT ON (ny_date) id FROM reels.score_slates
+      WHERE ny_date >= $1::date
+      ORDER BY ny_date, scored_at DESC`,
     [calendarDateKey(now)],
   );
-  const id = rows[0]?.id;
-  if (!id) return { scheduled: 0 };
-  return scheduleSelectedSlate(id, now);
+  let scheduled = 0;
+  for (const row of rows) scheduled += (await scheduleSelectedSlate(row.id, now)).scheduled;
+  return { scheduled };
 }
 
 async function readyVideo(postIdeaId: string, videoJobId: string | null): Promise<string | null> {
@@ -620,9 +687,13 @@ export async function loadSchedulesForIdeas(postIdeaIds: string[]): Promise<Reco
 /**
  * Force post (the /reels Force button, also the Social Hub's Hard publish):
  * post now as a trial reel, skipping the slot. The same three steps as the
- * force branch of POST /api/reels/publish, in one place.
+ * force branch of POST /api/reels/publish, in one place. Refused unless Text
+ * on Screen is Live (D16), before anything is recorded.
  */
+export const REELS_NOT_LIVE_NOTE = 'Text on Screen isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
+
 export async function forcePost(videoJobId: string): Promise<{ queued: true; id: string; note: string } | { queued: false; status: number; note: string }> {
+  if (!(await publishingLive())) return { queued: false, status: 409, note: REELS_NOT_LIVE_NOTE };
   const ready = await publishReadiness(videoJobId, { trigger: 'force' });
   if (!ready.ok) return { queued: false, status: ready.status, note: ready.note };
   await cancelScheduledPost(ready.postIdeaId);
