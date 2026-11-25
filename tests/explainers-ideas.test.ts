@@ -348,8 +348,8 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   assert.ok(system[0].text.startsWith(IDEA_GENERATOR_INSTRUCTIONS));
   assert.ok(!system[0].text.includes('"p"'), 'pool is not in the cached prefix');
   assert.ok(!system[0].text.includes('"inference"'), "tonight's syllabus topics are not in the cached prefix");
-  assert.match(idea.messages[0].content as string, /1\. term: "inference" \(AI\)\n   Level 1 of \d+: What AI is\. Unit: What AI is\.\n   Comes after \(order only; the viewer may not have seen it\): \["model training"\]\n   Angle \(the question the reel answers\): "Why is answering cheaper than training\?"\n   Takeaway \(what the viewer leaves with\): "Answering runs the question through the model once\."[\s\S]*"topic_title":"r"/);
-  assert.ok(!system[0].text.includes('Why is answering cheaper'), 'the angle is per-request, not in the cached prefix');
+  assert.match(idea.messages[0].content as string, /1\. term: "inference" \(AI\)\n   Level 1 of \d+: What AI is\. Unit: What AI is\.\n[\s\S]*"topic_title":"r"/);
+  assert.doesNotMatch(idea.messages[0].content as string, /Why is answering cheaper|Answering runs the question|Comes after/, 'v11: the generator writes from the term alone, as v6 did (no angle, takeaway or prerequisites)');
   assert.match(idea.messages[0].content as string, /Write one idea per topic, 1 in all, in this order\./);
   assert.ok((idea.messages[0].content as string).includes('"topic_title":"p"'));
   assert.ok((scope.messages[0].content as string).includes('["A","B"]'));
@@ -769,14 +769,14 @@ test('the worker retries a failed or thrown night after the delay, at most twice
 const registerText = () => fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
 
 test('analogy writer v8 is the golden-set prompt, with the no-real-names line and JSON output (EX3-123)', () => {
-  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v11');
+  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v12');
   assert.equal(ANALOGY_CALLS, 2);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI 101" reel/);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- Its name is the whole picture\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It is one idea, not a scene\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- That thing's single defining trait is the concept's defining trait\./);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It shows the concept doing its job\. Its limits, if any, are for later in the reel\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It shows what the Lesson says the viewer leaves with: the concept working, or, when the Lesson is a cause or a failure, that happening\. Side limits and edge cases stay out\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It names no real company, store or product, no real person, and no character from a film, show or book\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /They show the standard, not a template/);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Return JSON matching the schema: name, explanation \(two or three sentences\), and mapping \(three to six rows, most important first/);
@@ -898,7 +898,7 @@ test("a topic that makes the pool gets its named analogy from two Opus calls and
   const webhooks = (await getTopic(db, results[0].topicId))!;
   const note = await noteOf(db, results[0].topicId);
   assert.ok('pick' in note);
-  assert.equal(note.version, 'analogy-writer-v11');
+  assert.equal(note.version, 'analogy-writer-v12');
   assert.deepEqual(note.golden_hidden, ['webhook']);
   assert.equal(note.candidates.length, 2);
   assert.equal(note.pick, 1);
@@ -1053,20 +1053,23 @@ test('a writer call that fails is a failed candidate; a failed pass is recorded 
 });
 
 test('the idea generator writes one idea per assigned syllabus topic (curriculum); both write the term (EX3-86)', () => {
-  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v10');
+  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v11');
   assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v6');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) assert.ok(prompt.includes(TERM_RULE));
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /exactly one idea for each syllabus topic in the user message, in the same order/);
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /The term is the assigned topic's term, copied exactly/);
-  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Deliver the angle and the takeaway: the scope and the payload answer the angle, the payload says the takeaway/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Teach the assigned syllabus topics, one idea each/);
+  assert.doesNotMatch(IDEA_GENERATOR_INSTRUCTIONS, /takeaway|Deliver the angle|its angle/i, 'v11: the 11-21 idea shape, written from the term alone');
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Every reel stands alone/);
   assert.ok(!/already met/.test(IDEA_GENERATOR_INSTRUCTIONS), 'the generator never assumes the viewer saw earlier reels');
-  assert.ok(IDEA_GENERATOR_INSTRUCTIONS.includes(PLAIN_WORDS_RULE) && ANALOGY_WRITER_INSTRUCTIONS.includes(PLAIN_WORDS_RULE), 'plain words bind the idea and the analogy');
-  assert.ok(IDEA_GENERATOR_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE) && PAYLOAD_REWRITER_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE), 'the payload says what the concept does, never what it is not');
-  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /the payload delivers that mechanism at any altitude/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /never set the concept against a different thing or a rival method/);
-  assert.ok(!/often holds a contrast/.test(ANALOGY_WRITER_INSTRUCTIONS), 'no nudge toward a two-thing contrast');
-  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /never a restatement of the term's own words/);
+  assert.ok(!IDEA_GENERATOR_INSTRUCTIONS.includes(PLAIN_WORDS_RULE) && ANALOGY_WRITER_INSTRUCTIONS.includes(PLAIN_WORDS_RULE), 'v11: plain words bind the analogy, not the idea');
+  assert.ok(!IDEA_GENERATOR_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE) && !PAYLOAD_REWRITER_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE), "v11: the payload may say what the concept is not, as the 11-21 ideas did");
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /If a viewer would need to map the second thing too, or would leave remembering it instead of the concept, drop it/);
+  assert.doesNotMatch(ANALOGY_WRITER_INSTRUCTIONS, /never set the concept against a different thing/, 'v12: the golden set itself contrasts with other things');
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /food and cooking, shopping and money, travel/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /a world nearly every adult shares/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /when the Lesson is a cause or a failure, that happening/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /pick the analogy whose everyday thing makes that Lesson obvious at a glance/);
   assert.doesNotMatch(IDEA_GENERATOR_INSTRUCTIONS, /tonight's buckets|Skew toward AI|Exactly 2 of the 3/, 'no bucket pick or per-call AI skew left');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) {
     assert.match(prompt, /one minute|one-minute/);
