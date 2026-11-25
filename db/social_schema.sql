@@ -310,3 +310,45 @@ CREATE INDEX IF NOT EXISTS idx_social_rerun_requests_recent ON social.rerun_requ
 -- One open rerun per news story.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_rerun_requests_open_story
     ON social.rerun_requests (story_id) WHERE status IN ('requested', 'running');
+
+-- ── Hub read columns (db/perf_2026_11_24_social_runs_summary.sql) ────────────
+-- `record` is ~1 MB per row; the hub reads these small copies instead. A
+-- trigger fills them from `record` on every write. Same SQL as that file.
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS jev_usd numeric;
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS cost_by_stage jsonb;
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS post_summaries jsonb;
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS shortlist jsonb;
+
+-- Never throws on odd JSON: a field of the wrong type is stored as NULL, so a
+-- malformed record can never fail the run's write.
+CREATE OR REPLACE FUNCTION social.runs_fill_summary() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+DECLARE
+  posts jsonb := NEW.record->'result'->'posts';
+BEGIN
+  NEW.jev_usd := CASE WHEN jsonb_typeof(NEW.record->'jev'->'costUsd') = 'number'
+                      THEN (NEW.record->'jev'->>'costUsd')::numeric END;
+  NEW.cost_by_stage := CASE WHEN jsonb_typeof(NEW.record->'result'->'costByStage') = 'object'
+                            THEN NEW.record->'result'->'costByStage' END;
+  NEW.shortlist := CASE WHEN jsonb_typeof(NEW.record->'selection'->'shortlist') = 'array'
+                        THEN NEW.record->'selection'->'shortlist' END;
+  NEW.post_summaries := CASE WHEN jsonb_typeof(posts) = 'array' THEN (
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'storyId', e->>'storyId',
+             'costUsd', CASE WHEN jsonb_typeof(e->'costUsd') = 'number' THEN e->'costUsd' END,
+             'checks', e->'checks') ORDER BY n), '[]'::jsonb)
+      FROM jsonb_array_elements(posts) WITH ORDINALITY AS x(e, n)) END;
+  RETURN NEW;
+END
+$fn$;
+
+DROP TRIGGER IF EXISTS social_runs_fill_summary ON social.runs;
+CREATE TRIGGER social_runs_fill_summary
+  BEFORE INSERT OR UPDATE OF record ON social.runs
+  FOR EACH ROW EXECUTE FUNCTION social.runs_fill_summary();
+
+-- Backfill: rows written before the trigger. Setting record to itself fires it.
+-- Copies fields out of each row's own JSON; nothing is fetched or enriched.
+-- Rows already filled are skipped, so rerunning this file is cheap.
+UPDATE social.runs SET record = record
+ WHERE jev_usd IS NULL AND cost_by_stage IS NULL AND post_summaries IS NULL AND shortlist IS NULL;

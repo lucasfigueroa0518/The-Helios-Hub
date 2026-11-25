@@ -209,7 +209,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       pipelineHref: href,
       media: {
         kind: 'frames',
-        frames: frames.map((f) => ({ src: f.storage_path ? `/api/stories/frames/${encodeURIComponent(f.frame_id)}?v=${pathVersion(f.storage_path)}` : null, label: `Frame ${f.seq} · ${ROLE_LABEL[f.role] ?? f.role}`, path: f.storage_path })),
+        frames: frames.map((f) => storyFrameMedia(f)),
       },
       costMicros: null,
       costNote: null,
@@ -271,4 +271,23 @@ export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
       group: SERIES[row.series] ?? row.series,
     };
   });
+}
+
+/**
+ * One frame for the hub. An image frame shows its JPEG. A video frame's `src` and `path` are its poster (what an
+ * <img> can show, so every thumbnail and card works) and `video`/`videoPath` its MP4, played where the post opens.
+ */
+export function storyFrameMedia(f: Pick<StoryFrameRow, 'frame_id' | 'seq' | 'role' | 'storage_path' | 'poster_path' | 'media'>): { src: string | null; label: string; path: string | null; video?: string | null; videoPath?: string | null } {
+  const route = `/api/stories/frames/${encodeURIComponent(f.frame_id)}`;
+  const label = `Frame ${f.seq} · ${ROLE_LABEL[f.role] ?? f.role}`;
+  const isVideo = f.media === 'video' || /\.mp4$/i.test(f.storage_path ?? '');
+  if (!isVideo) return { src: f.storage_path ? `${route}?v=${pathVersion(f.storage_path)}` : null, label, path: f.storage_path };
+  const poster = f.poster_path ?? null;
+  return {
+    src: poster ? `${route}?v=${pathVersion(poster)}` : null,
+    label,
+    path: poster,
+    video: f.storage_path ? `${route}?media=video&v=${pathVersion(f.storage_path)}` : null,
+    videoPath: f.storage_path,
+  };
 }

@@ -18,7 +18,8 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import { canonicalSourceUrl, UNTRUSTED_MAX_CHARS, type TipCandidate } from './sources/candidate';
 import { SOURCE_REGISTRY } from './sources/registry';
 import type { TipTags } from './sources/score';
-import { saveCandidateTip, storedSourceUrls } from './store';
+import { saveCandidateTip, storedSourceUrls, trimTips } from './store';
+import { planStoredTipPool, POOL_TRIM_REASON, type TipPoolOptions } from './tip-pool';
 import type { TipSourceKind } from './types';
 
 /** The order's lookback: the legacy collect's window (live.ts SINCE_DAYS). */
@@ -107,6 +108,10 @@ export type IntakeTipsFound = {
   unmapped: number;
   alreadyStored: number;
   added: number;
+  /** New stories that did not make the best-30 pool (they stay in the intake and are offered again). */
+  belowPoolBar: number;
+  /** Waiting tips expired by the pool cap (tip-pool.ts). */
+  trimmed: number;
 };
 
 /**
@@ -119,6 +124,7 @@ export async function saveIntakeTips(
   deps: FieldNotesIntakeDeps,
   now: Date,
   registry: readonly FieldNotesSourceRef[] = SOURCE_REGISTRY,
+  pool: TipPoolOptions = {},
 ): Promise<IntakeTipsFound> {
   const since = new Date(now.getTime() - FIELD_NOTES_INTAKE_LOOKBACK_DAYS * 86_400_000);
   const stories = await deps.listOrderStories(asIntakeQuery(q), 'field-notes', { since, needScores: [FIELD_NOTES_SCORECARD] });
@@ -141,10 +147,14 @@ export async function saveIntakeTips(
   }
   const found = [...byUrl.values()].sort((a, b) => b.stored.score - a.stored.score);
   const already = await storedSourceUrls(q, found.map((f) => f.candidate.sourceUrl));
+  const fresh = found.filter((f) => !already.has(f.candidate.sourceUrl));
+  // The best-30 pool (tip-pool.ts): only what makes the cut is saved; a waiting tip it displaces expires after.
+  const plan = await planStoredTipPool(q, fresh.map((f, i) => ({ key: i, score: f.stored.score })), pool);
   let added = 0;
-  for (const f of found) {
-    if (already.has(f.candidate.sourceUrl)) continue;
+  for (const i of plan.admit) {
+    const f = fresh[i]!;
     if (await saveCandidateTip(q, f.candidate, f.stored.score, { ...f.stored.tags, questionSetVersion: f.stored.version })) added += 1;
   }
-  return { source: 'intake', stories: stories.length, scored, unmapped, alreadyStored: already.size, added };
+  const trimmed = await trimTips(q, plan.expire, POOL_TRIM_REASON);
+  return { source: 'intake', stories: stories.length, scored, unmapped, alreadyStored: already.size, added, belowPoolBar: fresh.length - plan.admit.length, trimmed };
 }

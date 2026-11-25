@@ -42,7 +42,7 @@ import { createStoriesJev } from '@/lib/stories/jev';
 import { isFinalCapture, type StoryInsightsClient } from '@/lib/stories/publish/insights';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
 import { publishSet } from '@/lib/stories/publish/publish';
-import type { Series } from '@/lib/stories/render/types';
+import { photoLedgerUrl, type Series } from '@/lib/stories/render/types';
 import {
   claimNextRequested,
   monthSpendUsd,
@@ -277,7 +277,7 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
   const at = deps.now?.() ?? new Date();
   for (const f of got.frames) {
     if (!f.photo?.src || isBrandAsset(f.photo.kind)) continue;
-    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, vertical: verticalOfSeries(series), slide: f.seq, credit: f.photo.credit, scene: f.role }, deps.photoHttp ? { http: deps.photoHttp } : {}).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
+    await recordPublishedPhoto(deps.sourceDb, { url: photoLedgerUrl(f.photo), usedAt: at, storyId: `stories:${setId}`, vertical: verticalOfSeries(series), slide: f.seq, credit: f.photo.credit, scene: f.role }, deps.photoHttp ? { http: deps.photoHttp } : {}).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
   }
   log(`published ${series} ${got.set.ny_date}: ${result.mediaIds.length} frames`);
   return true;

@@ -4,9 +4,16 @@ import test from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
 
-import { LFD_CAPTION_MODEL, LFD_CAPTION_SYSTEM, LFD_CAPTION_VERSION, writeLfdCaptionLines } from '@/lib/lfd/caption-lines';
+import {
+  checkLfdCaptionLines,
+  LFD_CAPTION_INSTRUCTIONS,
+  LFD_CAPTION_MODEL,
+  LFD_CAPTION_VERSION,
+  lfdCaptionSystem,
+  writeLfdCaptionLines,
+} from '@/lib/lfd/caption-lines';
 import type { Ready } from '@/lib/lfd/types';
-import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
+import { readHeliosVoice } from '@/lib/social/voice/voice';
 
 const ready = (i: number): Ready => ({
   pick: { key: `k${i}`, refs: [`r${i}`], origin: 'reels', headline: `H${i}`, sourceName: `Outlet ${i}`, url: `https://o${i}.com/a`, body: '', publishedAt: null, net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' },
@@ -15,10 +22,9 @@ const ready = (i: number): Ready => ({
 });
 
 const VALID = {
-  opener: '⬅️ Swipe for a robot that folds laundry, a new Claude model and a chip fight.',
-  body: 'A robot folded a full load of laundry on its own this week.\n\nAnthropic also put out a new Claude model.',
+  opener: '⬅️ Swipe for a robot that folds laundry and a new Claude model.',
+  body: 'A robot folded a full load of laundry on its own this week.\nAnthropic also put out a new Claude model.',
   question: 'Which one caught your attention? 👇',
-  helios_line: 'A faster model means a real estate team can answer a new listing lead in minutes, and Helios would tell any agent to stop letting those sit until morning.',
 };
 
 function stub(reply: unknown | Error, opts: { noUsage?: boolean } = {}) {
@@ -35,44 +41,57 @@ function stub(reply: unknown | Error, opts: { noUsage?: boolean } = {}) {
   return { create, calls };
 }
 
-const recent = [{ closing: 'At Helios we think law firms should care about this one.', buildLine: false, createdAt: new Date('2026-10-12T00:00:00Z') }];
+const recent = [{ closing: 'Which of these would change your week?', buildLine: false, createdAt: new Date('2026-10-12T00:00:00Z') }];
+const two = [0, 1].map(ready);
 
-test('valid lines pass through', async () => {
+test('valid lines pass through: opener, body, question only', async () => {
   const s = stub(VALID);
-  const res = await writeLfdCaptionLines([0, 1].map(ready), recent, s.create);
-  assert.deepEqual(res.lines, { opener: VALID.opener, body: VALID.body, question: VALID.question, heliosLine: VALID.helios_line });
+  const res = await writeLfdCaptionLines(two, recent, s.create);
+  assert.deepEqual(res.lines, VALID);
   assert.ok(res.costUsd > 0, 'the call is priced');
   assert.equal(s.calls.length, 1);
 });
 
+test('body lines are trimmed and blank lines collapse to single newlines', () => {
+  const lines = checkLfdCaptionLines({ ...VALID, body: '  Line one.  \n\n\nLine two.  ' }, 2);
+  assert.equal(lines.body, 'Line one.\nLine two.');
+});
+
+test('a body whose line count differs from the story count gives null', async () => {
+  const res = await writeLfdCaptionLines([0, 1, 2].map(ready), [], stub(VALID).create);
+  assert.equal(res.lines, null);
+  assert.match(res.reason ?? '', /2 lines for 3 stories/);
+  assert.doesNotThrow(() => checkLfdCaptionLines(VALID), 'no story count: no line-count check');
+});
+
 test('opener over 125 chars gives null', async () => {
-  const res = await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, opener: `Swipe ${'x'.repeat(125)}` }).create);
+  const res = await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, body: 'One line.', opener: `Swipe ${'x'.repeat(125)}` }).create);
   assert.equal(res.lines, null);
   assert.match(res.reason ?? '', /opener/);
   assert.ok(res.costUsd > 0, 'a rejected reply still cost money');
 });
 
-test('helios_line without Helios gives null', async () => {
-  const res = await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, helios_line: 'A law firm could use this. Follow for more.' }).create);
-  assert.equal(res.lines, null);
-});
-
-test('Helios outside the Helios line gives null', async () => {
+test('Helios named in any field gives null', () => {
   for (const field of ['opener', 'body', 'question'] as const) {
-    const res = await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, [field]: `${VALID[field]} Helios` }).create);
-    assert.equal(res.lines, null, field);
+    const raw = { ...VALID, [field]: field === 'body' ? `${VALID.body} Helios` : `${VALID[field]} Helios` };
+    assert.throws(() => checkLfdCaptionLines(raw, 2), /names Helios/, field);
   }
 });
 
-test('an empty body or question gives null', async () => {
-  assert.equal((await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, body: '  ' }).create)).lines, null);
-  assert.equal((await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, question: '' }).create)).lines, null);
+test('en and em dashes give null', () => {
+  assert.throws(() => checkLfdCaptionLines({ ...VALID, opener: 'Swipe — three stories' }, 2), /dash/);
+  assert.throws(() => checkLfdCaptionLines({ ...VALID, question: 'Which one, 2024–2026?' }, 2), /dash/);
 });
 
-test('emoji: at most two, none in the body or the Helios line', async () => {
-  assert.equal((await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, helios_line: `${VALID.helios_line} 🚀` }).create)).lines, null);
-  assert.equal((await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, body: `🤖 ${VALID.body}` }).create)).lines, null);
-  assert.equal((await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, question: 'Which one caught your eye? 👇🔥' }).create)).lines, null);
+test('an empty body or question gives null', async () => {
+  assert.equal((await writeLfdCaptionLines(two, [], stub({ ...VALID, body: '  ' }).create)).lines, null);
+  assert.equal((await writeLfdCaptionLines(two, [], stub({ ...VALID, question: '' }).create)).lines, null);
+});
+
+test('emoji: none in the body, at most two in total', () => {
+  assert.throws(() => checkLfdCaptionLines({ ...VALID, body: `🤖 ${VALID.body}` }, 2), /body has an emoji/);
+  assert.throws(() => checkLfdCaptionLines({ ...VALID, question: 'Which one caught your eye? 👇🔥' }, 2), /3 emoji/);
+  assert.doesNotThrow(() => checkLfdCaptionLines({ ...VALID, question: 'Which one caught your eye? 👇' }, 2));
 });
 
 test('a malformed reply gives null', async () => {
@@ -87,61 +106,48 @@ test('create throws gives null', async () => {
   assert.match(res.reason ?? '', /budget/);
 });
 
-test('system is cached and contains HELIOS_CONTEXT; closings in user message', async () => {
+test('system is the cached voice + instructions; stories and recent questions in the user message', async () => {
   const s = stub(VALID);
-  await writeLfdCaptionLines([0, 1].map(ready), recent, s.create);
+  await writeLfdCaptionLines(two, recent, s.create);
   const p = s.calls[0]! as Anthropic.MessageCreateParamsNonStreaming & { output_config?: { effort?: string; format?: { type: string; schema: { required: string[] } } } };
   assert.equal(p.model, 'claude-sonnet-5-5');
   assert.equal(p.output_config?.effort, 'low');
   assert.equal(p.output_config?.format?.type, 'json_schema');
-  assert.deepEqual(p.output_config?.format?.schema.required, ['opener', 'body', 'question', 'helios_line']);
+  assert.deepEqual(p.output_config?.format?.schema.required, ['opener', 'body', 'question']);
   const system = p.system as Array<{ text: string; cache_control?: unknown }>;
   assert.equal(system.length, 1);
   assert.ok(system[0]!.cache_control, 'the system prefix carries the cache breakpoint');
-  assert.ok(system[0]!.text.includes(HELIOS_CONTEXT));
-  assert.ok(system[0]!.text.startsWith(LFD_CAPTION_SYSTEM));
-  assert.ok(!system[0]!.text.includes('law firms should care'), 'closings stay out of the cached prefix');
+  assert.equal(system[0]!.text, lfdCaptionSystem());
+  assert.ok(system[0]!.text.startsWith(readHeliosVoice()), 'the shared voice leads the prefix');
+  assert.ok(system[0]!.text.includes(LFD_CAPTION_INSTRUCTIONS));
+  assert.ok(system[0]!.text.includes(LFD_CAPTION_VERSION));
+  assert.ok(!system[0]!.text.includes('change your week'), 'recent questions stay out of the cached prefix');
   const user = String(p.messages[0]!.content);
-  assert.match(user, /law firms should care/);
-  assert.match(user, /include_build_line: false/);
+  assert.match(user, /change your week/);
   assert.match(user, /Story 0 Just Dropped/);
   assert.match(user, /Body 1 sentence one/);
 });
 
-test('no closings block when the log is empty', async () => {
-  const s = stub(VALID);
+test('no recent-questions block when the log is empty', async () => {
+  const s = stub({ ...VALID, body: 'One line.' });
   await writeLfdCaptionLines([ready(0)], [], s.create);
-  assert.doesNotMatch(String(s.calls[0]!.messages[0]!.content), /Recent captions ended like this/);
+  assert.doesNotMatch(String(s.calls[0]!.messages[0]!.content), /Recent posts asked/);
 });
 
-test('the prompt is plain product copy: no em dashes', () => {
-  assert.doesNotMatch(LFD_CAPTION_SYSTEM, /—/);
+test('the instructions are plain product copy: no em dashes', () => {
+  assert.doesNotMatch(LFD_CAPTION_INSTRUCTIONS, /—/);
 });
 
 test('a reply with no usage never throws: the lines still come back, priced at 0', async () => {
-  const res = await writeLfdCaptionLines([ready(0)], [], stub(VALID, { noUsage: true }).create);
+  const res = await writeLfdCaptionLines(two, [], stub(VALID, { noUsage: true }).create);
   assert.ok(res.lines, res.reason);
   assert.ok(Number.isFinite(res.costUsd));
-  const bad = await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, helios_line: 'no brand' }, { noUsage: true }).create);
+  const bad = await writeLfdCaptionLines(two, [], stub({ ...VALID, opener: 'Helios says swipe' }, { noUsage: true }).create);
   assert.equal(bad.lines, null);
 });
 
-test('the Helios line follows the shared rules: best-matching industry, not a recent one, no example list of its own', () => {
-  const own = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
-  assert.match(own, /industry from the Helios context that best matches the week's stories/);
-  assert.match(own, /not one the recent closings used/);
-  assert.doesNotMatch(own, /real estate|law firm|med spa|HVAC|consumer brand/i);
-});
-
-test('copy fix (lfd-caption-v1 amended, 2026-10-20): one concrete point, a follow clause only now and then, short paragraphs', () => {
-  const own = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
-  assert.match(own, /make one concrete point about one of these stories for the industry it names/);
-  assert.match(own, /a short clause inviting the reader to follow for next week's roundup is rare, never the default/);
-  assert.doesNotMatch(own, /may end by inviting/);
-  assert.match(own, /two or three short paragraphs of one or two sentences each/);
-  assert.match(own, /Usually one emoji leads it/);
-});
-
-test('lfd-caption-v2 (fix round 3, 2026-10-20): version bumped after v1 shipped', () => {
-  assert.equal(LFD_CAPTION_VERSION, 'lfd-caption-v2');
+test('lfd-caption-v3 (caption voice, 2026-11-24): version bumped, no model-written Helios line', () => {
+  assert.equal(LFD_CAPTION_VERSION, 'lfd-caption-v3');
+  assert.match(LFD_CAPTION_INSTRUCTIONS, /No field names Helios/);
+  assert.match(LFD_CAPTION_INSTRUCTIONS, /exactly one line per story/);
 });

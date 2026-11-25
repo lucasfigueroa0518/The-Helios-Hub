@@ -9,7 +9,7 @@ import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { ideaOwns, type DayQuotas } from '@/lib/social-hub/views/day-rank';
 import type { IdeaAdjustment } from '@/lib/social-hub/views/moves';
 import { capacityWindows, type PlanWindow } from '@/lib/social-hub/views/plan';
-import { isRejected } from '@/lib/social-hub/views/state';
+import { isRejected, postState } from '@/lib/social-hub/views/state';
 
 /**
  * The pool screen's lists (pool UI contract 2026-11-15 §4): the Ideas tab, the Made tab, the next-three-days
@@ -365,6 +365,8 @@ export function poolMade(model: TypeHubModel, now: Date, source?: PoolSource): P
       if (!made) return [];
       const age = Math.max(0, daysBetween(made, today));
       if (age >= MADE_WINDOW_DAYS) return [];
+      // A rejected post won't post and has nothing left to act on, so it leaves Made (Lucas, 2026-11-24).
+      if (isRejected(post) || postState(post, now).id === 'rejected') return [];
       const state = madeRowState(post, now);
       const when = whenText(post, state, today);
       const daysLeft = MADE_WINDOW_DAYS - age;

@@ -23,8 +23,8 @@ KillSignal=SIGTERM
 # A pass finishes its current step on SIGTERM.
 TimeoutStopSec=120
 # Headless Chromium renders 1080x1920 frames; sets build at 4 AM, alone.
-MemoryMax=1500M
-MemoryHigh=1200M
+MemoryMax=2500M
+MemoryHigh=2G
 Nice=10
 
 [Install]

@@ -997,6 +997,29 @@ export function edgeSliver(P, it, min = SLIVER_MIN) {
   return touches && vis > 0 && vis / all < min;
 }
 
+/** A render item, or its `parts` as items of their own (each with the group's id and set flag). */
+export function groupParts(it) {
+  if (!it || typeof it !== 'object' || !Array.isArray(it.parts) || !it.parts.length) return [it];
+  return it.parts.filter(Boolean).map((p) => (typeof p === 'string' ? { svg: p, at: it.at, id: it.id } : { ...p, id: it.id, ...(it.set ? { set: true } : {}) }));
+}
+
+/** The aperture of a close or insert's implied focus: the background goes soft enough that its text reads as set. */
+export const INSERT_APERTURE = 14;
+
+/**
+ * A camera shot's focus: its own `focus` ({ reason, on, … }), else, for a close or an insert, the
+ * subject (2026-11-24: on a close shot the wall behind the subject, a quiz board's sum, sat under the
+ * captions and off the frame, sharp, in jobs 87/88): `implied` marks the default. `focus: false`
+ * keeps the whole shot sharp.
+ */
+export function shotFocus(shot) {
+  if (!shot || shot.focus === false) return null;
+  if (shot.focus?.on) return shot.focus;
+  const subject = shot.subject ?? (Array.isArray(shot.cast) ? shot.cast[0] : null);
+  if ((shot.kind === 'close' || shot.kind === 'insert') && subject) return { reason: 'insert', on: subject, implied: true };
+  return null;
+}
+
 /**
  * Draw a shot through the lens P: `env` first, in the order given (the room: floor, walls, a
  * backdrop seen through a window, light on the floor), then `items` back to front by their real
@@ -1019,18 +1042,23 @@ export function render(P, { env = [], items: given = [], focus: rawFocus = null,
   const cast = camShot && Array.isArray(shot.cast) ? all.filter((it) => !it || typeof it !== 'object' || !it.id || it.set === true || shot.cast.includes(it.id) || staysInPlace(it)) : all;
   // a set-dressing piece only barely in frame at an edge (a sliver of a picture frame) is not drawn
   const sliver = (it) => it && typeof it === 'object' && it.set === true && edgeSliver(P, it);
-  const items = cast.filter((it) => !sliver(it));
+  // a group (a crowd, a herd, a stack) gives `parts: [{ svg, at, bounds? }]`: each part takes its own
+  // place in the depth order under the group's id (2026-11-24, job 87: four dogs joined into one svg
+  // at their mean point were painted over and under the critters as one thing)
+  const items = cast.filter((it) => !sliver(it)).flatMap(groupParts);
   // a culled sliver is still on the set, out of frame: leave its dressing mark (set-lock check)
   const culled = cast.filter(sliver).map((it) => String(it.svg ?? '').match(/data-dressing="([^"]+)"/)?.[1]).filter(Boolean).map((d) => `<g data-dressing="${d}" data-culled="sliver"></g>`).join('');
   let focus = camShot ? null : rawFocus;
   let keep = null;
-  if (camShot && shot.focus?.on) {
+  const sf = camShot ? shotFocus(shot) : null;
+  if (sf) {
     const find = (id) => items.find((it) => it && it.id === id && it.at);
-    const a = find(shot.focus.on);
-    const b = shot.focus.reason === 'rack' && shot.focus.to ? find(shot.focus.to) : null;
-    const u = b ? E.world(clamp01((local - (shot.focus.at ?? 0.4)) / (shot.focus.dur ?? 0.7))) : 0;
+    const a = find(sf.on);
+    const b = sf.reason === 'rack' && sf.to ? find(sf.to) : null;
+    const u = b ? E.world(clamp01((local - (sf.at ?? 0.4)) / (sf.dur ?? 0.7))) : 0;
     if (a) focus = b ? P.dist(...a.at) + (P.dist(...b.at) - P.dist(...a.at)) * u : P.dist(...a.at);
-    keep = b && u >= 0.5 ? shot.focus.to : shot.focus.on;
+    keep = b && u >= 0.5 ? sf.to : sf.on;
+    if (sf.implied) aperture = Math.max(aperture, INSERT_APERTURE);
   }
   const filters = new Map();
   const blurred = (svg, sd, who) => {
@@ -1453,6 +1481,8 @@ const BODY_OF_BOX = 132 / 168;
 export const MAX_HIDDEN = 0.4;
 /** In a 4.1 camera shot (shot.camera) the bar is this: never overlap to fit (principles §3). */
 export const MAX_HIDDEN_SHOT = 0.15;
+/** The most of a cast thing a nearer critter may cover before it reads as stacked on it. */
+export const MAX_EXTRA_HIDDEN = 0.5;
 /** Outside a close, insert or reaction shot, no critter's face fills more than this share of the
  *  frame's width. */
 export const MAX_FACE = 0.45;
@@ -1469,7 +1499,7 @@ export function faceBoxOf(box) {
 }
 /** Which frame edge cuts a critter's face ('left', 'top'…), or null when the face is whole on
  *  screen or wholly off it. A critter turned away (view back) has no face to cut. */
-function faceEdgeCut(b, w, h) {
+export function faceEdgeCut(b, w, h) {
   if (b.view === 'back') return null;
   const [x0, y0, x1, y1] = faceBoxOf(b.box);
   if (x1 <= 0 || x0 >= w || y1 <= 0 || y0 >= h) return null;
@@ -1492,6 +1522,30 @@ export function occlusionProblems(samples, { shots = null, w = 1080, h = 1920 } 
     const at = typeof smp.t === 'number' ? ` at ${smp.t.toFixed(2)}s` : '';
     const inShot = shot ? ` (shot ${i + 1}, ${shot.kind})` : '';
     const cr = boxes.filter((b) => b.kind === 'critter' && onScreen(b.box, w, h));
+    // a cast thing (a dog of a crowd, a prop the story shows) mostly behind a nearer critter reads as
+    // stacked on it (2026-11-24, job 87: dogs walked a lane right behind the critters, a cat stood
+    // "on" one's head): its spot or lane goes beside the critters, not behind them
+    const cast = Array.isArray(shot?.cast) ? shot.cast : null;
+    for (const e of boxes) {
+      if (e.kind !== 'entity' || !cast?.includes(e.who) || !Number.isFinite(e.depth) || !onScreen(e.box, w, h)) continue;
+      const ea = Math.max(1, (e.box[2] - e.box[0]) * (e.box[3] - e.box[1]));
+      let hid = 0;
+      let by = null;
+      for (const b of cr) {
+        if (!(b.depth < e.depth)) continue;
+        const ix = Math.max(0, Math.min(e.box[2], b.box[2]) - Math.max(e.box[0], b.box[0]));
+        const iy = Math.max(0, Math.min(e.box[3], b.box[3]) - Math.max(e.box[1], b.box[1]));
+        if ((ix * iy) / ea > hid) {
+          hid = (ix * iy) / ea;
+          by = b.who;
+        }
+      }
+      const key = `extra:${e.who}:${i}`;
+      if (hid > MAX_EXTRA_HIDDEN && !seen.has(key)) {
+        seen.add(key);
+        out.push(`"${e.who}" is ${Math.round(hid * 100)}% hidden behind the critter "${by}"${at}${inShot}: stage it beside the critters (its spot or lane clear of them in this view), not behind them`);
+      }
+    }
     for (const a of cr) {
       const [x0, y0, x1, y1] = a.box;
       const area = Math.max(1, (x1 - x0) * (y1 - y0));

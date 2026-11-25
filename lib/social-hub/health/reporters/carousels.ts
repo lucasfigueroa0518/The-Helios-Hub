@@ -16,7 +16,7 @@ export const reportCarousels: Reporter = async (q: HubQuery, { night, posting })
   const range = [start.toISOString(), end.toISOString()];
   const runs = (await q<RunRow>(
     `SELECT id::text, status, stop_reason, error, total_usd::float8 AS total_usd, cap_usd::float8 AS cap_usd,
-            CASE WHEN jsonb_typeof(record->'result'->'posts') = 'array' THEN jsonb_array_length(record->'result'->'posts') ELSE 0 END AS posts,
+            COALESCE(jsonb_array_length(post_summaries), 0) AS posts,
             COALESCE(started_at, requested_at)::text AS at
        FROM social.runs
       WHERE kind = 'daily' AND trigger = 'scheduled'

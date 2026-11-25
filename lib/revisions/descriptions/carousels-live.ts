@@ -37,6 +37,44 @@ export function meteredJev<A extends (...args: never[]) => Promise<{ usage: { in
   }) as A;
 }
 
+/**
+ * The news pieces' Anthropic create (lib/news-writer, lib/news-photos: Opus writer, Haiku checks and briefs), metered at
+ * each reply's own model price (lib/anthropic-pricing). The pieces send their cached prefixes (lib/anthropic-cache.ts).
+ */
+export async function meteredNewsCreate(m: Metered): Promise<import('@/lib/stories/writer').WriterCreate> {
+  const [{ newAnthropic }, { priceAnthropicMessages }] = await Promise.all([import('@/lib/anthropic-client'), import('@/lib/anthropic-pricing')]);
+  const client = newAnthropic();
+  const create = (p: Record<string, unknown>) => client.messages.create(p as never) as unknown as Promise<import('@anthropic-ai/sdk').default.Message>;
+  return meteredCreate(create, m, (res, params) => Number(priceAnthropicMessages([res], { modelId: String((params as { model?: string }).model ?? '') }).costUsd));
+}
+
+/**
+ * The news photo finder's outside clients, metered: the image Jev (TypeSafe-Danger-Zone-Images) charged per answer,
+ * Serper image search (SERPER_API_KEY; null without it) charged per search, and the plain image fetcher (free).
+ */
+export async function meteredNewsPhotos(m: Metered): Promise<{ jev: import('@/lib/news-photos').PhotoJev; serper: ((q: string) => Promise<string[]>) | null; fetchImage: (url: string) => Promise<Buffer | null> }> {
+  const [{ TypeSafeClient }, { jevCostUsd }, np] = await Promise.all([import('@typesafe-ai/sdk'), import('@/lib/social/jev/client'), import('@/lib/news-photos')]);
+  const raw = new TypeSafeClient({ defaultHeaders: { 'TypeSafe-Danger-Zone-Images': 'true' } }) as unknown as import('@/lib/news-photos').PhotoJev;
+  const jev = {
+    async systemOne(...a: unknown[]) {
+      if (m.stopped()) m.halt();
+      const res = await raw.systemOne(...a);
+      m.spend(jevCostUsd({ input_tokens: res?.usage?.input_tokens ?? 0, output_tokens: res?.usage?.output_tokens ?? 0 }));
+      return res;
+    },
+  };
+  const key = process.env.SERPER_API_KEY;
+  const search = key ? np.serperImages(key) : null;
+  const serper = search
+    ? async (q: string) => {
+        if (m.stopped()) m.halt();
+        m.spend(np.SERPER_USD);
+        return search(q);
+      }
+    : null;
+  return { jev, serper, fetchImage: np.fetchImageLive() };
+}
+
 /** Try each request in order; stop at the first usable result, or as soon as the meter has stopped. */
 export async function firstUsable<R, P>(requests: readonly R[], searchOne: (r: R) => Promise<P | null>, m: Metered): Promise<P | null> {
   for (const r of requests) {

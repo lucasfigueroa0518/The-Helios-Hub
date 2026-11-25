@@ -35,13 +35,44 @@ export type Photo = {
   kind: 'person' | 'scene' | 'logo';
   /** Crop centre as object-position fractions (0–1). */
   focus?: { x: number; y: number };
+  /**
+   * The image already places a short photo in the middle of the band over its own blur fill (Morning Download band
+   * fit, 2026-11-23): the photo stays at full opacity and only the fill fades out above the copy.
+   */
+  contained?: boolean;
+  /**
+   * The image's own URL when `src` is a copy we made (Morning Download's band fit uploads the fitted JPEG and `src`
+   * is its signed storage URL). The used-photo ledger and the pending hold (WC12) key on this, so a picture stays
+   * held by its source URL, the one the photo finder sees.
+   */
+  sourceUrl?: string;
 };
+
+/** The URL a frame's photo is recorded and held under (WC12): its source when `src` is our own copy. */
+export const photoLedgerUrl = (p: Pick<Photo, 'src' | 'sourceUrl'>): string => p.sourceUrl || p.src;
 
 /** "via The Verge", "reported by Reuters", "from OpenAI's blog" (S-15). */
 export type SourceTag = { verb: 'via' | 'reported by' | 'from'; name: string };
 
-export type OpenerData = { role: 'opener'; /** e.g. "Wednesday, October 8" */ date: string; storyCount: number; photo?: Photo };
-export type StoryData = { role: 'story'; /** One or two full sentences (S-15). */ headline: string; source: SourceTag; photo?: Photo };
+export type OpenerData = {
+  role: 'opener';
+  /** e.g. "Wednesday, October 8" */
+  date: string;
+  storyCount: number;
+  /** The cover's three-line headline (copy.ts OPENER_PROMISES); sets without one show the first. */
+  promise?: readonly string[];
+  /** The story frames' photos in order (null where a story has none), shown blurred under question marks (MC14, 2026-11-23). */
+  peek?: Array<Photo | null>;
+  /** Sets built before the peek cover carried an opener photo; it is no longer drawn. */
+  photo?: Photo;
+};
+/**
+ * A story's clip (MD-LFD D16, 2026-11-24): already fitted to the photo band (lib/video-finder/band.ts) and stored in
+ * the stories bucket at `path`. The frame's `photo` is its poster, so the JPEG, the review and the hub show a still;
+ * the render stage turns the frame into an MP4 with the clip playing in the band.
+ */
+export type StoryVideo = { path: string; seconds: number; tier: 'golden' | 'good'; sourceUrl: string; fit: 'crop' | 'blur' | 'vertical' };
+export type StoryData = { role: 'story'; /** One or two full sentences (S-15). */ headline: string; source: SourceTag; photo?: Photo; video?: StoryVideo };
 export type CloserData = { role: 'closer' };
 /** Series intro slide (S-50): Free vs. Paid's, fixed copy. */
 export type IntroData = { role: 'intro' };

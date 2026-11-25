@@ -12,7 +12,7 @@ if [[ -f scripts/gcp/.deploy-env ]]; then
 fi
 
 PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
-ZONE="${GCP_ZONE:-us-west1-a}"
+ZONE="${GCP_ZONE:-northamerica-northeast1-a}"
 INSTANCE="${GCP_INSTANCE:-helios-orch-worker}"
 ENV_FILE="${WORKER_ENV_FILE:-scripts/gcp/worker.env}"
 # GCP_SSH_IAP=1 tunnels scp/ssh through Identity-Aware Proxy (HTTPS on 443),
@@ -113,6 +113,14 @@ COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
   --exclude='./scripts/gcp/worker.env' \
   --exclude='./.cursor' \
   --exclude='./helios_text_engine/.venv' \
+  --exclude='./runs' \
+  --exclude='./Claude outputs' \
+  --exclude='./Content Review 2026-11-08' \
+  --exclude='./.explainers-local' \
+  --exclude='./.stories-local' \
+  --exclude='./.memes-local' \
+  --exclude='./explainers/smoke/.out' \
+  --exclude='./explainers/design/sfx/dropins' \
   .
 
 DEPLOY_ID="$(date +%s)-$$"

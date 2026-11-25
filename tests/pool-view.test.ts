@@ -239,6 +239,16 @@ test('Made without the dataset still lists the posts the model holds', () => {
   assert.deepEqual(poolMade(model, now).map((m) => m.post.id), ['p1']);
 });
 
+test('Made leaves out rejected posts', () => {
+  const posts = [
+    post('kept', { status: 'ready', generatedAt: '2026-11-14T17:00:00Z' }),
+    post('rej', { status: 'failed', generatedAt: '2026-11-14T17:00:00Z', approval: { required: true, approvedAt: null, note: 'Rejected' } as never }),
+    post('slot', { status: 'cancelled', statusNote: 'This post was rejected, so it was not posted.', generatedAt: '2026-11-14T17:00:00Z' }),
+  ];
+  const { model, now } = build({ posts });
+  assert.deepEqual(poolMade(model, now).map((m) => m.post.id), ['kept']);
+});
+
 test('runway: whole days of posts the pool covers', () => {
   assert.equal(poolRunway(32, 2), 16);
   assert.equal(poolRunway(5, 2), 2);

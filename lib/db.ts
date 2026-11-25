@@ -94,17 +94,37 @@ export function resolvePoolMax(mode: 'session' | 'transaction', env: DbEnv = pro
   return Math.max(1, Math.min(cap, requested));
 }
 
+/** A Vercel isolate is short-lived and frozen between requests: it lets idle clients go fast. */
+export const WEB_IDLE_TIMEOUT_MS = 10_000;
+/**
+ * A long-lived worker keeps an idle client for a minute. Workers poll about every 17 s, so a
+ * 10 s timeout meant a new TLS handshake to the pooler on nearly every poll (~580 ms a read from
+ * the GCP VM). Nothing upstream drops a minute-idle client: Postgres idle_session_timeout is 0,
+ * Supavisor keeps idle clients, and GCP drops idle TCP only after 10 minutes. allowExitOnIdle
+ * still lets a one-off script exit without waiting it out. PG_IDLE_TIMEOUT_MS overrides both.
+ */
+export const WORKER_IDLE_TIMEOUT_MS = 60_000;
+
+export function resolveIdleTimeoutMs(env: DbEnv = process.env): number {
+  const fallback = env.VERCEL === '1' ? WEB_IDLE_TIMEOUT_MS : WORKER_IDLE_TIMEOUT_MS;
+  const parsed = Number(env.PG_IDLE_TIMEOUT_MS ?? fallback);
+  return Number.isFinite(parsed) && parsed >= 1_000 ? Math.floor(parsed) : fallback;
+}
+
 export function dbPoolSettings(mode: 'session' | 'transaction', env: DbEnv = process.env): {
   max: number;
   connectionTimeoutMillis: number;
   idleTimeoutMillis: number;
   allowExitOnIdle: true;
+  keepAlive: boolean;
 } {
   return {
     max: resolvePoolMax(mode, env),
     connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
-    idleTimeoutMillis: 10_000,
+    idleTimeoutMillis: resolveIdleTimeoutMs(env),
     allowExitOnIdle: true,
+    // TCP keepalive on a worker's minute-idle clients, so a dropped path shows up as an error, not a hang.
+    keepAlive: env.VERCEL !== '1',
   };
 }
 

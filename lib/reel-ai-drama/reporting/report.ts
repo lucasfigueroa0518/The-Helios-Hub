@@ -74,7 +74,6 @@ export const SUBMIT_FACT_SHEET_TOOL = {
         background: nullableStr,
         later: nullableStr,
         context_fact_ids: strList,
-        pronounce: { type: 'array', items: obj({ word: str, say: str, source_id: str }) },
       }),
     },
     places: { type: 'array', items: obj({ name: str, address: nullableStr, lat: nullableNum, lon: nullableNum, role: str, fact_ids: strList }) },

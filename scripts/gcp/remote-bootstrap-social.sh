@@ -5,7 +5,7 @@
 set -euo pipefail
 
 APP_DIR=/opt/helios-social
-# e2-medium has 4 GB; the night jobs are staggered by the hour, swap covers spikes.
+# e2-standard-4 has 16 GB; swap covers spikes when renders overlap.
 SWAP_MB=4096
 NODE_MAJOR=22
 
