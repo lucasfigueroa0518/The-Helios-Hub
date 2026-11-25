@@ -1,0 +1,6 @@
+/field-notes|button|Approve
+/hub/inboxes|button|Sync now
+/reels/health|button|Run now
+/seo|button|Sync now
+/social|button|Approve
+/social|button|Approve#2

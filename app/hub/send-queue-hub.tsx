@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { PERF_QUEUE_CV } from '@/lib/perf/flags';
 import { ChevronLeft, ChevronRight, RotateCcw, Send, Trash2, X } from 'lucide-react';
 
 import {
@@ -326,7 +327,7 @@ export function SendQueueHub() {
             <button type="button" className="send-queue-board-wrap__nav" aria-label="Scroll left" onClick={() => scrollBy(-1)}>
               <ChevronLeft size={16} />
             </button>
-            <div className="send-queue-board-scroller" ref={scrollerRef}>
+            <div className={`send-queue-board-scroller${PERF_QUEUE_CV ? ' send-queue-board-scroller--cv' : ''}`} ref={scrollerRef}>
               {board.days.map((day) => (
                 <DayColumn
                   key={day.date}
