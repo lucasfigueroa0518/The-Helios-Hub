@@ -14,6 +14,7 @@
  *               drops its pool row; the next one is tried, up to 5.
  *               None passes → the day is skipped, the record lands on the set
  *               as triviaSkip
+ *   critter     trivia-direct@1 dresses the on-screen critter for the question (direction.ts)
  *   frames      question + answer, each carrying the whole question as copy
  *               only (no photo, no music: CONTRACT-2 §3); the renderer adds
  *               the fixed copy, the motion and the one fixed sound
@@ -21,10 +22,11 @@
 import { openPool, servedTriviaKeys } from '@/lib/stories/pool';
 import { material } from '@/lib/stories/prompts';
 import type { NewCandidate, NewFrame } from '@/lib/stories/repository';
+import { directionFrom, type DirectOut } from '@/lib/stories/trivia/direction';
 import { checkRepeat, loadEarlier, REPEAT_CHECK_VERSION, repeatFail } from '@/lib/stories/trivia/repeats';
 import { answerTop, LEAN_TOP, leanFrom, leanOrder, opponentFor, recentAiResults, type Lean } from '@/lib/stories/trivia/lean';
 import type { Opponent } from '@/lib/stories/trivia/opponent';
-import { TRIVIA_CHECK, TRIVIA_CHECK_SEARCHES, type TriviaCheckMaterial, type TriviaCheckOut } from '@/lib/stories/trivia/prompts';
+import { TRIVIA_CHECK, TRIVIA_CHECK_SEARCHES, TRIVIA_DIRECT, type TriviaCheckMaterial, type TriviaCheckOut, type TriviaDirectMaterial } from '@/lib/stories/trivia/prompts';
 import { poolKeyOf, TRIVIA_SERIES, type FactCheck, type TriviaFrameCopy, type TriviaPoolPayload, type TriviaSetPayload } from '@/lib/stories/trivia/types';
 import { writeStructured } from '@/lib/stories/writer';
 
@@ -151,8 +153,20 @@ export async function buildAiTrivia(deps: BuildDeps): Promise<BuildResult> {
   }
   const shown = opponent ? { opponent: { label: opponent.label, picked: opponent.picked } } : {};
 
-  // 3. Two frames, each with the whole question: copy only.
-  const copy = (role: TriviaFrameCopy['role']): TriviaFrameCopy => ({ role, question: q.question, options: q.options, correct: q.correct, answerLine: q.answerLine, ...shown });
+  // 3. The critter's direction. A failed call keeps the default look: the critter is on every set.
+  let critter = directionFrom();
+  try {
+    const mat: TriviaDirectMaterial = { question: q.question, options: q.options, correct: q.correct, answer_line: q.answerLine };
+    critter = directionFrom((await writeStructured<DirectOut>({
+      create: deps.write, db: deps.db, setId: deps.setId, component: 'trivia-direct', model: deps.settings.models.copy,
+      system: TRIVIA_DIRECT.system, tool: TRIVIA_DIRECT.tool, user: material(mat), maxTokens: 4000, effort: 'low',
+    })).value);
+  } catch (err) {
+    log.push(`critter direction fell back to the default: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 4. Two frames, each with the whole question: copy only.
+  const copy = (role: TriviaFrameCopy['role']): TriviaFrameCopy => ({ role, question: q.question, options: q.options, correct: q.correct, answerLine: q.answerLine, critter, ...shown });
   const frames: NewFrame[] = [
     { seq: 1, role: 'question', backdrop: 'black', template: 'trivia', copy: copy('question') },
     { seq: 2, role: 'answer', backdrop: 'black', template: 'trivia', copy: copy('answer') },

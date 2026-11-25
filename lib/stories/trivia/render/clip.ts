@@ -27,6 +27,7 @@ import type { TriviaCopy as RenderTriviaCopy } from '@/lib/stories/render/types'
 
 import { deliveryProblems, masterProblems, MASTER_FILE, muxArgs, parseProbe, posterArgs, probeArgs } from './audio';
 import { boxDelta, fitLinePx, fitQuestionPx, LINE_PX, lineSlotH, QUESTION_PX, slideLayout, type LinePx, type QuestionPx, type SlideRole } from './layout';
+import { defaultDirection } from '../direction';
 import { critterModule, critterProblems, KIT_FILES, kitDir } from './critter';
 import { openPreflight, type PageBoxes, type Preflight, type SeamShots } from './preflight';
 import { answerTimeline, CLIP_S, FPS, POSTER_AT, questionTimeline, SEAM_T, timelineScript } from './timeline';
@@ -170,7 +171,7 @@ export async function renderTriviaClips(frames: TriviaFrameInput[], deps: Render
   const q = frames.find((f) => f.role === 'question');
   const a = frames.find((f) => f.role === 'answer');
   if (!q || !a || frames.length !== 2) throw new Error('"Are you smarter than AI?" renders exactly two frames: question and answer');
-  const copy: TriviaCopy = { question: q.copy.question, options: q.copy.options, correct: q.copy.correct, answerLine: q.copy.answerLine ?? a.copy.answerLine, ...((q.copy.critter ?? a.copy.critter) ? { critter: q.copy.critter ?? a.copy.critter } : {}), ...((q.copy.opponent ?? a.copy.opponent) ? { opponent: q.copy.opponent ?? a.copy.opponent } : {}) };
+  const copy: TriviaCopy = { question: q.copy.question, options: q.copy.options, correct: q.copy.correct, answerLine: q.copy.answerLine ?? a.copy.answerLine, critter: q.copy.critter ?? a.copy.critter ?? defaultDirection(), ...((q.copy.opponent ?? a.copy.opponent) ? { opponent: q.copy.opponent ?? a.copy.opponent } : {}) };
   const problems = copyProblems(copy);
   if (problems.length) throw new Error(`trivia copy can't be drawn: ${problems.join('; ')}`);
 
@@ -193,7 +194,7 @@ export async function renderTriviaClips(frames: TriviaFrameInput[], deps: Render
       fs.writeFileSync(path.join(dirs[role], 'index.html'), await compositionHtml({ role, ...copy, questionPx, linePx, ...(confettiAt ? { confettiAt } : {}) }));
     // Measured at the smallest answer-line size, so a long line can't fail the measuring pass itself.
     for (const role of ROLES) {
-      prepareProject(dirs[role], !!copy.critter);
+      prepareProject(dirs[role], true);
       await write(role, QUESTION_PX[0], LINE_PX[LINE_PX.length - 1]!);
     }
 
