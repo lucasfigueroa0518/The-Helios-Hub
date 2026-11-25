@@ -330,7 +330,7 @@ test('an image is refused when the spend, the reveal already paid and one more i
   const write = (async (params: Record<string, unknown>) => {
     const res = await base(params);
     if ((params.tools as Array<{ name: string }>).some((t) => t.name === 'submit_reveal')) {
-      (res as { usage: Record<string, number> }).usage = { input_tokens: 0, output_tokens: 25_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+      (res as unknown as { usage: Record<string, number> }).usage = { input_tokens: 0, output_tokens: 25_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
       reveal += responseCostUsd(res, String(params.model));
     }
     return res;
