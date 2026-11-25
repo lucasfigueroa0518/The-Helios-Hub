@@ -7,8 +7,9 @@
  *            ledger. Subject `none`: failed before any photo search or image.
  *   spec     the daily run's own spec path (daily.ts runRoaSpec) with `seed` set: the real photo (shared photo finder,
  *            used-photo ledger, bank), then, only when it pooled, the AI image from the same scene's prompt (at most
- *            AI_ATTEMPTS), each through intake. Each image call is made only while ROA_IMAGE_WORST_USD still fits; its actual
- *            cost goes in the ledger. Both pooled payloads carry `seed: true` (Yours, never cut by a cap).
+ *            AI_ATTEMPTS), each through intake. Each image call is made only while ROA_IMAGE_WORST_USD still fits the ledger
+ *            and the spend so far plus the reveal's plus one image stays within the 60-cent limit; its actual cost goes in
+ *            the ledger. Both pooled payloads carry `seed: true` (Yours, never cut by a cap).
  *   reserve  the reveal and the Jev screens inside intake are not gated: the type's reserve covers them. The reveal's cost is
  *            still added to what the card shows.
  *   stage    'writing' before the writer, 'making' before the photo search and again before each image; each refresh writes
@@ -32,14 +33,18 @@ import { validateSpecs } from '@/lib/stories/roa/validate';
 import { DEFAULT_SETTINGS } from '@/lib/stories/settings';
 import { responseCostUsd, writeStructured, type WriterCreate } from '@/lib/stories/writer';
 
-import { limitText, type Ledger } from '../budget';
+import { LIMIT_USD, limitText, type Ledger } from '../budget';
 import { doneRequest, failRequest, setStage } from '../requests';
 import type { OneBoxInput } from '../types';
 
 /** One image attempt's worst case (spec section 5: 17¢ an image, the most measured). */
 export const ROA_IMAGE_WORST_USD = 0.17;
-/** The seed writer's output cap: one short spec, with room for the model's thinking. */
-export const ROA_SEED_MAX_TOKENS = 4_000;
+/**
+ * The seed writer's output cap: one short spec, with room for the model's thinking. Priced worst case at 12,000: about
+ * 13 cents for the writer, so writer plus two gated images is about 47 cents (under the usable 52) and all-in with the
+ * reserve about 55 (under the 60-cent limit). The image gate uses actual spend, not this figure.
+ */
+export const ROA_SEED_MAX_TOKENS = 12_000;
 /** A conservative 3.5 characters a token for this JSON and prose (an assumption, as in the Trivia seed). */
 export const CHARS_PER_TOKEN = 3.5;
 
@@ -131,7 +136,9 @@ export async function runRoaSeed(i: {
     const res = await runRoaSpec(ctx, spec, {
       seed: true,
       beforeImage: async () => {
-        if (!ledger.canAfford(ROA_IMAGE_WORST_USD)) return false;
+        // The ledger's own room (the reserve set aside), and the whole limit counting what the reserve-covered calls
+        // (the reveal) already spent.
+        if (!ledger.canAfford(ROA_IMAGE_WORST_USD) || ledger.spent + reserved + ROA_IMAGE_WORST_USD > LIMIT_USD.real_or_ai + 1e-9) return false;
         // Each image refreshes the card, so the photo search, screens and images never read as timed out.
         await setStage(q, id, 'making', cost(), clock());
         return true;

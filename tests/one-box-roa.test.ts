@@ -15,7 +15,9 @@ import sharp from 'sharp';
 import { EMPTY_LEDGER } from '@/lib/photos/used-match';
 import { Ledger } from '@/lib/seed/one-box/budget';
 import { claimRequest, createRequest } from '@/lib/seed/one-box/requests';
-import { ROA_IMAGE_WORST_USD, roaSeedWorstCaseUsd, runRoaSeed } from '@/lib/seed/one-box/workers/roa';
+import { LIMIT_USD } from '@/lib/seed/one-box/budget';
+import { ROA_IMAGE_WORST_USD, ROA_SEED_MAX_TOKENS, roaSeedWorstCaseUsd, runRoaSeed } from '@/lib/seed/one-box/workers/roa';
+import { responseCostUsd } from '@/lib/stories/writer';
 import type { Query } from '@/lib/social/store/pg';
 import { runRoaDaily, type RoaDailyDeps } from '@/lib/stories/roa/daily';
 import { ROA_SEED, ROA_WRITE } from '@/lib/stories/roa/prompts';
@@ -303,6 +305,46 @@ test('a Real or AI? seed\'s stage refresh moves updated_at forward: writing, mak
   assert.ok(stages.every((s) => s.at !== NOW.toISOString()), 'never the run\'s start time');
   for (let n = 1; n < stages.length; n++) assert.ok(stages[n]!.at > stages[n - 1]!.at, 'each refresh is later');
   assert.equal((await requestRow(q, id)).status, 'done');
+});
+
+// Final fixes 4: the writer gets 12,000 output tokens; the priced worst case (writer plus two gated images) still fits.
+test('the seed writer asks for 12,000 output tokens, and its worst case plus two images fits the usable 0.52 (all-in under 0.60)', async () => {
+  assert.equal(ROA_SEED_MAX_TOKENS, 12_000);
+  const { db, q, id, input } = await setup();
+  const write = writer();
+  await runRoaSeed({ q, id, input, deps: deps(db, { write, image: stubImages(0.04) }), ledger: new Ledger('real_or_ai') });
+  const call = write.calls.find((c) => (c.tools as Array<{ name: string }>).some((t) => t.name === 'submit_specs'))!;
+  assert.equal(call.max_tokens, 12_000);
+  const worst = roaSeedWorstCaseUsd({ prefixChars: JSON.stringify(call.system).length + JSON.stringify(call.tools).length, userChars: JSON.stringify(call.messages).length });
+  const usable = new Ledger('real_or_ai').usable;
+  assert.ok(worst + 2 * ROA_IMAGE_WORST_USD <= usable, `gated worst case ${worst + 2 * ROA_IMAGE_WORST_USD} within ${usable}`);
+  // The reserve (0.08) covers the reveal (about 5 cents measured) and Jev (about free).
+  assert.ok(worst + 2 * ROA_IMAGE_WORST_USD + 0.08 <= LIMIT_USD.real_or_ai + 1e-9);
+});
+
+// Final fixes 11: the image gate counts what the reserve-covered calls (the reveal) already spent.
+test('an image is refused when the spend, the reveal already paid and one more image would pass 0.60', async () => {
+  const { db, q, id, input } = await setup();
+  const base = writer();
+  let reveal = 0;
+  const write = (async (params: Record<string, unknown>) => {
+    const res = await base(params);
+    if ((params.tools as Array<{ name: string }>).some((t) => t.name === 'submit_reveal')) {
+      (res as { usage: Record<string, number> }).usage = { input_tokens: 0, output_tokens: 25_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+      reveal += responseCostUsd(res, String(params.model));
+    }
+    return res;
+  }) as typeof base;
+  const images = stubImages(0.17);
+  const ledger = new Ledger('real_or_ai');
+  ledger.add(0.29); // + the writer: one 0.17 image still fits the ledger's usable 0.52 on its own
+  await runRoaSeed({ q, id, input, deps: deps(db, { write, image: images }), ledger });
+  assert.ok(reveal > 0.15, `the reveal cost ${reveal}`);
+  assert.equal(images.prompts.length, 0, 'no image: spend + reveal + 0.17 passes 0.60');
+  assert.ok(ledger.canAfford(ROA_IMAGE_WORST_USD), 'the ledger alone would have allowed it');
+  const row = await requestRow(q, id);
+  assert.equal(row.status, 'done');
+  assert.equal(row.message, REAL_ONLY);
 });
 
 /* The daily run's behavior is unchanged: the same fixture (with a twin) pools the same rows as before the extraction. */
