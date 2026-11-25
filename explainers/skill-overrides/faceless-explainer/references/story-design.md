@@ -73,11 +73,6 @@ formal, literary or old-fashioned words, no made-up compound words. The viewer m
 cold, with no other reel seen: never lean on an earlier topic's term. Where a line needs a
 harder word, say the idea in simpler ones.
 
-**HARD CONSTRAINT: say what the term does, never what it is not.** The definition (beat 2), the
-payoff (beat 5) and the tie-together (beat 7) use no "instead of", "rather than", "unlike" or
-"not …" contrast with another thing. The reel teaches the term's own mechanism, as the Lesson
-frame gives it, never the mechanism of a neighboring concept.
-
 ### 1 · Opener
 - **Built by code:** the bank's opener lands on the AI 101 card, then cuts to frame 2. There is no
   scene to plan here. Copy the skeleton's frame 1 block and fill only `voiceover:`.
