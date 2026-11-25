@@ -3,7 +3,10 @@ import { noul } from '@typesafe-ai/sdk';
 import { defineQuestionSet } from '@/lib/reels/jev/question-set';
 
 /**
- * Explainers analogy checks (3.9, EX3-124; replaces analogy scoring v6 and the own-material gate).
+ * Explainers analogy checks (3.9, EX3-124; replaces analogy scoring v6 and the own-material gate). Gates v2 and
+ * comparison v2 (2026-11-25): the false-mapping gate judges against how the concept really works, as an expert knows
+ * it, with each row's plain words read at their everyday meaning; the topic's own term is never a real name; the comparison sees the
+ * Lesson, so "get it at once" includes it, as the writer's Lesson rule does.
  * Questions, judge rules and state fields are the register's verbatim (planning/Explainer
  * Reels/DECISIONS.md, "Analogy checks v1"); tests/explainers-questions.test.ts fails if they drift.
  * Jev answers yes or no; code applies the thresholds and the pick (lib/explainers/ideas/analogy.ts),
@@ -33,12 +36,12 @@ export const GOLDEN_MATCH_FIELDS = ['topic_title', 'topic_scope', 'example_conce
 /** One call per candidate, three questions. A candidate fails a gate at ANALOGY_GATE_MAX or more. */
 export const ANALOGY_GATES = defineQuestionSet({
   id: 'explainers-analogy-gates',
-  version: 'explainers-analogy-gates-v1',
+  version: 'explainers-analogy-gates-v2',
   questions: {
     false_mapping: noul({
       question: "Does any row of this analogy's mapping teach something false or misleading about how the concept works?",
       judge:
-        "Check each row of the analogy's mapping, and its explanation, against how the concept in topic_title and topic_scope really works. Answer yes when any row would leave a viewer believing something false about the concept, or when a part of the analogy behaves differently from the part of the concept it stands for. Answer no when every row is true of the concept.",
+        "Check each row of the analogy's mapping, and its explanation, against how the concept named by term really works, as an expert in the field knows it; topic_title and topic_scope say what the reel covers, and their wording may be loose. Answer yes when any row, with its plain words read at their everyday meaning, would leave a viewer believing something false about the concept, or when a part of the analogy behaves differently from the part of the concept it stands for. Answer no when every row is true of the concept.",
     }),
     is_the_system: noul({
       question: 'Is this analogy the real system itself at work, rather than a comparison to something else?',
@@ -48,7 +51,7 @@ export const ANALOGY_GATES = defineQuestionSet({
     real_names: noul({
       question: 'Does this analogy name a real brand, company, product, real person, or a character from a film, show or book?',
       judge:
-        "Read the analogy's name, explanation and mapping. Answer yes when any of them names a real company, store, brand or product, a real person, or a character from a film, show or book. Answer no when everything it names is generic: kinds of things, places and jobs, open standards, and brand names that have become the everyday word for a kind of thing everyone knows.",
+        "Read the analogy's name, explanation and mapping. Answer yes when any of them names a real company, store, brand or product, a real person, or a character from a film, show or book. Answer no when everything it names is generic: kinds of things, places and jobs, open standards, and brand names that have become the everyday word for a kind of thing everyone knows. The topic's own term never counts.",
     }),
   },
 });
@@ -58,12 +61,12 @@ export const ANALOGY_GATE_FIELDS = ['topic_title', 'topic_scope', 'term', 'analo
 /** Asked twice per pair, with a and b swapped, so neither gains from going first. */
 export const ANALOGY_COMPARE = defineQuestionSet({
   id: 'explainers-analogy-compare',
-  version: 'explainers-analogy-compare-v1',
+  version: 'explainers-analogy-compare-v2',
   questions: {
     a_over_b: noul({
       question: 'Would a viewer be more likely to remember this analogy and repeat it to a friend than the other one?',
       judge:
-        "Analogy a and analogy b were both written to teach the concept in topic. Picture a viewer who meets one of them in a one-minute reel. Answer yes when that viewer would be more likely to get a at once, remember it a week later and repeat it to a friend than b; answer no when b is the one they would remember and repeat.",
+        "Analogy a and analogy b were both written to teach the concept in topic, and its lesson when topic gives one. Picture a viewer who meets one of them in a one-minute reel. Answer yes when that viewer would be more likely to get a at once (the concept, and its lesson when there is one), remember it a week later and repeat it to a friend than b; answer no when b is the one they would get, remember and repeat.",
     }),
   },
 });

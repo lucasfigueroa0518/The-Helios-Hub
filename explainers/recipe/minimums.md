@@ -1,17 +1,20 @@
 # Minimums: what every reel must contain
 
-These eight are the only things a reel must contain to communicate. Everything else is a craft
-call (`craft.md`) or a house decision (`house-style.md`). Each minimum is numbered; a warning about
+These eight are what every reel must contain to communicate, and they outrank every other rule.
+Everything else is the format (`story-design.md`), a house decision (`house-style.md`) or a craft
+call (`craft.md`). Each minimum is numbered; a warning about
 one carries its number (`minimum:<n>`).
 
 ## The eight minimums
 
-1. **HARD CONSTRAINT: the analogy plays out in full at least once.**
+1. **HARD CONSTRAINT: the analogy plays out in full at least once:** its defining trait doing its
+   job, with every part the reel maps.
 2. **HARD CONSTRAINT: the real mechanism is shown working at least once.**
-3. **HARD CONSTRAINT: the definition is true and clear, and the definitions, the analogy and the
-   takeaway never contradict each other.** If a true definition and the analogy ever seem to
+3. **HARD CONSTRAINT: the definition is true, as experts in the field know it, and clear,
+   and the definitions, the analogy and the takeaway never contradict each other.** If a true definition and the analogy ever seem to
    disagree, one of them is wrong: fix the definition, or, if the analogy is the wrong one, flag it
-   (a warning). The analogy never changes in the reel.
+   (a warning). The analogy never changes in the reel, except that a mapping row found untrue is left
+   out or said truly.
 4. **HARD CONSTRAINT: what the voice describes is on screen as it is said,** trips and actions
    included.
 5. **HARD CONSTRAINT: the hero (a critter or an object) reads clearly the moment it is named:** big
@@ -20,7 +23,7 @@ one carries its number (`minimum:<n>`).
    symbol, shape and colour stay the same across scenes, settings, light and modes (night and dark
    mode included). They change only when the change is the point, and then the change is shown.
 7. **HARD CONSTRAINT: the reel ends on what the concept means for the viewer, in real terms,**
-   with it shown, not repeated from an earlier image.
+   with it shown in a new picture, not an earlier frame repeated.
 8. **HARD CONSTRAINT: nothing is broken** (code checks it): no face cut by the frame edge, nothing
    floating, no off-screen or unreadable text, no empty containers, captions at most 2 lines, and
    no jump cuts (below).

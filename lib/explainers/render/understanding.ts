@@ -298,9 +298,10 @@ export const READER_PERSONAS: readonly ReaderPersona[] = ['newcomer', 'curious']
  * viewer framing were stopped by the safety classifier on every model).
  */
 export const PERSONA_LINES: Record<ReaderPersona, string> = {
-  newcomer: 'Write the answers in plain words, at the level of a general audience with no technical background.',
+  newcomer:
+    'Write the answers in plain words, at the level of a general audience with no technical background. Take every word the video does not define at its most common everyday meaning, and answer from that reading.',
   curious:
-    'Write the answers at the level of a technically informed reader. When something the video says seems wrong, or contradicts something it said earlier, note it for that beat, with the quote.',
+    'Write the answers at the level of a technically informed reader. When something the video says contradicts something it said earlier, note it in [could_not_follow] for that beat, with the quote. Also judge each line against what experts in the field know: note in [untrue], for that beat, each line that is untrue, or whose plain words a newcomer would take, at their everyday meaning, to say something untrue, with the quote and what is true. Leaving detail out is not untrue.',
 };
 
 /**
@@ -329,6 +330,7 @@ export const READER_INSTRUCTIONS = [
   '- What this beat teaches. [learned]',
   '- What the next beat is likely to cover. [expect_next]',
   '- Anything hard to follow by ear, or too fast, quoted. [could_not_follow: each with the quote and why]',
+  '- Anything said that is untrue, quoted, with what is true; filled only when the audience line asks for it, otherwise empty. [untrue: each with the quote and why]',
   '',
   'After the last beat, the questions, in the field named in brackets:',
   '1. What it is [what_it_is]: "In one sentence, what is a [TERM], according to the video? Say what kind of thing it is."',
@@ -345,7 +347,7 @@ export const READER_INSTRUCTIONS = [
   '',
   'Each answer is marked `sure` when the video states it or `guessing` when it is inferred [sure], gives its beats [beats] and the exact words it rests on [quotes], and says where it came from [source: "video" or "not from the video"].',
   'Reply with one JSON object only, no other text, shaped like this (every probe has answer, beats, quotes, sure, source, plus its own extra field when it has one):',
-  '{"beats": [{"beat": 1, "see_and_hear": "", "think_it_explains": "", "learned": "", "expect_next": "", "could_not_follow": [{"quote": "", "why": ""}]}], "probes": {"what_it_is": {"answer": "", "beats": [3], "quotes": [""], "sure": "sure", "source": "video"}, "which_one": {…}, "two_stories": {…, "two": false}, "how_it_works": {…}, "the_map": {…, "rows": [{"story": "", "real": ""}]}, "new_case": {…}, "what_youd_assume": {…, "beliefs": [""]}, "where_it_stops": {…}, "the_example": {…, "other_answer": ""}, "the_takeaway": {…}, "where_lost": {…, "lost_beat": 0}}}',
+  '{"beats": [{"beat": 1, "see_and_hear": "", "think_it_explains": "", "learned": "", "expect_next": "", "could_not_follow": [{"quote": "", "why": ""}], "untrue": []}], "probes": {"what_it_is": {"answer": "", "beats": [3], "quotes": [""], "sure": "sure", "source": "video"}, "which_one": {…}, "two_stories": {…, "two": false}, "how_it_works": {…}, "the_map": {…, "rows": [{"story": "", "real": ""}]}, "new_case": {…}, "what_youd_assume": {…, "beliefs": [""]}, "where_it_stops": {…}, "the_example": {…, "other_answer": ""}, "the_takeaway": {…}, "where_lost": {…, "lost_beat": 0}}}',
 ].join('\n');
 
 const PROBE_KEYS = ['what_it_is', 'which_one', 'two_stories', 'how_it_works', 'the_map', 'new_case', 'what_youd_assume', 'where_it_stops', 'the_example', 'the_takeaway', 'where_lost'] as const;
@@ -370,6 +372,8 @@ export type ReaderBeat = {
   learned: string;
   expect_next: string;
   could_not_follow: { quote: string; why: string }[];
+  /** The curious reader's lines that are untrue as experts know them, or untrue at a plain word's everyday meaning (2026-11-25). */
+  untrue?: { quote: string; why: string }[];
 };
 export type ReaderAnswers = { beats: ReaderBeat[]; probes: Record<ProbeKey, ProbeAnswer> };
 
@@ -410,8 +414,12 @@ export const READER_SCHEMA = {
             type: 'array',
             items: { type: 'object', properties: { quote: { type: 'string' }, why: { type: 'string' } }, required: ['quote', 'why'], additionalProperties: false },
           },
+          untrue: {
+            type: 'array',
+            items: { type: 'object', properties: { quote: { type: 'string' }, why: { type: 'string' } }, required: ['quote', 'why'], additionalProperties: false },
+          },
         },
-        required: ['beat', 'see_and_hear', 'think_it_explains', 'learned', 'expect_next', 'could_not_follow'],
+        required: ['beat', 'see_and_hear', 'think_it_explains', 'learned', 'expect_next', 'could_not_follow', 'untrue'],
         additionalProperties: false,
       },
     },
@@ -432,6 +440,10 @@ const ints = (v: unknown) => (Array.isArray(v) ? v.map(Number).filter((n) => Num
 export function parseReaderAnswers(input: unknown): ReaderAnswers {
   const raw = (input ?? {}) as { beats?: unknown; probes?: Record<string, unknown> };
   if (!raw || typeof raw !== 'object' || !raw.probes || typeof raw.probes !== 'object') throw new Error('reader: the reply has no probes');
+  const notes = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .map((c) => (typeof c === 'string' ? { quote: c.trim(), why: '' } : { quote: str((c as { quote?: unknown })?.quote), why: str((c as { why?: unknown })?.why) }))
+      .filter((c) => c.quote || c.why);
   const beats: ReaderBeat[] = (Array.isArray(raw.beats) ? raw.beats : []).map((b) => {
     const x = (b ?? {}) as Record<string, unknown>;
     return {
@@ -440,9 +452,8 @@ export function parseReaderAnswers(input: unknown): ReaderAnswers {
       think_it_explains: str(x.think_it_explains),
       learned: str(x.learned),
       expect_next: str(x.expect_next),
-      could_not_follow: (Array.isArray(x.could_not_follow) ? x.could_not_follow : [])
-        .map((c) => (typeof c === 'string' ? { quote: c.trim(), why: '' } : { quote: str((c as { quote?: unknown })?.quote), why: str((c as { why?: unknown })?.why) }))
-        .filter((c) => c.quote || c.why),
+      could_not_follow: notes(x.could_not_follow),
+      untrue: notes(x.untrue),
     };
   });
   const probes = {} as Record<ProbeKey, ProbeAnswer>;
@@ -475,13 +486,13 @@ export const DIAGNOSER_INSTRUCTIONS = [
   'For each finding, name two things:',
   "(a) the first beat where the viewer's understanding diverged from the answer key. That is often earlier than the beat where the error surfaced: read the beat notes in order and find where the wrong idea first appears.",
   '(b) the root cause, exactly one of:',
-  "- definition: beat 2's or beat 5's wording of what the term is;",
+  "- definition: beat 2's or beat 5's wording of what the term is, an untrue line there included;",
   '- mapping: the analogy\'s lines call a part inconsistently;',
   '- missing_beat: a step never shown or said;',
-  '- wording: jargon, ear-ambiguity, a pronoun with no clear referent;',
+  '- wording: jargon, ear-ambiguity, a pronoun with no clear referent, or a line elsewhere that is untrue, or whose plain words a newcomer would take, at their everyday meaning, to say something untrue;',
   '- order: a thing used before it is introduced;',
   "- boundary: the analogy's limit is unstated, so a false belief forms.",
-  'Add one sentence of why, citing the evidence. Never write a fix or a rewrite.',
+  'Add one sentence of why, citing the evidence; when the answer key itself is untrue, say so there. Never write a fix or a rewrite.',
   'Reply with JSON only, matching the response schema: one diagnosis per finding, by its number.',
 ].join('\n');
 
@@ -775,6 +786,7 @@ export const SERIOUS_TYPES = [
   'example_wrong',
   'example_ambiguous',
   'question_unanswered',
+  'untrue',
 ] as const;
 export type SeriousType = (typeof SERIOUS_TYPES)[number];
 
@@ -802,6 +814,7 @@ const DEFAULT_CAUSE: Record<SeriousType, Cause> = {
   example_wrong: 'missing_beat',
   example_ambiguous: 'wording',
   question_unanswered: 'missing_beat',
+  untrue: 'wording',
 };
 
 /** A quote reduced to its words, for matching against the reel test. */
@@ -883,6 +896,16 @@ export async function judgeReader(input: JudgeInput): Promise<UnderstandingFindi
   if (p.the_example.other_answer) fail('example_ambiguous', p.the_example, `${who} could read the example another way: "${p.the_example.other_answer}".`);
   for (const b of answers.beats) {
     for (const c of b.could_not_follow) out.minor.push({ text: `Beat ${b.beat}, ${reader}: could not follow "${c.quote}"${c.why ? ` (${c.why})` : ''}.`, beat: b.beat || null });
+    // The truth check (2026-11-25): the curious reader judges each line against what experts know. A line it
+    // traced to the reel is serious (beat 2 or 5 is the definition's cause); a fixed line (beats 1 and 3), or one it
+    // could not trace, is recorded only.
+    for (const c of b.untrue ?? []) {
+      const beat = reader === 'curious' ? quoteBeat(reelTest, c.quote) : null;
+      const why = `${who} found a line untrue: "${c.quote}"${c.why ? ` (${c.why})` : ''}.`;
+      const fixedLine = beat === 1 || beat === 3;
+      if (beat !== null && !fixedLine) out.serious.push({ type: 'untrue', reader, reader_quote: c.why, script_quote: c.quote, beat, cause: beat === 2 || beat === 5 ? 'definition' : DEFAULT_CAUSE.untrue, why });
+      else out.minor.push({ text: `${why} (${fixedLine ? 'a fixed line' : 'no quoted line from the video behind it'}: recorded, not fixed)`, beat: beat ?? (b.beat || null) });
+    }
   }
   if (p.where_lost.lost_beat && p.where_lost.lost_beat > 0) out.minor.push({ text: `${who} first got lost at beat ${p.where_lost.lost_beat}: ${p.where_lost.answer}`, beat: p.where_lost.lost_beat });
 

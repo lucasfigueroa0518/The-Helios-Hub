@@ -117,12 +117,12 @@ function noulBlocks(from: string, to: string, marker: string) {
   }));
 }
 
-test('analogy checks v1 match the register verbatim: the golden match, the three gates, the comparison (EX3-124)', () => {
-  const checks = noulBlocks('**C1 — Same concept', '**End of analogy checks v1**', 'C');
+test('analogy checks v2 match the register verbatim: the golden match, the three gates, the comparison (EX3-124)', () => {
+  const checks = noulBlocks('**C1 — Same concept', '**End of analogy checks v2**', 'C');
   assert.deepEqual(checks.map((c) => c.key), ['same_concept', ...ANALOGY_GATE_KEYS, 'a_over_b']);
   assert.equal(GOLDEN_MATCH.version, 'explainers-golden-match-v1');
-  assert.equal(ANALOGY_GATES.version, 'explainers-analogy-gates-v1');
-  assert.equal(ANALOGY_COMPARE.version, 'explainers-analogy-compare-v1');
+  assert.equal(ANALOGY_GATES.version, 'explainers-analogy-gates-v2');
+  assert.equal(ANALOGY_COMPARE.version, 'explainers-analogy-compare-v2');
   assert.deepEqual(Object.keys(ANALOGY_GATES.questions), [...ANALOGY_GATE_KEYS]);
   const sets: Record<string, { set: { questions: object }; fields: readonly string[] }> = {
     same_concept: { set: GOLDEN_MATCH, fields: GOLDEN_MATCH_FIELDS },

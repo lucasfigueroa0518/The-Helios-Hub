@@ -207,7 +207,7 @@ test("the readers' prompt: UNDERSTANDING.md's wording, cached and shared; who th
   assert.equal(system[0].text, READER_INSTRUCTIONS, 'the cached prefix is identical for both readers');
   assert.deepEqual(system[0].cache_control, { type: 'ephemeral', ttl: '1h' });
   const user = String(params.messages[0].content);
-  assert.match(user, /^Write the answers in plain words, at the level of a general audience with no technical background\.\nIn this copy of the script [^\n]*"velk"[^\n]*\n\nHere is the file:\n\n## Beat 1\nVoice: hi$/);
+  assert.match(user, /^Write the answers in plain words, at the level of a general audience with no technical background\. Take every word the video does not define at its most common everyday meaning, and answer from that reading\.\nIn this copy of the script [^\n]*"velk"[^\n]*\n\nHere is the file:\n\n## Beat 1\nVoice: hi$/);
   assert.deepEqual(readerParams({ model: 'm', persona: 'curious', term: 'cache', reelTest: 'x' }).system, params.system);
   // Live run 42: the reader schema was too large for structured output; plain JSON, parsed leniently.
   assert.ok(!('output_config' in params), 'no structured-output grammar for the readers');
@@ -352,6 +352,28 @@ test('code reads what needs no Jev: two stories, an ambiguous example, ear notes
     assert.ok(f.minor.some((x) => /^Beat 3, curious: could not follow "recently" \(too fast\)\.$/.test(x.text)));
     assert.ok(f.minor.some((x) => x.beat === 4 && /first got lost at beat 4/.test(x.text)));
   }
+});
+
+test('the truth check (2026-11-25): a line the curious reader finds untrue and quotes from the reel is serious, unless it is a fixed line; else recorded only', async () => {
+  const a = answers();
+  a.beats = [
+    { beat: 3, see_and_hear: '', think_it_explains: '', learned: '', expect_next: '', could_not_follow: [], untrue: [{ quote: 'The fridge keeps the milk close', why: 'experts say otherwise' }] },
+    { beat: 5, see_and_hear: '', think_it_explains: '', learned: '', expect_next: '', could_not_follow: [], untrue: [{ quote: 'words the reel never says', why: 'x' }] },
+  ];
+  const f = await judge(a, null, null);
+  assert.deepEqual(f.serious.map((x) => [x.type, x.beat, x.cause, x.script_quote]), [['untrue', 4, 'wording', 'The fridge keeps the milk close']]);
+  assert.ok(f.minor.some((x) => /found a line untrue: "words the reel never says".*recorded, not fixed/.test(x.text)));
+  const defining = answers();
+  defining.beats = [{ beat: 3, see_and_hear: '', think_it_explains: '', learned: '', expect_next: '', could_not_follow: [], untrue: [{ quote: 'A cache is a nearby store', why: 'a cache holds copies' }] }];
+  const handoff = await judge(defining, null, null);
+  assert.equal(handoff.serious.length, 0, 'beat 3 is the fixed hand-off line, built by code');
+  assert.ok(handoff.minor.some((x) => /a fixed line: recorded, not fixed/.test(x.text)));
+  const newcomer = await judgeReader({ jev: null, topicId: 't', key: null, reader: 'newcomer', answers: a, reelTest: REEL });
+  assert.equal(newcomer.serious.length, 0, "only the curious reader's truth notes can be serious");
+  assert.equal(parseReaderAnswers({ probes: {}, beats: [{ beat: 2, untrue: [{ quote: 'q', why: 'w' }] }] }).beats[0].untrue?.length, 1);
+  assert.match(PERSONA_LINES.curious, /what experts in the field know/);
+  assert.match(PERSONA_LINES.newcomer, /most common everyday meaning/);
+  assert.match(READER_INSTRUCTIONS, /\[untrue: each with the quote and why\]/);
 });
 
 test('findings: both readers merged, the diagnosis folded in, the stand-in word turned back into the term', () => {

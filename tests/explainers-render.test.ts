@@ -895,7 +895,7 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
   const brief = fs.readFileSync(p('BRIEF.md'), 'utf8');
   assert.match(brief, /flow: automation\nstoryboard: no/);
   // The named analogy (EX3-123): its name, its explanation, and the mapping table the director stages from.
-  assert.match(brief, /## Analogy\n\nThe analogy the idea phase picked \(two writers, Jev's pick\)\. Stage the anchor scene from it; never swap in another\.\n\nName: A mailbox with a flag\n\nA letter drops in and the flag pops up\. You never walk out to look\.\n\n\| Analogy \| Concept \|\n\|---\|---\|\n\| the mailbox \| the webhook URL \|\n\| the flag popping up \| the notification \|\n\| walking over to look \| polling \|\n\nThe reel shows the first three or four rows\./);
+  assert.match(brief, /## Analogy\n\nThe analogy the idea phase picked \(two writers, Jev's pick\)\. Stage the anchor scene from it; never swap in another\.\n\nName: A mailbox with a flag\n\nA letter drops in and the flag pops up\. You never walk out to look\.\n\n\| Analogy \| Concept \|\n\|---\|---\|\n\| the mailbox \| the webhook URL \|\n\| the flag popping up \| the notification \|\n\| walking over to look \| polling \|\n\nRows are most important first; the reel maps the first three or four\./);
   assert.doesNotMatch(brief, /Scene:|Elements:|Actor:|Hook \(|Steps \(/);
   // EX6-14 (D124): the default opener is silent, so the brief gives no line and says so.
   assert.match(brief, /## Opener line\n\nSilent\. Frame 1 is the opener over the AI 101 card: no opener line/);
