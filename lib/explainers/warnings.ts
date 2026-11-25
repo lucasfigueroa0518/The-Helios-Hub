@@ -105,6 +105,7 @@ export const SERIOUS_LABELS: Record<string, string> = {
   example_wrong: "The example's answer did not land",
   example_ambiguous: 'The example can be read two ways',
   question_unanswered: "The reel's question did not get its answer across",
+  untrue: 'A line says something untrue',
 };
 
 /** A detail with its times and numbers blanked: the pattern repeats share. */

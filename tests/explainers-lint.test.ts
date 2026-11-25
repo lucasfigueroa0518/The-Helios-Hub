@@ -303,7 +303,7 @@ test('4.2 every spoken frame declares its look; the pipeline reads it, never the
   assert.deepEqual(rules(lintOf(swapIn(SIX, '- type: social_proof\n- ground: paper'))), ['look@6']);
   assert.deepEqual(rules(lintOf(swapIn(SIX, '- type: social_proof\n- ground: paper\n- look: own'))), ['look@6']);
   // Most beats take any look: a mechanism frame 4 or a world frame 7 is the director's call.
-  assert.deepEqual(BEAT_LOOKS, { 3: ['world'], 6: ['mechanism', 'blend'] });
+  assert.deepEqual(BEAT_LOOKS, { 3: ['world'], 6: ['mechanism'] });
   assert.deepEqual(lintOf(swapIn('- type: feature_showcase\n- ground: paper\n- look: world\n- voiceover: "This mailbox', '- type: feature_showcase\n- ground: paper\n- look: mechanism\n- voiceover: "This mailbox')), []);
   // Two beats' jobs narrow it: the real technology (6) and code's card over the world (3).
   assert.deepEqual(lintOf(swapIn(SIX, '- type: social_proof\n- ground: paper\n- look: world')).map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['look@6:warning']);
@@ -380,7 +380,7 @@ test('4.3 writing rules: no scene restart, the quick definition, the hand-off, t
   const flagged = (storyboard: string) => rules(lintOf(storyboard));
   const good = fixture('good');
   assert.deepEqual(flagged(swapIn('- voiceover: "This mailbox is where messages land.', '- voiceover: "Picture a mailbox where messages land.')), ['scene_setting@4']);
-  // Beat 2 (4.3): one plain sentence of about 15 words, "[Term] is when …".
+  // Beat 2 (4.3): one plain sentence of about 15 words, "[Term] is a [kind of thing] that …" (the lint reads only "[Term] is …").
   const QUICK = 'A webhook is when one app sends another a message the moment something happens.';
   const quick = (line: string) => flagged(swapIn(QUICK, line)).filter((r) => /^quick_definition|^definition_overstated|^minimum:3/.test(r));
   assert.deepEqual(quick('One app sends another a message the moment something happens.'), ['quick_definition@2']);

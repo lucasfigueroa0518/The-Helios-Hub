@@ -46,8 +46,12 @@ export const IDEAS_PER_CALL = 3;
 // explained well; since v8 to v10 the scope and payload shrank to the syllabus takeaway restated, and the analogy writer
 // (fed only the term, scope and payload) got a third of the material. The syllabus still picks and orders the terms; the
 // generator writes each idea from the term alone, as v6 did, with no angle, takeaway, plain-words or what-it-does rule.
+// v12 (2026-11-25, the prompt contradictions): TRUTH_RULE (every claim true as experts know it; an everyday word true at
+// its everyday meaning); a later check, not the generator, handles a topic that repeats a published reel; "embedded" is
+// where the viewer stands (they know the larger system, not the concept; it comes before "unfamiliar"), and the reel
+// shows the concept's place as well as defining it, never "before" the definition. The idea shape is v11's.
 
-export const IDEA_GENERATOR_VERSION = 'idea-generator-v11';
+export const IDEA_GENERATOR_VERSION = 'idea-generator-v12';
 
 /** The reel shape every topic must fit (EX3-10; 3.9, EX3-123), shared by the prompts and theme brief v4. */
 export const REEL_SHAPE =
@@ -58,7 +62,7 @@ export const REEL_SHAPE =
  * scope writer. Every reel still teaches its definition; the frame says where the lesson starts and how deep it goes.
  */
 export const LESSON_FRAME_RULE = `payload, altitude, map_position: the lesson frame. Every reel teaches the term's plain definition; the frame says where the viewer starts and how far the reel goes past the definition.
-   - altitude: where the average viewer of the theme brief's audience stands with the concept. "unfamiliar": most viewers do not really know what it is, so the definition and how it works is the payload. "familiar": most viewers already know the word, so the definition is a quick anchor and the payload goes past it. "embedded": the concept is one part of a larger system, so the reel places it in that system before and after defining it.
+   - altitude: where the average viewer of the theme brief's audience stands with the concept. "unfamiliar": most viewers do not really know what it is, so the definition and how it works is the payload. "familiar": most viewers already know the word, so the definition is a quick anchor and the payload goes past it. "embedded": most viewers do not know the concept but know the larger system it is one part of (this label comes before "unfamiliar"), so the reel shows where it sits in that system as well as defining it.
    - payload: one sentence, the one thing the viewer leaves with, at the depth the altitude calls for. For a familiar word the payload goes past the definition, to the mechanism, cause or failure behind it.
    - map_position: one sentence placing the concept in the system it belongs to: what it does there, and what comes before and after it.`;
 
@@ -67,25 +71,25 @@ export const TERM_RULE =
   'term: the exact name of the one concept the reel defines, as a viewer would search for it, 1 to 4 words, lowercase unless it is an acronym or a proper name. The title, the term and the scope agree: the reel defines this term, not a broader concept it belongs to and not a narrower part of it. The scope says what the reel covers and stops short of.';
 
 /**
- * Plain words (Lucas, 2026-11-24: three real viewers were lost on "word-perfect" and "phrasebook"). Shared by every
- * prompt that writes words a viewer reads or hears; the director's story design holds the same rule.
+ * Plain, true words (Lucas, 2026-11-24: three real viewers were lost on "word-perfect" and "phrasebook"; 2026-11-25: a
+ * plain word that says something untrue is as wrong as jargon). The director's story design holds the same rule.
  */
 export const PLAIN_WORDS_RULE =
-  'Plain words: every word a viewer reads or hears is one a 12-year-old uses talking to a friend, plus everyday tech words any phone user knows (app, website, password, photo, email, chatbot). The topic\'s own term is the only technical word. No idioms, no formal, literary or old-fashioned words, no made-up compound words.';
+  'Plain, true words: every word a viewer reads or hears is one a 12-year-old uses talking to a friend, plus everyday tech words any phone user knows (app, website, password, photo, email, chatbot). Simple words may leave detail out but never say something untrue: a plain word a newcomer would take, at its everyday meaning, to say something untrue is the wrong word. The topic\'s own term is the one new word to learn; another technical word is used only where no plain word is true, after its job is said in plain words. No idioms, no formal, literary or old-fashioned words, no made-up compound words.';
 
 /**
- * What it does, never what it isn't (Lucas, 2026-11-24): the AI reel defined AI against "rules someone typed" and taught
- * machine learning; the AI model reel defined a model against a cheat sheet. Shared by the prompts that write a lesson.
+ * True as an expert says it (Lucas, 2026-11-25: the rule-based system reel taught that the rules are "written by hand",
+ * an error that began in the idea's own loose words). Shared by every prompt that writes an idea's words.
  */
-export const WHAT_IT_DOES_RULE =
-  'Say what the concept does, never what it is not: no "instead of", "rather than", "unlike" or "not …" contrast with another thing, and never the mechanism of a neighboring concept in place of its own.';
+export const TRUTH_RULE =
+  'Every claim is true as experts in the field know it. Plainer words may leave detail out but never make a claim untrue: an everyday word must be true at its everyday meaning, as a newcomer would read it.';
 
 export const IDEA_GENERATOR_INSTRUCTIONS = `You write the ideas for Helios Explainer Reels: one-minute, 9:16 animated reels that each teach one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience, the tone, the banned angles, and what counts as a duplicate. It is binding.
 
 HARD CONSTRAINTS. Every one is required.
 1. Return exactly one idea for each syllabus topic in the user message, in the same order, as JSON matching the response schema. No other output.
 2. Each idea teaches exactly one complete thought that fits one minute with ${REEL_SHAPE}.
-3. Teach the assigned syllabus topics, one idea each. The syllabus has already chosen and ordered tonight's terms, so the brief's guidance on which topics to pick is met by it; everything else in the brief holds. Every reel stands alone: most viewers meet it cold on a social feed, having seen no other reel, so the idea never relies on an earlier topic.
+3. Teach the assigned syllabus topics, one idea each. The syllabus has already chosen and ordered tonight's terms, so the brief's guidance on which topics to pick is met by it, and a later check handles a topic that repeats a published reel; everything else in the brief holds. Every reel stands alone: most viewers meet it cold on a social feed, having seen no other reel, so the idea never relies on an earlier topic.
    bucket: the id of the coverage bucket the concept belongs to, from the response schema's list.
 4. topic_title: the viewer-facing title or question, 12 words or fewer.
 5. topic_scope: one sentence that states the exact learning objective, beginning with "Explain".
@@ -93,7 +97,8 @@ HARD CONSTRAINTS. Every one is required.
 7. ${LESSON_FRAME_RULE}
 8. Each idea teaches only its own topic. It does not teach another topic as its subject: one it comes after, one in the current pool, or an archived topic in the user message. Where it needs an earlier idea, it says it in a few everyday words.
 9. Never take an angle the brief bans.
-10. Do not write hooks, analogies, scripts, scores, or reasoning. Titles, terms, scopes, buckets and lesson frames only.`;
+10. ${TRUTH_RULE}
+11. Do not write hooks, analogies, scripts, scores, or reasoning. Titles, terms, scopes, buckets and lesson frames only.`;
 
 export function ideaGeneratorSystem(themeBrief: string): string {
   return `${IDEA_GENERATOR_INSTRUCTIONS}\n\n<theme_brief>\n${themeBrief}\n</theme_brief>`;
@@ -183,9 +188,10 @@ export type IdeaResponse = {
 // scope-writer-v4 (Explainers 3.2, EX3-86): v3's one-minute reel, plus the term
 // each reel defines. It also backfills the terms of topics written before 3.2.
 // Approved in the 3.2 plan (Lucas, 2026-10-13). v5 (3.9, EX3-123): the new reel shape (REEL_SHAPE). v6 (ideas
-// coverage, 2026-11-03): in the same call, each title's bucket (any of the thirteen) and lesson frame.
+// coverage, 2026-11-03): in the same call, each title's bucket (any of the thirteen) and lesson frame. v7 (2026-11-25):
+// TRUTH_RULE; the scope narrows a broad title to the thought at its heart without changing what it promises.
 
-export const SCOPE_WRITER_VERSION = 'scope-writer-v6';
+export const SCOPE_WRITER_VERSION = 'scope-writer-v7';
 
 export const SCOPE_WRITER_INSTRUCTIONS = `You write the one-sentence learning objective (topic_scope) and the term for Helios Explainer Reel titles that a person entered by hand. Each reel runs about one minute, 9:16, and teaches one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience and what one reel can teach. It is binding.
 
@@ -196,8 +202,9 @@ HARD CONSTRAINTS. Every one is required.
 4. ${TERM_RULE}
 5. bucket: the id of the coverage bucket the concept belongs to, from the response schema's list.
 6. ${LESSON_FRAME_RULE}
-7. Keep the title's intent. Do not change, merge, or drop titles, and do not judge whether a title is a good topic. Scoring happens later.
-8. Do not write hooks, analogies, scripts, or reasoning.`;
+7. Keep the title's intent: the scope narrows the title to the one thought at its heart and never changes what it promises. Do not change, merge, or drop titles, and do not judge whether a title is a good topic. Scoring happens later.
+8. ${TRUTH_RULE}
+9. Do not write hooks, analogies, scripts, or reasoning.`;
 
 export function scopeWriterSystem(themeBrief: string): string {
   return `${SCOPE_WRITER_INSTRUCTIONS}\n\n<theme_brief>\n${themeBrief}\n</theme_brief>`;
@@ -224,21 +231,23 @@ export type ScopeResponse = {
 // When Jev's altitude check disagrees with the generator's label (familiar or not), Jev wins and one call
 // rewrites only the payload for the corrected altitude. Title, scope, term and map position stay.
 // v2 (2026-11-24): WHAT_IT_DOES_RULE. v3 (2026-11-25): back to v1's text with the idea shape (idea-generator-v11).
+// v4 (2026-11-25): TRUTH_RULE; the payload goes as deep as the altitude asks, inside the scope; "embedded" as v12.
 
-export const PAYLOAD_REWRITER_VERSION = 'payload-rewriter-v3';
+export const PAYLOAD_REWRITER_VERSION = 'payload-rewriter-v4';
 
 export const PAYLOAD_REWRITER_INSTRUCTIONS = `You rewrite the payload of one Helios Explainer Reel's lesson frame. Each reel runs about one minute, 9:16, and teaches one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience. It is binding.
 
 A check found that the frame's altitude was wrong; the user message gives the corrected altitude. Every reel teaches the term's plain definition; the altitude says how far it goes past it.
 - "unfamiliar": most viewers do not really know what the concept is, so the definition and how it works is the payload.
 - "familiar": most viewers already know the word, so the definition is a quick anchor and the payload goes past it, to the mechanism, cause or failure behind it.
-- "embedded": the concept is one part of a larger system, so the reel places it in that system before and after defining it.
+- "embedded": most viewers do not know the concept but know the larger system it is one part of (this label comes before "unfamiliar"), so the reel shows where it sits in that system as well as defining it.
 
 HARD CONSTRAINTS. Every one is required.
 1. Return one payload as JSON matching the response schema. No other output.
 2. The payload is one sentence: the one thing the viewer leaves with, at the depth the corrected altitude calls for.
-3. Stay inside the topic's title, scope and term; do not change the concept or widen the lesson.
-4. Do not write hooks, analogies, scripts, or reasoning.`;
+3. Keep the topic's concept and stay inside what its scope covers; within it, go as far past the definition as the corrected altitude asks.
+4. ${TRUTH_RULE}
+5. Do not write hooks, analogies, scripts, or reasoning.`;
 
 export function payloadRewriterSystem(themeBrief: string): string {
   return `${PAYLOAD_REWRITER_INSTRUCTIONS}\n\n<theme_brief>\n${themeBrief}\n</theme_brief>`;
@@ -288,8 +297,12 @@ export function payloadRewriterUserMessage(request: Omit<PayloadRequest, 'model'
 // held to worlds nearly every adult shares; the contrast rule targets a second thing the viewer must map (the golden set's
 // own open-book and buzzer analogies set the concept against another thing, which v11 banned); "it shows" follows the
 // Lesson, so a failure lesson shows the failure; the Lesson rule asks for the analogy that makes the Lesson obvious.
+// v13 (2026-11-25, the prompt contradictions): plain, true words (a plain word that says something untrue is wrong);
+// the Lesson is picked for among analogies whose defining trait is the concept's, so beats 2 and 5 still have it; the
+// golden set sets the bar for picture and fit (its notes' technical words and side concepts are not the bar); every
+// mapping row is true as experts know the concept; the concept's own name is not a real name.
 
-export const ANALOGY_WRITER_VERSION = 'analogy-writer-v12';
+export const ANALOGY_WRITER_VERSION = 'analogy-writer-v13';
 /** Two calls in parallel; a third only when neither passes (EX3-123). */
 export const ANALOGY_CALLS = 2;
 export const MIN_ANALOGY_SENTENCES = 2;
@@ -322,7 +335,7 @@ export function goldenExample(g: GoldenAnalogy): string {
   return `${g.concept}: **${g.name}**\n${g.text}`;
 }
 
-/** The writer's system prompt (analogy-writer-v9: the Lesson line, 2026-11-03). `{EXAMPLES}` is the golden set minus what Jev hid. */
+/** The writer's system prompt (analogy-writer-v13: true words, the Lesson within the defining trait, 2026-11-25). `{EXAMPLES}` is the golden set minus what Jev hid. */
 export const ANALOGY_WRITER_INSTRUCTIONS = `You write the analogy at the heart of a one-minute "AI 101" reel, a simple cartoon/paper animation that teaches one AI or software concept to business owners and curious professionals. Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend.
 
 What the best analogies have in common:
@@ -332,12 +345,12 @@ What the best analogies have in common:
 - That thing's single defining trait is the concept's defining trait. The first thing anyone would say about it is exactly the thing the concept does, so the viewer never has to work out which meaning counts, and every part behaves the way the real part it stands for behaves.
 - A contrast earns its place when it makes the concept's job visible: the same scene with and without it, or the everyday way people managed before it. HARD CONSTRAINT: any second thing in the analogy is there only to make this concept clearer. If a viewer would need to map the second thing too, or would leave remembering it instead of the concept, drop it.
 - One concrete, specific detail makes it vivid, and often a little funny.
-- It shows what the Lesson says the viewer leaves with: the concept working, or, when the Lesson is a cause or a failure, that happening. Side limits and edge cases stay out.
-- HARD CONSTRAINT: when the message gives a Lesson, pick the analogy whose everyday thing makes that Lesson obvious at a glance; the term's plain meaning comes along on the way.
+- It shows what the Lesson says the viewer leaves with: the concept working, or, when the Lesson is a cause or a failure, that happening. Other limits and edge cases stay out.
+- HARD CONSTRAINT: when the message gives a Lesson, pick, among the analogies whose defining trait is the concept's, the one whose everyday thing makes that Lesson obvious at a glance; the term's plain meaning comes along on the way.
 - HARD CONSTRAINT: ${PLAIN_WORDS_RULE} This holds for the name, the explanation and every detail in it.
-- It names no real company, store or product, no real person, and no character from a film, show or book. A brand name that has become the everyday word for a kind of thing is fine.
+- It names no real company, store or product, no real person, and no character from a film, show or book. A brand name that has become the everyday word for a kind of thing is fine, and so is the concept's own name.
 
-These analogies, each for a different concept, meet that bar. They show the standard, not a template; find the one that fits this concept as well as these fit theirs.
+These analogies, each for a different concept, set the bar for the picture and the fit. Their technical words, and the second concepts some of them name, are not part of the bar: never copy them. They show the standard, not a template; find the one that fits this concept as well as these fit theirs.
 
 <examples>
 {EXAMPLES}
@@ -345,7 +358,7 @@ These analogies, each for a different concept, meet that bar. They show the stan
 
 How to work: think of many candidates, test each against every point above, and keep the one a viewer would most likely repeat to a friend.
 
-Return JSON matching the schema: name, explanation (two or three sentences), and mapping (three to six rows, most important first, each pairing a part of the analogy with the part of the concept it stands for). Nothing else.`;
+Return JSON matching the schema: name, explanation (two or three sentences), and mapping (three to six rows, most important first, each pairing a part of the analogy with the part of the concept it stands for, true as experts know the concept). Nothing else.`;
 
 /** The system prompt with the golden examples Jev did not hide for this topic. */
 export function analogyWriterSystem(hidden: readonly string[] = []): string {

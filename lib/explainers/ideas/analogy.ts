@@ -173,7 +173,7 @@ export function analogyMarkdown(candidate: AnalogyCandidate): string {
     '|---|---|',
     ...candidate.mapping.map((row) => `| ${cell(row.analogy)} | ${cell(row.concept)} |`),
     '',
-    'The reel shows the first three or four rows.',
+    'Rows are most important first; the reel maps the first three or four.',
   ].join('\n');
 }
 
@@ -284,7 +284,9 @@ async function writeOne(deps: AnalogyDeps, topic: AnalogyTopic, hidden: string[]
 
 /** Jev's swapped-order comparison of two passing candidates (EX3-124). */
 async function compare(deps: AnalogyDeps, topic: AnalogyTopic, first: AnalogyCandidate, second: AnalogyCandidate): Promise<AnalogyComparison> {
-  const subject = `${topic.title} — ${topic.scope ?? topic.title}`;
+  // Comparison v2 (2026-11-25): the Lesson rides with the topic, so "get it at once" includes it, as the writer's Lesson rule does.
+  const lesson = topic.lesson_payload?.trim();
+  const subject = `${topic.title} — ${topic.scope ?? topic.title}${lesson ? `\nLesson: ${lesson}` : ''}`;
   const ask = async (a: AnalogyCandidate, b: AnalogyCandidate) => {
     const result = await deps.jev.ask({
       component: 'analogy_compare',

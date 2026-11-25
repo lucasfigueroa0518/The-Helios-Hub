@@ -3,7 +3,7 @@
 This file holds Helios's taste: the decisions Lucas has made about how every reel looks and
 sounds, whatever the topic. `craft.md` teaches how to choose; house style is where Helios has
 already chosen, so follow it. A line that leaves room for the director's judgement says so. Lines
-marked HARD CONSTRAINT never bend.
+marked HARD CONSTRAINT never bend to craft or taste; only a minimum or the format outranks them.
 
 The other layers: `minimums.md` (the eight things every reel must contain, and failing open), the
 format (`story-design.md`: the eight beats and their jobs, fixed) and `frame.md` (the tools: the
@@ -42,7 +42,7 @@ This section is the look of every frame except the analogy frames, which § The 
 - **HARD CONSTRAINT: never** photos, stock footage, emoji, unicode glyph icons, real brands or
   logos other than Helios, real people's likenesses, infographic templates, bullet lists,
   headlines, or narration sentences on screen (the dictionary card's definition is the one
-  exception).
+  exception). The topic's own term is never a brand here, even when it names a product.
 
 ## Palette and orange
 
@@ -205,8 +205,8 @@ frame keeps § The look.
 - **The voice is tight:** no pause runs longer than 0.2 s. Code trims a silence inside a line to
   0.15 s (0.2 s after a sentence ends), and each frame ends on a 0.15 s hold. The picture keeps
   pace with the voice.
-- **No word is ever cut** to tighten the voice or to chase a length; only real silence is trimmed.
-  A reel may run long: understanding comes first.
+- **No word is ever cut** from the recorded voice to tighten it or to chase a length; only real
+  silence is trimmed. A reel may run long: understanding comes before length.
 
 ## Sound and music
 

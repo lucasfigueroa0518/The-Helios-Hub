@@ -63,8 +63,9 @@ export const DEFINITION_FRAME = 5;
 /** Each frame's look (4.2, CONTRACT § Storyboard): frames 2–7 declare one; the opener and the close have none. */
 export const LOOKS = ['world', 'mechanism', 'blend'];
 /** The looks a beat's job allows, where it narrows them (story-design.md § Frame fields): the hand-off
- *  is code's card over the world; the example is the real technology. Other beats take any look. */
-export const BEAT_LOOKS = { 3: ['world'], 6: ['mechanism', 'blend'] };
+ *  is code's card over the world; the example is the real technology, never the analogy (§ 6), so it
+ *  is never a blend (2026-11-25). Other beats take any look. */
+export const BEAT_LOOKS = { 3: ['world'], 6: ['mechanism'] };
 /** A shot's size (4.2): the first part of every shot line. */
 export const SHOT_SIZES = ['wide', 'medium', 'close', 'insert'];
 /** The `## Visual arc` block's fields (4.2): the reel planned as one film. */
@@ -1021,7 +1022,7 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
       }
     }
 
-    // Beat 2 (4.3): the quick definition, one plain sentence of about 15 words, "[Term] is when …",
+    // Beat 2 (4.3): the quick definition, one plain sentence of about 15 words, "[Term] is a [kind of thing] that …",
     // written fresh from the mechanism; captions only (the dictionary card is frame 5's).
     if (i === 1 && vo) {
       const plain = stripQuotes(vo);
@@ -1029,8 +1030,8 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
       const said = sentences2(plain);
       if (said.length > 1) out.push(violation('quick_definition', n, 'warning', `the quick definition is ${said.length} sentences: one plain sentence`));
       if (countWords(plain) > QUICK_DEFINITION_MAX) out.push(violation('quick_definition', n, 'warning', `the quick definition is ${countWords(plain)} words; about ${QUICK_DEFINITION_MAX} at most`));
-      if (term && !normalize(plain).includes(normalize(term))) out.push(violation('quick_definition', n, 'error', `the quick definition does not name the term "${term}": "[Term] is when …"`));
-      else if (term && !new RegExp(`^(?:a |an |the )?${normalize(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} (is|are) `).test(normalize(plain))) out.push(violation('quick_definition', n, 'warning', `the quick definition does not open "${term} is …": "[Term] is when …"`));
+      if (term && !normalize(plain).includes(normalize(term))) out.push(violation('quick_definition', n, 'error', `the quick definition does not name the term "${term}": "[Term] is a [kind of thing] that …"`));
+      else if (term && !new RegExp(`^(?:a |an |the )?${normalize(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} (is|are) `).test(normalize(plain))) out.push(violation('quick_definition', n, 'warning', `the quick definition does not open "${term} is …": "[Term] is a [kind of thing] that …"`));
       const overstated = OVERSTATE_RE.exec(plain);
       if (overstated) out.push(violation('definition_overstated', n, 'warning', `the quick definition says "${overstated[0]}": claim no more than the mechanism does (minimums.md 3)`));
       const jargon = jargonCandidates(vo).filter((j) => normalize(j) !== normalize(term) && !/^ai$/i.test(j));

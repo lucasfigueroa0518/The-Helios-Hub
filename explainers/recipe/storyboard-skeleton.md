@@ -3,7 +3,7 @@ format: 1080x1920
 duration: 60s
 arc: concept-explainer
 mode: autonomous
-message: <fill in: the thesis, the one line the viewer leaves with>
+message: <fill in: the thesis, the one line the viewer leaves with (the Payload when BRIEF.md has one)>
 term: <fill in: BRIEF.md's term, verbatim>
 concept: <fill in: the same term>
 audience: <fill in: who the reel is for>
@@ -25,7 +25,7 @@ music: none
   - <fill in: place id> — <interior or exterior: its kind> — <what happens there>
 - hero: <fill in: entity id> — <critter or object>
 - steps:
-  - <fill in: what happens in the analogy> — <the real step's technical name>
+  - <fill in: a mapped part doing its job in the analogy> — <the real step's technical name>
 - entities:
   - <fill in: id> — <what it is> — stands for <the real part> — <how it is built> — beats <the beats it appears in>
   - <fill in: id, for each critter> — <who it is> — stands for <the real part> — critter <body>, role <role or bare> — beats <the beats it appears in>
@@ -51,7 +51,7 @@ music: none
 - type: product_intro
 - ground: <fill in: paper or stage; room only for an anchor-scene look: world frame staging the analogy>
 - look: <fill in: world, mechanism or blend>
-- voiceover: "<fill in: one plain sentence, about 15 words or fewer: [Term] is when …>"
+- voiceover: "<fill in: one plain sentence, about 15 words or fewer: what kind of thing the term is, then what it does ([Term] is a [kind of thing] that … for a noun)>"
 - shots:
   - <fill in: one line per shot>
 - scene: <fill in: what the viewer sees>
@@ -96,7 +96,7 @@ music: none
 - type: feature_showcase
 - ground: <fill in: paper or stage; room only for an anchor-scene look: world frame staging the analogy>
 - look: <fill in: world, mechanism or blend>
-- definition: "<fill in: the term restated with the analogy attached, word for word as the voiceover's first sentence>"
+- definition: "<fill in: the term's definition, true on its own, with the analogy attached as a comparison, word for word as the voiceover's first sentence>"
 - part_of_speech: <fill in: usually noun>
 - voiceover: "<fill in: the definition, then why the analogy works>"
 - shots:
@@ -112,7 +112,7 @@ music: none
 - src: compositions/frames/06-example.html
 - type: social_proof
 - ground: <fill in: paper or stage>
-- look: <fill in: mechanism or blend>
+- look: <fill in: mechanism>
 - voiceover: "<fill in: the real example>"
 - shots:
   - <fill in: one line per shot>

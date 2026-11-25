@@ -12,8 +12,9 @@
 `craft.md`** (the order `craft.md` states). The beats come in this order whatever craft would prefer:
 the term is named and defined plainly at beat 2, before the analogy plays, and restated with the
 analogy attached at beat 5. Craft's principles of order (concrete before abstract,
-motivate before defining, show it working before naming its parts) apply inside each beat and across
-the frames that serve it, never to the beat order.
+motivate before defining, show it working before naming its parts) and its hook apply inside each beat
+and across the frames that serve it, never to the beat order, the code-built opener or the quick
+definition.
 
 ## Inputs
 
@@ -27,14 +28,17 @@ the frames that serve it, never to the beat order.
 The input is information, not a story: never follow its order. Find the teaching truth first (what
 the term is in one plain sentence, the one line the viewer leaves with, the mechanism as a few real
 steps, the analogy's defining trait and what it maps to, a tiny correct example, what the concept
-means for the viewer in real terms), then write the beats around it.
+means for the viewer in real terms), every part of it true as experts in the field know it (with a
+source, its facts win): research what you are not sure of, since BRIEF.md's own wording may be
+loose. Then write the beats around it.
 
 ### The lesson frame
 
 Every reel teaches the definition (beats 2 and 5), whatever the frame says. The frame says what the
 reel teaches past it:
-- **Payload** is the one line the viewer leaves with: it is the teaching truth's line, and beat 7's
-  takeaway must land on it, in your own words.
+- **Payload** is the one line the viewer leaves with: it is the teaching truth's line. The reel
+  teaches it, and beat 7's takeaway lands on it in your own words, as what it means for the viewer
+  (§ 7).
 - **Altitude** says where the viewer's understanding already ends, and so how far past the
   definition the reel goes:
   - `unfamiliar`: the definition and how it works is the lesson. Beats 5 and 6 show the mechanism
@@ -66,12 +70,15 @@ yourself from the topic, as the teaching truth asks.
 Never add, drop, merge or reorder beats. Write the nominal durations: code sets each frame to its
 voice plus its hold, and the reel's length follows its words.
 
-**HARD CONSTRAINT: plain words, in every voice line and every word on screen.** Every word is one
-a 12-year-old uses talking to a friend, plus everyday tech words any phone user knows (app,
-website, password, photo, email, chatbot). The term is the only technical word. No idioms, no
-formal, literary or old-fashioned words, no made-up compound words. The viewer meets this reel
-cold, with no other reel seen: never lean on an earlier topic's term. Where a line needs a
-harder word, say the idea in simpler ones.
+**HARD CONSTRAINT: plain, true words, in every line you write and every word on screen** (the fixed
+lines of beats 1 and 3 are as given). Every word is one a 12-year-old uses talking to a friend, plus
+everyday tech words any phone user knows (app, website, password, photo, email, chatbot). Simple
+words may leave detail out but never say something untrue: choose each word for what a first-time viewer will believe it means,
+at its everyday meaning, and a plain word that would leave them believing something untrue is the
+wrong word, however simple. The term is the one new word to learn; another technical word appears
+only where no plain word is true, after its job is said plainly. No idioms, no formal, literary or
+old-fashioned words, no made-up compound words. The viewer meets this reel cold, with no other reel
+seen: never lean on an earlier topic's term.
 
 ### 1 · Opener
 - **Built by code:** the bank's opener lands on the AI 101 card, then cuts to frame 2. There is no
@@ -86,13 +93,14 @@ harder word, say the idea in simpler ones.
   The slot is 1–3 words naming the analogy's scene, as a stranger would name it.
 
 ### 2 · Quick definition
-- **Voice:** **HARD CONSTRAINT: one plain sentence of about 15 words or fewer, in the shape
-  "[Term] is when …", with no jargon.** Write it fresh from how the mechanism truly works, never
-  copied or adapted from the learning objective's or the source's wording, which are often loose.
-  Say what kind of thing it is and what it does, and claim no more than the mechanism does
-  (`minimums.md` 3 is the bar).
-- **HARD CONSTRAINT: every content word in it is later shown by the analogy** (beat 4 plays it, beat
-  5 names it): a word the analogy never shows is a word to cut.
+- **Voice:** **HARD CONSTRAINT: one plain sentence of about 15 words or fewer that says what kind of
+  thing the term is, then what it does** ("[Term] is a [kind of thing] that …" for a noun). Write it
+  fresh from how the mechanism truly works, as experts in the field know it, never copied or adapted
+  from the learning objective's or the source's wording, which are often loose. Claim no more than
+  the mechanism does (`minimums.md` 3 is the bar).
+- **HARD CONSTRAINT: every content word in it is later shown,** by the analogy (beat 4 plays it,
+  beat 5 names it) or, where the analogy cannot show it, by the real example (beat 6). A word the
+  sentence needs to stay true is never cut to meet this.
 - **Picture:** yours; captions carry the words (no card here).
 
 ### 3 · Hand-off
@@ -109,21 +117,24 @@ harder word, say the idea in simpler ones.
 - Open inside the analogy's action, never with a setup phrase such as "Picture…", "Imagine…" or
   "Let's say…".
 - Map each part by what it does, in plain words first: name its job as it appears, in one clause
-  (the jargon name second, or not at all), then play the steps in order.
+  (a technical name second, only where § The eight beats allows one), then play the steps in order.
 
 ### 5 · Definition payoff
-- **Voice:** first the term restated with the analogy attached, which is also `definition:` word for
-  word, with `part_of_speech:`: the kit's dictionary card writes it as it is said, the reel's reward.
+- **Voice:** first the term restated: its definition, true on its own, with the analogy attached as
+  a comparison, never in place of the real words. That sentence is also `definition:` word for word,
+  with `part_of_speech:`: the kit's dictionary card writes it as it is said, the reel's reward.
   Then why it works: the analogy's defining trait doing its job, and why that is the concept's job
   too.
 - It never contradicts beat 2: the same thing, now with the picture attached.
 
 ### 6 · One tiny real example
-- Framed as a real example ("Here's a real example:" or close), with real values. It walks the
+- Framed as a real example ("Here's a real example:" or close): the real system at work on concrete
+  values. It walks the
   anchor scene's steps in the real system, in order, each doing that step's job, and its answer is one
   a stranger reaches without doubt.
-- It is never the analogy: none of the anchor scene's entities, places, characters, words or values,
-  and the analogy's beats never borrow the example's material. If the only example you can find is the
+- It is never the analogy: none of the anchor scene's entities, places, characters, words or values
+  (a concept's own colour and symbol still carry over, `minimums.md` 6), and the analogy's beats
+  never borrow the example's material. If the only example you can find is the
   scene retold, find another.
 
 ### 7 · Tie-together
@@ -132,8 +143,9 @@ harder word, say the idea in simpler ones.
   look at, `house-style.md` § Palette and orange). This is the
   one place the analogy and the example meet, and only on that trait.
 - **HARD CONSTRAINT: end on what the concept means for the viewer, in real terms** (`minimums.md`
-  7): a takeaway they can use or recognise, never a restated definition. With a lesson frame, it
-  lands on the Payload (§ The lesson frame).
+  7): a takeaway they can use or recognise, never a repeat of beat 2's or beat 5's sentence. With a
+  lesson frame, it lands on the Payload (§ The lesson frame); when the Payload is the definition and
+  how it works, the takeaway says what that lets the viewer do or recognise.
 
 ### 8 · The close
 - Built by code (the kit's `close.js`). Copy the skeleton's frame 8 block as it is; it has no line
@@ -150,10 +162,13 @@ harder word, say the idea in simpler ones.
   word on screen instead). No symbols (`= / & # @ < > → *`), code tokens or file names: write them
   the way a person says them.
 - Plain-spoken and authoritative, in the present tense. No hype words, no exclamation marks, no
-  emoji, no rhetorical filler, no "not X, but Y".
+  emoji, no rhetorical filler, no "not X, but Y" flourish (a plain with-and-without contrast, or a
+  plain correction of a wrong belief, is not one).
 - A deep concept stays in its computer-science framing, explained so a non-technical person follows
-  it: no jargon the viewer does not already use.
-- Numbers are numerals, and every one is real: never invent a statistic, a date, a count or a quote.
+  it, in the words § The eight beats allows.
+- Numbers are numerals. Every fact is real: never invent a statistic, a date, a count or a quote
+  about the world. An example's own values may be made up when the line plainly presents them as
+  the example's.
 
 ## The plan's blocks (`STORYBOARD.md`, before the frames)
 
@@ -161,7 +176,7 @@ Start from `.media/recipes/helios-explainer/storyboard-skeleton.md`.
 
 ### Frontmatter
 `format: 1080x1920`, `duration: 60s`, `arc: concept-explainer`, `mode: autonomous`, `message` (the
-thesis), `term` (BRIEF.md's, verbatim), `concept` (the same term), `audience`, and `music: none`
+thesis: the Payload when there is one; BRIEF.md's `message` is the learning objective, not this), `term` (BRIEF.md's, verbatim), `concept` (the same term), `audience`, and `music: none`
 (code picks the music).
 
 ### `## Visual arc`
@@ -188,7 +203,7 @@ BRIEF.md's named analogy, staged:
   - <place id> — <interior | exterior: its kind> — <what happens there>
 - hero: <entity id> — critter | object
 - steps:
-  - <what happens in the analogy> — <the real step's technical name>
+  - <a mapped part doing its job in the analogy> — <the real step's technical name>
 - entities:
   - <id> — <what it is> — stands for <the real part> — <how it is built> — beats <n, n>
   - <id> — <who it is> — stands for <the real part> — critter <body>, role <role|bare> — beats <n, n>
@@ -207,7 +222,8 @@ BRIEF.md's named analogy, staged:
   the kit's `ROLES` names (`frame.md` § Roles) or `bare`. The role is the one a stranger would name
   the character by in this story; pick `bare` when none of the kit's roles is that character
   (`house-style.md` § Critter roles).
-- **`steps`**: 3–5, in order, the analogy's action and the real step's technical name.
+- **`steps`**: 3–5, in the order they happen: the moments where the analogy's mapped parts
+  (BRIEF.md's rows) do their jobs, each with the real step it stands for, by its technical name.
 - **`entities`**: every mapped part the reel shows, plus any actor you cast who is not in the
   mapping (its "stands for" names who does this in real life). "How it is built" tells the scene
   builder what to draw: the thing, named as a stranger would name it in this place; a bank asset
@@ -234,8 +250,8 @@ visual arc's `bridges`.
   - `blend`: both in one frame, or one becoming the other on screen.
 
   The builders and the checks read each frame's kind from its look, never from its number. Two
-  beats' jobs narrow it: frame 3 (code's card over the world) is `world`; frame 6 (the real technology) is `mechanism` or
-  `blend`. The rest is yours, chosen for the
+  beats' jobs narrow it: frame 3 (code's card over the world) is `world`; frame 6 (the real example) is
+  `mechanism`. The rest is yours, chosen for the
   beat's job and the visual arc; `minimums.md` 1 and 2 say what at least two frames must do. A
   mechanism frame that departs from the house's mechanism look (`house-style.md` § Mechanism frames)
   says what it looks like instead in its `scene:` line.

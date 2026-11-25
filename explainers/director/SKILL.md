@@ -1,6 +1,6 @@
 ---
 name: helios-explainer-director
-description: "Runs one Helios Explainer Reel end to end, headless, through the Helios faceless-explainer workflow. Use only inside the explainers worker's job directory. Version director-v17 (Explainers 4.3: the new eight beats and the lesson frame, planning/Explainer Reels/ideas-coverage/PLAN.md; recipe/craft.md, house-style.md, minimums.md; planning/Explainer Reels/DECISIONS.md), drafted 2026-10-28."
+description: "Runs one Helios Explainer Reel end to end, headless, through the Helios faceless-explainer workflow. Use only inside the explainers worker's job directory. Version director-v18 (Explainers 4.3: the new eight beats and the lesson frame, planning/Explainer Reels/ideas-coverage/PLAN.md; recipe/craft.md, house-style.md, minimums.md; planning/Explainer Reels/DECISIONS.md), drafted 2026-10-28."
 ---
 
 # Helios Explainer Director (Explainers 4.3)
@@ -43,8 +43,11 @@ craft; name the conflict in your last message. The build phase reads only the wo
    BRIEF.md's `## Analogy` is staged, never swapped and never changed in what it is or what its parts
    stand for; `## Term` is the exact phrase the reel defines. BRIEF.md's `## Lesson frame`, when
    present, is kept the same way: **HARD CONSTRAINT: its Payload and its Map position are never
-   swapped or changed in meaning.** How the beats carry the frame, and how much screen time context
-   gets, is story-design.md § The lesson frame.
+   swapped or changed in meaning.** The one exception is truth (`minimums.md` 3): where research or a
+   check shows that a mapping row, the Payload or the Map position is untrue, the reel leaves that row
+   out or says that claim truly, keeps everything else, and your last message names the change. How
+   the beats carry the frame, and how much screen time context gets, is story-design.md § The lesson
+   frame.
 6. **Stay in your phase.** The worker names it (`PHASE: plan`, `PHASE: fix` or `PHASE: build`). Do
    exactly that phase's steps, then stop.
 7. **Fail open** (`minimums.md` § Fail open). A check you run never stops the reel: fix what it
@@ -68,7 +71,11 @@ One author, two passes, then the answer key.
    beat's job, for `craft.md` § 7's priorities in their order. Settle story-design.md's fixed lines
    first: the opener (§ 1: silent unless BRIEF.md gives a line), the quick definition (§ 2), the hand-off line (§ 3) and the
    restated definition (§ 5).
-5. Read it back as a listener would hear it, once, and tighten it. Then copy each line into its
+5. Read it back once, as a listener would hear it, asking of every line: is it true as experts in
+   the field know it, and what will a first-time viewer believe each plain word means, at its
+   everyday meaning? Rewrite any line that fails either (story-design.md § The eight beats), and
+   tighten it.
+   Then copy each line into its
    frame's `voiceover:` in `STORYBOARD.md`, with the frontmatter and every frame block from the
    skeleton (frame 8 exactly as the skeleton has it).
 
@@ -110,6 +117,7 @@ One author, two passes, then the answer key.
    - `false_beliefs_to_avoid`: 1–3 things a viewer might wrongly infer from the analogy.
    - `example_answer`: what frame 6's example reaches.
 
+   Every entry is true as experts in the field know it: the readers are graded against it.
    Code never shows the key to a reader. You never run the reel test: after you stop, code has two
    first-time readers read the reel and checks their answers against the key.
 5. **Stop.** No audio, no scene code, no `hyperframes` command. Your last message: the term; the
@@ -136,21 +144,26 @@ starts with "PHASE: fix" and the findings file.
      restated definition (its dictionary card), the analogy's lines and the tie-together so the term
      names that one thing everywhere.
      If the true definition and the analogy disagree, one of them is wrong: say which in the fix log.
-   - `mapping`: make the analogy's lines call each part by the same real counterpart every time.
-   - `missing_beat`: add the step to the beat that should carry it, and trim elsewhere to stay within
-     the word budget.
-   - `boundary`: add one clause where the confusion started that names the wrong belief and corrects
-     it, inside that beat's word budget.
-   - `wording`: swap the word or phrase for a plain spoken one.
+   - `mapping`: make the analogy's lines call each part by the same real counterpart every time. For
+     an analogy-check finding, fix what the check names without changing what the analogy is: leave
+     out a row it found untrue or say that part's job truly (constraint 5's exception), and swap a
+     real name for a generic one. If only another analogy would pass, keep this one and say so.
+   - `missing_beat`: add the step to the beat that should carry it, trimming inside the beats you are
+     changing to stay within the word budget.
+   - `boundary`: add one plain clause where the confusion started that corrects the wrong belief,
+     inside that beat's word budget.
+   - `wording`: make the line say the true thing in plain words: swap a word that a listener cannot
+     follow, or whose everyday meaning says something untrue, for one that is plain and true
+     (story-design.md § The eight beats); when the claim itself is untrue, say what is true.
    - `order`: introduce the thing before it is used.
 4. **Keep** the voice and its sentence rhythm, frame 1's and frame 3's lines, the analogy and
-   what each part stands for, the hero, and the total word count within about ±10%. Change only the
+   what each part stands for (but for constraint 5's exception), the hero, and the total word count within about ±10%. Change only the
    beats the findings name, plus the lines that must change so one name means one thing. Fix a minor
    item only when it sits in a beat you are already rewriting. If a finding says the analogy itself
    is wrong, leave it and say so in your last message: that goes back to Lucas.
 5. Change the shots of every line you changed (story-design.md § Shot lines), keep `SCRIPT.md` and
    the storyboard's voiceovers equal, and update `answer-key.json` only where your fix changed what
-   the reel means to teach, never to match what a reader said. Lint once, as in the plan phase.
+   the reel means to teach, never to match what a reader said (a key the diagnosis shows untrue is corrected). Lint once, as in the plan phase.
 6. **Stop.** Never run a reel test: code re-tests the whole reel once and keeps the better version.
    Your last message: each finding with its cause line, and the beats you changed.
 

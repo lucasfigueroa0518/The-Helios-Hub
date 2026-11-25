@@ -1,0 +1,758 @@
+[
+  {
+    "id": "C1",
+    "severity": "high",
+    "title": "Unfamiliar payload is the definition; beat 7 may not restate it",
+    "a": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 7, altitude, line 12",
+      "quote": "\"unfamiliar\": most viewers do not really know what it is, so the definition and how it works is the payload."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 7 Tie-together, lines 134-136",
+      "quote": "a takeaway they can use or recognise, never a restated definition. With a lesson frame, it lands on the Payload (§ The lesson frame)."
+    },
+    "why": "For every unfamiliar topic the idea stage makes the Payload the definition plus how it works. The director must land beat 7's takeaway on that Payload and may not change its meaning (director HARD CONSTRAINT 5), yet beat 7 may never restate the definition and must say what the concept means for the viewer (minimums 7). The model has to break one of these: restate the definition in different words, or end on a takeaway the Payload never said.",
+    "effect_on_reels": "Unfamiliar-topic reels end on a reworded definition, or on a generic 'so next time you…' line that drifts from the Payload.",
+    "precedence": "Director order: minimums, then the format. Both beat-7 rules sit in those top layers, while HARD CONSTRAINT 5 also protects the Payload. Nothing ranks the idea stage against the director."
+  },
+  {
+    "id": "C2",
+    "severity": "high",
+    "title": "Analogy must fit the Lesson and also share the concept's trait",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 11",
+      "quote": "HARD CONSTRAINT: when the message gives a Lesson, pick the analogy whose everyday thing makes that Lesson obvious at a glance; the term's plain meaning comes along on the way."
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 7",
+      "quote": "That thing's single defining trait is the concept's defining trait. The first thing anyone would say about it is exactly the thing the concept does"
+    },
+    "why": "The Lesson is the Payload, and for familiar topics it is a cause or failure past the definition (idea prompt line 13). The analogy that makes that failure obvious is often not the one whose defining trait is what the concept does. Downstream, beat 2 may use only content words the analogy shows, and beat 5 must explain why the analogy's trait 'is the concept's job too'. A Lesson-first analogy leaves the definition beats with nothing to point at.",
+    "effect_on_reels": "The analogy shows a failure or side effect, and beats 2 and 5 define the term through a picture of something else, so the definition goes vague or wrong.",
+    "precedence": "Within the writer, line 11 is marked HARD CONSTRAINT and line 7 is not, so the Lesson fit wins there. Nothing ranks it against story-design's beat 2 and beat 5 rules."
+  },
+  {
+    "id": "C3",
+    "severity": "high",
+    "title": "'[Term] is when' shape vs naming what kind of thing",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 2 Quick definition, lines 89-90",
+      "quote": "one plain sentence of about 15 words or fewer, in the shape \"[Term] is when …\", with no jargon."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 2 Quick definition, lines 92-93",
+      "quote": "Say what kind of thing it is and what it does, and claim no more than the mechanism does"
+    },
+    "why": "'X is when …' casts the term as an event or situation, but the same beat wants 'what kind of thing it is'. The answer key asks for 'The term names ___: the kind of thing it is, as frames 2 and 5 define it', and frame 5's part_of_speech is 'usually noun'. For noun concepts (primary key, token, API, context window, Git branch) the shape forces sentences such as 'A primary key is when each row gets its own number', which never name a kind of thing and can blur the concept.",
+    "effect_on_reels": "Beat 2 definitions of noun terms come out ungrammatical or name a situation instead of a thing, and beat 5's noun card disagrees with beat 2.",
+    "precedence": "Both lines are in story-design (the format). Only the shape is marked HARD CONSTRAINT, so the model keeps 'is when'."
+  },
+  {
+    "id": "C4",
+    "severity": "high",
+    "title": "Term is the only technical word, yet jargon names are allowed",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ The eight beats, plain-words HARD CONSTRAINT, lines 69-72",
+      "quote": "Every word is one a 12-year-old uses talking to a friend, plus everyday tech words any phone user knows (app, website, password, photo, email, chatbot). The term is the only technical word."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 4 The analogy plays, lines 111-112",
+      "quote": "Map each part by what it does, in plain words first: name its job as it appears, in one clause (the jargon name second, or not at all), then play the steps in order."
+    },
+    "why": "Beat 4 lets the director say a part's jargon name after the plain description. The script rules allow 'no jargon the viewer does not already use' (line 155), not 'no jargon but the term'. The embedded altitude and Map position need the neighbouring parts named (server, database, request), and beat 6 walks 'the real system' with real values. The HARD rule allows one technical word, so the model must either blur the real mechanism or break the rule.",
+    "effect_on_reels": "Reels name second technical terms (polling, request, server) or swap them for vague paraphrases that hide how the real system works.",
+    "precedence": "All three rules are in story-design. Only the plain-words rule is marked HARD CONSTRAINT. Nothing says whether the beat-4 or script allowance is an exception to it."
+  },
+  {
+    "id": "C5",
+    "severity": "high",
+    "title": "Analogy-check fix phase cannot change the analogy it must fix",
+    "a": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "Phase: fix, lines 121-122",
+      "quote": "once when the analogy failed its checks (every finding then has `reader: \"analogy_check\"` and cause `mapping`: `reader_quote` and `why` name the check it missed)"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "HARD CONSTRAINT 5, lines 43-44",
+      "quote": "BRIEF.md's `## Analogy` is staged, never swapped and never changed in what it is or what its parts stand for"
+    },
+    "why": "The fix phase runs when the picked analogy failed a check such as Jev's false_mapping gate ('a row would leave a viewer believing something false'). The only fix for cause `mapping` is to call each part by the same counterpart every time, and step 4 says to leave a wrong analogy for Lucas. The director cannot change what a part stands for, so a mapping a check called false can only be relabelled consistently. Minimums 3 requires a true definition and no contradiction with the analogy, but it also says 'The analogy never changes in the reel'.",
+    "effect_on_reels": "Reels ship an analogy row a gate judged false, worded more consistently, so the reel teaches the false part clearly.",
+    "precedence": "Director order: minimums win. Minimums 3 itself holds both 'true and clear' and 'The analogy never changes in the reel', so the top layer does not settle it."
+  },
+  {
+    "id": "C6",
+    "severity": "high",
+    "title": "Golden analogy examples break the writer's own plain-words rule",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 12",
+      "quote": "The topic's own term is the only technical word. No idioms, no formal, literary or old-fashioned words, no made-up compound words."
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "examples, model routing, lines 33-34",
+      "quote": "The nurse sends the sprained ankle to the PA and the chest pain to cardiology. Easy requests go to a small cheap model, hard ones go to the expensive frontier model."
+    },
+    "why": "The examples are said to 'meet that bar', but they use specialist and technical words: PA, cardiology, triage, frontier model, polling, registrar, pretraining, and RAG inside the fine-tuning example. Examples outweigh abstract rules, so the writer will produce analogies with second technical terms and specialist vocabulary. The director must stage that analogy unchanged under its own plain-words rule.",
+    "effect_on_reels": "The staged analogy's name and explanation carry specialist or second technical words that the voice either repeats or has to paraphrase away.",
+    "precedence": "None stated between rule and examples. The prompt calls the examples 'the standard, not a template' and says they meet the bar."
+  },
+  {
+    "id": "C7",
+    "severity": "medium",
+    "title": "Second-thing HARD rule vs examples that map extra concepts",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 8",
+      "quote": "HARD CONSTRAINT: any second thing in the analogy is there only to make this concept clearer. If a viewer would need to map the second thing too, or would leave remembering it instead of the concept, drop it."
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "examples, fine-tuning, lines 36-37",
+      "quote": "Pretraining is med school (broad knowledge). Fine-tuning is residency (thousands of cases in one specialty until instincts change). RAG is just handing the doctor a chart."
+    },
+    "why": "The fine-tuning example asks the viewer to map three concepts (pretraining, fine-tuning, RAG). Authentication vs authorization maps two, and the webhook example names and maps polling. Each is exactly what the HARD constraint says to drop, yet all are presented as meeting the bar.",
+    "effect_on_reels": "Analogies arrive with extra mapped concepts that the director must stage unchanged, so viewers leave remembering a neighbour concept.",
+    "precedence": "None stated between rule and examples."
+  },
+  {
+    "id": "C8",
+    "severity": "medium",
+    "title": "Comparison topics vs one term, one concept",
+    "a": {
+      "file": "audit/00-theme-brief-v4.md",
+      "where": "10 good example topics, line 29",
+      "quote": "8. What is authentication vs. authorization? — A narrow comparison that fits naturally into one thought."
+    },
+    "b": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 6, line 10",
+      "quote": "the exact name of the one concept the reel defines, as a viewer would search for it, 1 to 4 words"
+    },
+    "why": "The theme brief calls a two-concept comparison a model topic, and the analogy writer has a golden example for it. The term rule wants one concept, the writer's HARD constraint drops any second thing a viewer must map, and beat 2 defines one term as '[Term] is when …'. A comparison topic cannot meet both: either one side is dropped, which loses the topic's point, or the reel defines two terms in one 15-word sentence.",
+    "effect_on_reels": "Comparison reels define only one half, or cram two definitions into beat 2 and the dictionary card.",
+    "precedence": "The idea prompt calls the theme brief binding, and the term rule is a HARD CONSTRAINT. No order between them is stated."
+  },
+  {
+    "id": "C9",
+    "severity": "medium",
+    "title": "Analogy has no steps, but the director needs 3–5",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 5",
+      "quote": "It is one idea, not a scene. Two or three sentences carry it; there are no steps to follow or cast to keep track of."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ Anchor scene, line 210",
+      "quote": "3–5, in order, the analogy's action and the real step's technical name."
+    },
+    "why": "The writer is told to produce a stepless idea. The director must stage it as 3–5 steps, play 'the steps in order' in beat 4, walk 'the anchor scene's steps' in beat 6, and write one answer-key mechanism step per anchor step. brief-skeleton.md still expects the analogy to arrive with 'the steps (each with its analogy action and its technical name)', which briefMarkdown never supplies. The director has to invent the action while being told never to change what the analogy is. Several golden examples, such as Git branch, are themselves step sequences, against line 5.",
+    "effect_on_reels": "Directors invent action steps the analogy never had, and these may map to the wrong real steps.",
+    "precedence": "Within the director, the format is fixed and outranks craft and house style. Nothing orders the stages."
+  },
+  {
+    "id": "C10",
+    "severity": "medium",
+    "title": "Embedded reels place context 'before' a definition that comes first",
+    "a": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 7, altitude, line 12",
+      "quote": "\"embedded\": the concept is one part of a larger system, so the reel places it in that system before and after defining it."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "format preamble, lines 12-14",
+      "quote": "the term is named and defined plainly at beat 2, before the analogy plays, and restated with the analogy attached at beat 5."
+    },
+    "why": "The idea stage writes embedded frames on the promise that system context comes before the definition. In the format, beat 1 is a silent code-built opener and beat 2 is the definition, so nothing can come before it. Story-design moves the context to beat 5's why or beat 6, but the Payload and Map position were scoped for a different shape.",
+    "effect_on_reels": "System context lands only after the definition, or gets packed into beat 2's 15-word sentence.",
+    "precedence": "The format is fixed ('Never add, drop, merge or reorder beats') and story-design gives its own embedded rule. Nothing ranks the idea stage."
+  },
+  {
+    "id": "C11",
+    "severity": "medium",
+    "title": "Payload and Map position are locked even when untrue",
+    "a": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "HARD CONSTRAINT 5, lines 44-46",
+      "quote": "HARD CONSTRAINT: its Payload and its Map position are never swapped or changed in meaning."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/minimums.md",
+      "where": "minimum 3, lines 11-12",
+      "quote": "the definition is true and clear, and the definitions, the analogy and the takeaway never contradict each other."
+    },
+    "why": "The idea generator writes the Payload and Map position with no research step. The director may research, but may not change their meaning, and beat 7's takeaway must land on the Payload. If research shows the Payload overclaims or misstates the mechanism, the takeaway must either repeat the error or break HARD CONSTRAINT 5.",
+    "effect_on_reels": "An inaccurate Payload from the idea stage reaches the reel's final line as stated.",
+    "precedence": "Director order: minimums win, but HARD CONSTRAINT 5 is stated without exception and the conflict rule names only the recipe files, not the director's own constraints."
+  },
+  {
+    "id": "C12",
+    "severity": "medium",
+    "title": "Beat 2 must be true but use only analogy words",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 2 Quick definition, lines 94-95",
+      "quote": "every content word in it is later shown by the analogy** (beat 4 plays it, beat 5 names it): a word the analogy never shows is a word to cut."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 2 Quick definition, lines 90-91",
+      "quote": "Write it fresh from how the mechanism truly works, never copied or adapted from the learning objective's or the source's wording, which are often loose."
+    },
+    "why": "A true definition often needs words the analogy never shows, such as the kind of thing the term is or the part the analogy leaves out. The HARD rule says to cut those words, and minimums 3 says that when definition and analogy disagree, 'fix the definition'. The model trims the truth to fit the picture.",
+    "effect_on_reels": "Beat 2 definitions shrink to what the analogy depicts, missing the kind of thing or a core part of the mechanism.",
+    "precedence": "Both are in the format. The content-word rule is HARD CONSTRAINT and the 'write it fresh' rule is not."
+  },
+  {
+    "id": "C13",
+    "severity": "medium",
+    "title": "Jev picks by memorability; the writer's hard rule is Lesson fit",
+    "a": {
+      "file": "audit/04-jev-analogy-questions.json",
+      "where": "ANALOGY_COMPARE.a_over_b.judge",
+      "quote": "Answer yes when that viewer would be more likely to get a at once, remember it a week later and repeat it to a friend than b"
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 11",
+      "quote": "HARD CONSTRAINT: when the message gives a Lesson, pick the analogy whose everyday thing makes that Lesson obvious at a glance"
+    },
+    "why": "Two writers each obey the Lesson-fit HARD constraint, but the pairwise judge that picks between them asks only about memorability. A catchier analogy that misses the Lesson beats one that fits it, and the director may never swap it.",
+    "effect_on_reels": "Reels stage the more memorable analogy even when it does not show the Payload.",
+    "precedence": "None stated. The gates (false_mapping and others) do not test Lesson fit either."
+  },
+  {
+    "id": "C14",
+    "severity": "medium",
+    "title": "Twelve-year-old words vs accurate, authoritative mechanism teaching",
+    "a": {
+      "file": "audit/00-theme-brief-v4.md",
+      "where": "line 15",
+      "quote": "Avoid hype, jargon for its own sake, and claims that oversimplify a concept into something inaccurate."
+    },
+    "b": {
+      "file": "audit/02-const-PLAIN_WORDS_RULE.txt",
+      "where": "whole constant",
+      "quote": "every word a viewer reads or hears is one a 12-year-old uses talking to a friend"
+    },
+    "why": "The theme brief targets business owners and professionals ('Assume intelligence'), bans only jargon 'for its own sake', and forbids inaccurate oversimplification. The plain-words rule, a HARD CONSTRAINT in the analogy writer and story-design, limits every word to a 12-year-old's vocabulary. Mechanism-level Payloads often have no accurate 12-year-old wording, so the model must choose between plain and precise.",
+    "effect_on_reels": "Lines become vague paraphrases ('the thing that sends your stuff') or slightly wrong simplifications.",
+    "precedence": "The theme brief is called 'binding'. Plain words is HARD CONSTRAINT in the writer and the format. No order between them is stated."
+  },
+  {
+    "id": "C15",
+    "severity": "medium",
+    "title": "Writer invites contrasts; script bans 'not X, but Y'",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 8",
+      "quote": "A contrast earns its place when it makes the concept's job visible: the same scene with and without it, or the everyday way people managed before it."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ The script, lines 152-153",
+      "quote": "No hype words, no exclamation marks, no emoji, no rhetorical filler, no \"not X, but Y\"."
+    },
+    "why": "The writer encourages with/without contrasts, and golden examples use them ('Without it, you ask the host…', 'Normally the AI answers closed-book'). The director must stage that analogy unchanged, but voicing a with/without scene nearly always comes out as 'not X, but Y'. generator.ts still defines WHAT_IT_DOES_RULE (no 'instead of', 'rather than', 'unlike' or 'not' contrasts), but no live prompt uses it.",
+    "effect_on_reels": "Beat 4 either drops the 'without' half of the analogy from the voice or uses the banned contrast phrasing.",
+    "precedence": "None stated across stages. In the director, the format outranks craft but cannot change the analogy (HARD CONSTRAINT 5)."
+  },
+  {
+    "id": "C16",
+    "severity": "medium",
+    "title": "Craft puts story first; house style puts understanding first",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/craft.md",
+      "where": "§ 7 Script and voiceover, lines 277-278",
+      "quote": "The voiceover comes first. Its priorities, in order: an engaging story, teaching effectively, communicating at a high level."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/house-style.md",
+      "where": "§ Captions, voice and pacing, lines 208-209",
+      "quote": "A reel may run long: understanding comes first."
+    },
+    "why": "The director's pass 1 tells it to write 'for craft.md § 7's priorities in their order', which ranks an engaging story above teaching. House style and the theme brief ('durable technical literacy') rank understanding first. 'Communicating at a high level' can also be read as staying abstract, against the brief's 'Teach the underlying mechanism, not just a definition'.",
+    "effect_on_reels": "Scripts trade precise teaching for story beats, or stay at a high level where the brief wants the mechanism.",
+    "precedence": "The stated order (minimums, format, house style, craft) favours house style, but the director's step 4 points explicitly at craft's order."
+  },
+  {
+    "id": "C17",
+    "severity": "medium",
+    "title": "Craft wants a spoken hook; format opens silent on a definition",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/craft.md",
+      "where": "§ 7 Script and voiceover, lines 283-284",
+      "quote": "Hook in the first seconds with a specific unresolved question, tension or promise, and make the first frame readable without sound."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 1 Opener, lines 79-80",
+      "quote": "When that section says Silent, frame 1's `voiceover:` is empty"
+    },
+    "why": "Craft also asks to 'Motivate before defining' and to use a story spine that starts from the normal state and a problem. The format has a silent opener, and the first spoken line is a plain definition in a fixed shape. Story-design limits craft's ordering principles to inside beats, but the hook rule invites the model to bend beat 2 into a question or delay the definition.",
+    "effect_on_reels": "Beat 2 gets a hook-like lead-in that breaks the '[Term] is when' shape, or the reel has no hook at all.",
+    "precedence": "Format over craft, stated in craft.md, story-design.md and the director."
+  },
+  {
+    "id": "C18",
+    "severity": "medium",
+    "title": "Six mapping rows, first 3–4 shown, yet 'in full'",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/minimums.md",
+      "where": "minimum 1, line 9",
+      "quote": "HARD CONSTRAINT: the analogy plays out in full at least once."
+    },
+    "b": {
+      "file": "Helios-Hub-release/lib/explainers/ideas/analogy.ts",
+      "where": "analogyMarkdown, line 176 (BRIEF.md ## Analogy footer)",
+      "quote": "The reel shows the first three or four rows."
+    },
+    "why": "The writer returns three to six mapping rows. BRIEF tells the director that only the first three or four are shown. Minimums 1 requires the analogy in full, and HARD CONSTRAINT 5 forbids changing what its parts stand for. The model cannot tell whether rows 5–6 are part of 'in full', and the answer-key mapping and readers may still test them.",
+    "effect_on_reels": "Beat 4 is either packed with every row past its 38-word cap, or it drops rows the understanding test then checks for.",
+    "precedence": "Minimums win over everything. BRIEF's footer is code-written data with no stated rank."
+  },
+  {
+    "id": "C19",
+    "severity": "medium",
+    "title": "Dictionary-card definition carries the analogy, yet must be true",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 5 Definition payoff, lines 115-116",
+      "quote": "first the term restated with the analogy attached, which is also `definition:` word for word"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/minimums.md",
+      "where": "minimum 3, line 10",
+      "quote": "HARD CONSTRAINT: the definition is true and clear"
+    },
+    "why": "The dictionary card prints, as the term's definition, a sentence that folds in the analogy. The answer key's term_is must match 'as frames 2 and 5 define it'. A figurative definition ('a token is a LEGO brick of text') is not literally true, and readers may take it as the definition.",
+    "effect_on_reels": "Dictionary cards show a metaphor as the definition, and the reader test can flag beat 5 as contradicting beat 2.",
+    "precedence": "Minimums win. Story-design says beat 5 'never contradicts beat 2' but does not say how literal the card must be."
+  },
+  {
+    "id": "C20",
+    "severity": "medium",
+    "title": "Frame 6 may blend the analogy, yet must exclude it",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ Frame fields, look, lines 237-238",
+      "quote": "frame 6 (the real technology) is `mechanism` or `blend`"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 6 One tiny real example, lines 125-126",
+      "quote": "It is never the analogy: none of the anchor scene's entities, places, characters, words or values"
+    },
+    "why": "`blend` is defined as 'both in one frame, or one becoming the other on screen', so a blend frame 6 shows analogy entities. Beat 6 bans every anchor-scene entity and word, and beat 7 is 'the one place the analogy and the example meet'.",
+    "effect_on_reels": "A blend frame 6 reuses analogy objects in the example, which the readers' test may read as the analogy retold.",
+    "precedence": "Both rules are in story-design. None stated."
+  },
+  {
+    "id": "C21",
+    "severity": "medium",
+    "title": "'Real values' vs never inventing a count",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 6 One tiny real example, line 122",
+      "quote": "Framed as a real example (\"Here's a real example:\" or close), with real values."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ The script, line 156",
+      "quote": "Numbers are numerals, and every one is real: never invent a statistic, a date, a count or a quote."
+    },
+    "why": "A 'tiny real example' usually needs sample values: a table row, an ID, a request count, a price per token. These are illustrative, not sourced. 'Real values' plus 'never invent a count' (and BRIEF's 'never invent statistics') leave the model to fabricate specifics as if they were facts, or to avoid numbers in the one beat that asks for them.",
+    "effect_on_reels": "Beat 6 states made-up figures as real facts, or gives a value-free example that is not tiny or concrete.",
+    "precedence": "Both rules are in the format. None stated."
+  },
+  {
+    "id": "C22",
+    "severity": "medium",
+    "title": "Fix step: trim elsewhere vs change only the named beats",
+    "a": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "Phase: fix, step 3, lines 140-141",
+      "quote": "add the step to the beat that should carry it, and trim elsewhere to stay within the word budget."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "Phase: fix, step 4, lines 147-148",
+      "quote": "Change only the beats the findings name, plus the lines that must change so one name means one thing."
+    },
+    "why": "A missing_beat fix must trim 'elsewhere', meaning beats the findings did not name. Step 4 allows changes only to named beats and to the lines needed for consistent naming. The total must also stay within about ±10%.",
+    "effect_on_reels": "Fixes either overrun a beat's word range or quietly edit beats nobody flagged.",
+    "precedence": "Same file, same phase. None stated."
+  },
+  {
+    "id": "C23",
+    "severity": "medium",
+    "title": "Boundary fix names wrong belief; script bans 'not X, but Y'",
+    "a": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "Phase: fix, step 3, boundary, lines 142-143",
+      "quote": "add one clause where the confusion started that names the wrong belief and corrects it, inside that beat's word budget."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ The script, lines 152-153",
+      "quote": "no rhetorical filler, no \"not X, but Y\"."
+    },
+    "why": "One clause that names a wrong belief and corrects it is the 'not X, but Y' pattern the script bans. The analogy writer also keeps 'Side limits and edge cases' out, which is where boundaries live.",
+    "effect_on_reels": "Boundary fixes either use the banned phrasing or leave the wrong belief unnamed.",
+    "precedence": "The director must use the format's script rules. The fix rule is the director's own. None stated."
+  },
+  {
+    "id": "C24",
+    "severity": "medium",
+    "title": "Payload rewriter: go past the definition but stay inside the scope",
+    "a": {
+      "file": "audit/02-const-PAYLOAD_REWRITER_INSTRUCTIONS.txt",
+      "where": "line 11",
+      "quote": "Stay inside the topic's title, scope and term; do not change the concept or widen the lesson."
+    },
+    "b": {
+      "file": "audit/02-const-PAYLOAD_REWRITER_INSTRUCTIONS.txt",
+      "where": "line 5",
+      "quote": "\"familiar\": most viewers already know the word, so the definition is a quick anchor and the payload goes past it, to the mechanism, cause or failure behind it."
+    },
+    "why": "The rewriter runs because the altitude was wrong, so the scope was written for the old altitude. The scope writer says 'The scope says what the reel covers and stops short of'. When the corrected altitude is familiar, the Payload must go past a scope that may stop at the definition, which widens the lesson.",
+    "effect_on_reels": "Corrected Payloads either stay at the definition, so the familiar reel teaches nothing new, or go beyond the scope that BRIEF's learning objective still states.",
+    "precedence": "Both are in the rewriter's own list. None stated."
+  },
+  {
+    "id": "C25",
+    "severity": "medium",
+    "title": "Product-name topics vs brand bans and the real-names gate",
+    "a": {
+      "file": "audit/00-theme-brief-v4.md",
+      "where": "10 good example topics, line 30",
+      "quote": "9. What does React actually do? — A framework/language-adjacent topic framed around its fundamental role rather than a tutorial."
+    },
+    "b": {
+      "file": "audit/04-jev-analogy-questions.json",
+      "where": "ANALOGY_GATES.real_names.judge",
+      "quote": "Answer yes when any of them names a real company, store, brand or product, a real person, or a character from a film, show or book."
+    },
+    "why": "The brief lists React, Git and GitHub as topics, so the term itself can be a real product. The real_names gate reads the analogy's mapping, whose concept column names the term. House style bans 'real brands or logos other than Helios', while the hand-off card and dictionary card write the term.",
+    "effect_on_reels": "Product-term analogies fail the gate on the concept side, or the reel puts a brand name on screen against house style.",
+    "precedence": "Gate exceptions cover 'open standards' and genericised brands only. None stated."
+  },
+  {
+    "id": "C26",
+    "severity": "low",
+    "title": "HARD lines 'never bend' in a layer ranked third",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/house-style.md",
+      "where": "preamble, lines 5-6",
+      "quote": "Lines marked HARD CONSTRAINT never bend."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "Read first, lines 25-26",
+      "quote": "When two of them seem to conflict, minimums win, then the format (story-design.md), then house style, then craft"
+    },
+    "why": "House style says its HARD lines never bend, yet every ranking puts it below minimums and the format, which carry their own HARD constraints. Minimums also say its eight items are 'the only things a reel must contain', while the format and house style add more HARD CONSTRAINTs. Two layers each claim to win.",
+    "effect_on_reels": "When a house-style HARD rule meets a format rule, the outcome depends on which claim the model reads as stronger.",
+    "precedence": "Director, craft and faceless SKILL: minimums, format, house style, craft. House style claims its HARD lines are absolute."
+  },
+  {
+    "id": "C27",
+    "severity": "low",
+    "title": "Fixed hand-off line is an idiom under the plain-words rule",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 3 Hand-off, line 99",
+      "quote": "Let's dive into this in everyday terms."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ The eight beats, line 69",
+      "quote": "HARD CONSTRAINT: plain words, in every voice line and every word on screen."
+    },
+    "why": "'Dive into' is an idiom, and 'Let's…' is the kind of rhetorical filler the script rules ban. The line is fixed and may never change, yet the plain-words HARD rule covers 'every voice line'.",
+    "effect_on_reels": "Every reel carries an idiom in its voice, and a careful model may report or try to change a fixed line.",
+    "precedence": "The line is fixed ('Voice, exactly' and 'Frame 1's and frame 3's lines never change'). The format does not say it is exempt from plain words."
+  },
+  {
+    "id": "C28",
+    "severity": "low",
+    "title": "Don't narrate what the picture shows vs voicing the steps",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/craft.md",
+      "where": "§ 7 Script and voiceover, lines 293-294",
+      "quote": "Don't spend words on what the picture already shows. Say why it happens or what it means"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 4 The analogy plays, lines 111-112",
+      "quote": "name its job as it appears, in one clause (the jargon name second, or not at all), then play the steps in order."
+    },
+    "why": "Beat 4's voice must narrate the analogy's parts and steps as they appear, and minimums 4 puts each described action on screen as it is said. Craft says not to spend words on what the picture shows.",
+    "effect_on_reels": "Beat 4 lines swing between describing the action and explaining it.",
+    "precedence": "Format over craft."
+  },
+  {
+    "id": "C29",
+    "severity": "low",
+    "title": "Spoken opener names the analogy scene; no analogy on screen",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 1 Opener, line 86",
+      "quote": "The slot is 1–3 words naming the analogy's scene, as a stranger would name it."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/house-style.md",
+      "where": "§ Bookends, lines 193-194",
+      "quote": "The opener lands on the AI 101 card and cuts to frame 2: no scene of the analogy there."
+    },
+    "why": "In spoken-opener mode the voice names the analogy's scene ('this restaurant buzzer') over a card that shows no analogy, against minimums 4 (what the voice describes is on screen). The default mode is silent, so this applies only when BRIEF gives a line.",
+    "effect_on_reels": "Spoken-opener reels name a picture the viewer cannot see yet.",
+    "precedence": "Minimums over format over house style. Here the format and house style agree that no scene is shown, and minimums 4 conflicts with the format's slot."
+  },
+  {
+    "id": "C30",
+    "severity": "low",
+    "title": "Popular culture allowed, but no film or show characters",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 6",
+      "quote": "from daily life, home, food and cooking, shopping and money, travel, school, work or popular culture"
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 13",
+      "quote": "It names no real company, store or product, no real person, and no character from a film, show or book."
+    },
+    "why": "Most popular-culture references are to named works, characters or brands, and line 6 also excludes worlds 'only fans' know. 'Popular culture' leaves the writer little it can name.",
+    "effect_on_reels": "Pop-culture analogies get blurred into generic versions, or fail the real_names gate.",
+    "precedence": "None stated."
+  },
+  {
+    "id": "C31",
+    "severity": "low",
+    "title": "Funny detail vs every part behaving like its real part",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 9",
+      "quote": "One concrete, specific detail makes it vivid, and often a little funny."
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 7",
+      "quote": "every part behaves the way the real part it stands for behaves."
+    },
+    "why": "Jokes like 'polka at a wedding' or the parrot court case usually map to nothing. False_mapping fails a part that 'behaves differently', and handoff_parts never takes 'a prop that maps to nothing'.",
+    "effect_on_reels": "Comic details either get flagged as false mappings or sit in the scene unmapped.",
+    "precedence": "None stated."
+  },
+  {
+    "id": "C32",
+    "severity": "low",
+    "title": "LEGO example vs the ban on brands",
+    "a": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "examples, token, line 18",
+      "quote": "token: **LEGO bricks**"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/house-style.md",
+      "where": "§ The look, HARD CONSTRAINT, lines 42-43",
+      "quote": "real brands or logos other than Helios"
+    },
+    "why": "LEGO is a trademark, not clearly a genericised word. The writer, the real_names gate and house style all exclude real brands except genericised ones, and the golden example sits on that line.",
+    "effect_on_reels": "Writers may reach for brand-named objects that fail the gate or have to be redrawn generic.",
+    "precedence": "None stated. The writer's genericised-brand exception makes it a judgement call."
+  },
+  {
+    "id": "C33",
+    "severity": "low",
+    "title": "One concept identity across worlds vs no analogy in the example",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/craft.md",
+      "where": "§ 6 Explainer craft, lines 243-244",
+      "quote": "Give each concept one persistent visual identity (shape, color, icon) and keep it for the whole reel, across the analogy and the mechanism."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 6 One tiny real example, lines 125-126",
+      "quote": "It is never the analogy: none of the anchor scene's entities, places, characters, words or values"
+    },
+    "why": "Craft and minimums 6 keep a concept's look the same across the analogy and the mechanism. Beat 6 bans every anchor-scene entity from the example. The concept's analogy shape cannot recur in beat 6.",
+    "effect_on_reels": "Beat 6 either echoes the analogy's look or gives the concept a new look mid-reel.",
+    "precedence": "Minimums 6 tops the order but says change is allowed 'when the change is the point'. The format bans reuse in beat 6."
+  },
+  {
+    "id": "C34",
+    "severity": "low",
+    "title": "Ending must not repeat an earlier image; beat 7 reuses two",
+    "a": {
+      "file": "Helios-Hub-release/explainers/recipe/minimums.md",
+      "where": "minimum 7, lines 22-23",
+      "quote": "the reel ends on what the concept means for the viewer, in real terms,** with it shown, not repeated from an earlier image."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 7 Tie-together, lines 131-132",
+      "quote": "the analogy's key object meets its real counterpart in the example (it fades or carries over it"
+    },
+    "why": "Beat 7's prescribed picture is the analogy's object over the example's counterpart, both earlier images. Minimums 7 says the ending's image is not repeated from earlier.",
+    "effect_on_reels": "Tie-together frames recycle frames 4 and 6, or invent an image the beat-7 rule did not ask for.",
+    "precedence": "Minimums win over the format."
+  },
+  {
+    "id": "C35",
+    "severity": "low",
+    "title": "Ideas scoped for a curiosity gap the 4.3 reel lacks",
+    "a": {
+      "file": "audit/02-const-REEL_SHAPE.txt",
+      "where": "whole constant",
+      "quote": "one curiosity gap, one plain definition, one well-known analogy whose defining trait is the concept, that can carry the reel, one tiny real example, and one real-world application"
+    },
+    "b": {
+      "file": "audit/05-briefMarkdown.ts.txt",
+      "where": "line 56",
+      "quote": "...(gapBody ? ['## Curiosity gap', '', gapBody, ''] : []),"
+    },
+    "why": "The idea generator and scope writer test every idea against a shape that includes 'one curiosity gap'. 4.3 reels pass no gap (the gap writer is unused), the opener is silent, and no beat asks a question. Ideas are scoped for an element that never appears.",
+    "effect_on_reels": "Topics are judged on gap potential the reel never uses.",
+    "precedence": "None stated."
+  },
+  {
+    "id": "C36",
+    "severity": "low",
+    "title": "Scope writer must narrow the title but keep its intent",
+    "a": {
+      "file": "audit/02-const-SCOPE_WRITER_INSTRUCTIONS.txt",
+      "where": "HARD CONSTRAINT 3, line 6",
+      "quote": "Narrow each scope to one complete thought that fits one minute"
+    },
+    "b": {
+      "file": "audit/02-const-SCOPE_WRITER_INSTRUCTIONS.txt",
+      "where": "HARD CONSTRAINT 7, line 13",
+      "quote": "Keep the title's intent. Do not change, merge, or drop titles, and do not judge whether a title is a good topic."
+    },
+    "why": "A hand-entered broad title (for example 'how AI agents work') cannot be narrowed to one thought without changing what it promises.",
+    "effect_on_reels": "Hand-entered reels get a scope narrower than their title, so the title overpromises.",
+    "precedence": "Both are HARD CONSTRAINTs. None stated."
+  },
+  {
+    "id": "C37",
+    "severity": "low",
+    "title": "One idea per syllabus topic vs the brief's dedupe rule",
+    "a": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 1, line 4",
+      "quote": "Return exactly one idea for each syllabus topic in the user message, in the same order"
+    },
+    "b": {
+      "file": "audit/00-theme-brief-v4.md",
+      "where": "Deduplication, line 19",
+      "quote": "Compare against all available queued, rendered, and previously published topics."
+    },
+    "why": "Rule 3 says the brief's dedupe still holds ('everything else in the brief holds'), but the generator cannot drop or replace a syllabus topic that duplicates a published one.",
+    "effect_on_reels": "Near-duplicate topics get a forced different angle instead of being skipped.",
+    "precedence": "The brief is 'binding'. Rule 3 says the syllabus meets the brief's topic-picking guidance only."
+  },
+  {
+    "id": "C38",
+    "severity": "low",
+    "title": "Altitude mixes viewer familiarity with system placement",
+    "a": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 7, line 12",
+      "quote": "altitude: where the average viewer of the theme brief's audience stands with the concept."
+    },
+    "b": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 7, line 12",
+      "quote": "\"embedded\": the concept is one part of a larger system, so the reel places it in that system before and after defining it."
+    },
+    "why": "'Embedded' describes the concept's place in a system, not where the viewer stands. A concept can be familiar and embedded at once, and the model must pick one, which changes how far past the definition the reel goes.",
+    "effect_on_reels": "Familiar-but-embedded concepts get one depth or the other at random.",
+    "precedence": "None stated."
+  },
+  {
+    "id": "C39",
+    "severity": "low",
+    "title": "A familiar failure Payload vs keeping edge cases out",
+    "a": {
+      "file": "audit/01-idea-generator-system.txt",
+      "where": "HARD CONSTRAINT 7, payload, line 13",
+      "quote": "For a familiar word the payload goes past the definition, to the mechanism, cause or failure behind it."
+    },
+    "b": {
+      "file": "audit/03-analogy-writer-system.txt",
+      "where": "best-analogy list, line 10",
+      "quote": "Side limits and edge cases stay out."
+    },
+    "why": "A Payload about the failure behind a concept is often a limit or edge case. The writer must show the failure (line 10's first half) while keeping limits out.",
+    "effect_on_reels": "Analogies for failure Payloads show the concept working normally and skip the failure.",
+    "precedence": "None stated."
+  },
+  {
+    "id": "C40",
+    "severity": "low",
+    "title": "BRIEF 'message' is the scope; storyboard 'message' is the thesis",
+    "a": {
+      "file": "audit/05-briefMarkdown.ts.txt",
+      "where": "line 14",
+      "quote": "const message = (topic.scope ?? topic.title).replace(/\"/g, \"'\");"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/storyboard-skeleton.md",
+      "where": "frontmatter, line 6",
+      "quote": "message: <fill in: the thesis, the one line the viewer leaves with>"
+    },
+    "why": "BRIEF's frontmatter `message` holds the learning objective. The storyboard's `message` is the thesis, which story-design ties to the Payload. The same field name means two things across the hand-off.",
+    "effect_on_reels": "The storyboard thesis may copy the scope instead of the Payload.",
+    "precedence": "None stated."
+  },
+  {
+    "id": "C41",
+    "severity": "low",
+    "title": "'AI Lesson' card on topics the opener calls tech or coding",
+    "a": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 3 Hand-off, line 100",
+      "quote": "the card \"today's AI Lesson: <term>\" is the focus"
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/skill-overrides/faceless-explainer/references/story-design.md",
+      "where": "§ 1 Opener, line 84",
+      "quote": "`In the next minute, this ___ will teach you a tech concept.`"
+    },
+    "why": "Code picks 'tech concept' or 'coding concept' for non-AI topics (primary key, Git branch), but the fixed hand-off card always says 'AI Lesson' and the close says 'AI 101'.",
+    "effect_on_reels": "Non-AI reels call the topic an AI lesson on screen.",
+    "precedence": "Bookends are fixed by house style. None stated."
+  },
+  {
+    "id": "C42",
+    "severity": "low",
+    "title": "'Tighten' the script vs 'no word is ever cut'",
+    "a": {
+      "file": "Helios-Hub-release/explainers/director/SKILL.md",
+      "where": "Pass 1, step 5, line 70",
+      "quote": "Read it back as a listener would hear it, once, and tighten it."
+    },
+    "b": {
+      "file": "Helios-Hub-release/explainers/recipe/house-style.md",
+      "where": "§ Captions, voice and pacing, line 208",
+      "quote": "to tighten the voice or to chase a length; only real silence is trimmed."
+    },
+    "why": "House style's rule is about audio editing, but it uses the same verb, so a model may read the script 'tighten' as banned, or read the house rule as forbidding word cuts while drafting.",
+    "effect_on_reels": "Little visible effect. At most a looser first-draft script.",
+    "precedence": "House style over craft, but the director's pass-1 step is process, not ranked."
+  }
+]

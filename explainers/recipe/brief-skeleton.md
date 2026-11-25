@@ -14,7 +14,7 @@ narration: yes
 
 ## Analogy
 
-<fill in: the analogy the idea phase picked — scene, elements and what each stands for, process, payoff, picture, the opening hook, and the steps (each with its analogy action and its technical name).>
+<fill in: the analogy the idea phase picked — its name, its explanation, and its mapping (each part of the analogy and the part of the concept it stands for, most important first).>
 
 ## Notes
 

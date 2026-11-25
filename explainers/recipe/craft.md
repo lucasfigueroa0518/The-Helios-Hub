@@ -290,8 +290,9 @@ The twelve principles of animation, applied to simple characters and objects:
   resolution. It gives even a technical explanation narrative pull.
 - Write for the ear: short sentences, concrete nouns and active verbs, one idea per sentence. Each
   sentence becomes a shot.
-- Don't spend words on what the picture already shows. Say why it happens or what it means, so
-  words and image complement each other instead of duplicating.
+- Don't spend words describing what the picture already makes plain. Say what things do, why it
+  happens or what it means, and let the picture show it as it is said, so words and image
+  complement each other instead of duplicating.
 - Budget about 140–160 spoken words a minute. Dense voiceover leaves the visuals no time to teach:
   where an image must land, make room for it in the writing (a short sentence, a line that lets
   the picture carry the beat). Pauses themselves stay short (`house-style.md` § Captions, voice
