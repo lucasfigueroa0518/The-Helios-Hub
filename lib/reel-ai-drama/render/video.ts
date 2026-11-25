@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { HYPERFRAMES_BIN, HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
+import { runSettled } from '@/lib/content-runs/render-settle';
 import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
 import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
 
@@ -32,9 +33,10 @@ export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?
   fs.mkdirSync(path.dirname(out), { recursive: true });
   // gsap ships with the project, so a render needs no network at all (ITERATION-12 §1).
   localizeGsap(projectDir);
-  const res = run(deps.bin ?? HYPERFRAMES_BIN, ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'], {
-    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: renderTimeoutMs(projectDir),
-  });
+  const args = ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'];
+  const opts = { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: renderTimeoutMs(projectDir) };
+  // Live: returns when the video is finished even if the render's Chrome children linger (render-settle.ts). Tests stub `run`.
+  const res = deps.run ? run(deps.bin ?? HYPERFRAMES_BIN, args, opts) : await runSettled(deps.bin ?? HYPERFRAMES_BIN, args, { ...opts, output: out });
   if (res.status !== 0) {
     appendStepLog(projectDir, 'hyperframes render', res);
     throw new Error(`hyperframes render exited ${res.status ?? 'with no status'}: ${tail(res)}`);

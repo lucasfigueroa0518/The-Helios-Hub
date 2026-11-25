@@ -52,3 +52,11 @@ test('only a frame that still uses the route and has a stored object is on scree
   ]);
   assert.deepEqual([...ids], ['stories:set:a']);
 });
+
+test('a video frame signs both its poster and its MP4', async () => {
+  const post = { id: 'v', media: { kind: 'frames', frames: [{ src: '/api/stories/frames/f3?v=1', label: 'Frame 3', path: 'sets/s/03-story.jpg', video: '/api/stories/frames/f3?media=video&v=2', videoPath: 'sets/s/03-story.mp4' }] } } as unknown as HubPost;
+  const signed = await signVisibleStoryFrames({ posts: [post] }, storyFramePostIds([post]), async (paths) => paths.map((p) => `https://signed/${p}`));
+  const f = (signed.posts[0]!.media as Extract<HubPost['media'], { kind: 'frames' }>).frames[0]!;
+  assert.equal(f.src, 'https://signed/sets/s/03-story.jpg');
+  assert.equal(f.video, 'https://signed/sets/s/03-story.mp4');
+});

@@ -30,7 +30,7 @@ test('every cross-field check refuses, on the key being changed', () => {
     [{ hook_seconds: 70 }, 'hook_seconds'],
     [{ rung_max_seconds: 90 }, 'rung_max_seconds'],
     [{ fresh_days: 120 }, 'fresh_days'],
-    [{ solver_limit_usd: 9 }, 'solver_limit_usd'],
+    [{ solver_limit_usd: 11 }, 'solver_limit_usd'],
     [{ per_reel_cap_usd: 0.3 }, 'per_reel_cap_usd'],
     [{ daily_spend_cap_usd: 5 }, 'daily_spend_cap_usd'],
     [{ daily_render_cap: 1, posts_per_day: 1 }, ''],

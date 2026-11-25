@@ -190,6 +190,11 @@ accents, `wood` furniture, `leaf` plants; `wall`, `wainscot`, `trim`, `floor`, `
   (`explain.js`) in a flat frame. `contrast(a, b)` (`glass.js`) measures a colour pair.
 - Text inside a shape goes through `textBox(text, x, y, { kind, size, maxW, focal, progress, scale })`
   (`cards.js`, `BOX_KINDS`: speech, chat, note, sign, screen) or a primitive that measures it.
+- **HARD CONSTRAINT — a line of text in a window (a calculator's display, a counter, a scoreboard, a
+  device's screen line) is `readout(text, { x, y, w, h }, { fitTo, chars, align, fill })` (`cards.js`),
+  never an `el('text')` at a size you picked:** it sizes the line to fit the window with a margin,
+  `fitTo` lists every text the window will show (the typed sum and its result) so all share one
+  size, and `chars` types it in place. It works in a prop's own units (cm on a face).
   `handwrite(text, x, y, size, progress, { color, weight, align })` (`draw.js`) writes strokes in
   order. Set text added outside `setBuilder` is wrapped with `set(svg)` (`lens.js`).
 
@@ -305,8 +310,11 @@ into constants.
   inside the safe area (x 96–940, y 570–1600) at its kind's size (it slides the picture, or aims at
   the subject and dollies), turns it around the subject (15–45°, or higher) when a nearer thing
   hides it, and moves a thing that would appear within 0.3 s after a cut to the cut itself. Aim the
-  camera roughly; do not hand-tune offsets. Opt a shot out with `fit: false` (or `fit: { orbit:
-  false }`, `fit: { frame: false }`), a cut with `popIn: false`.
+  camera roughly; do not hand-tune offsets. `fit: false` (or `fit: { orbit: false }`, `fit: {
+  frame: false }`) keeps your angle and size, but a subject over the safe area's edge is still
+  backed off or slid whole inside it, without cutting a face; a cut opts out with `popIn: false`.
+  A close or an insert focuses on its subject unless it says `focus` (`focus: false` keeps it all
+  sharp): what lies behind goes soft, so a sign on the wall never fights the captions.
 - **HARD CONSTRAINT — a critter stays in its place:** a critter a shot of a place casts is in the
   cast of every later shot of that place until a shot lists it in `away: [<id>]` (it left on
   screen); `shotFrame` keeps it drawn whatever a cast says (an object an earlier shot cast too), so
@@ -407,7 +415,10 @@ orange. It returns the registry `reg` (§ Mechanism primitives). A mapped concep
   as `exterior: <kind>`); `kind` is one of `EXTERIOR_KINDS` (street, shopfront, park, road, plaza,
   rooftop, dock; `EXTERIOR_ABOUT` says what each holds). It returns `{ kind, env, items, lights,
   tells, spots, lanes, horizon, mood }`: `spots` are named world points to stage things on, and
-  `lanes.walk` and `lanes.drive` are paths a traveller can take.
+  `lanes.walk` and `lanes.drive` are paths a traveller can take. Extras (a crowd, passers-by, a pet)
+  stand on spots or lanes beside the critters in the shot's view, never behind them: a thing mostly
+  hidden by a nearer critter reads as stacked on it, and the check flags it. A group drawer returns
+  `{ parts: [...] }` (one entry per member) so each member sorts by its own depth.
 - **A journey:** `journey(from, to, { by, at, dur, traveller, cast, side, dist, height, fov, camera,
   arrive, via })` (`shots.js`). `from` and `to` are places: a `SETS` id, or `{ id, at, door?, path?,
   camera? }` in world cm. `by: 'cut'` is two shots, out of `from` and a hard cut to a wide of `to`;

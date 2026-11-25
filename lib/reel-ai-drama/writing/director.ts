@@ -77,7 +77,6 @@ export function scriptForDirecting(draft: WriterDraft): WriterDraft {
     landing_rung_id: draft.landing_rung_id,
     close_question: draft.close_question,
     word_count: draft.word_count,
-    ...(draft.pronounce ? { pronounce: draft.pronounce } : {}),
     central: draft.central ?? [],
   };
 }

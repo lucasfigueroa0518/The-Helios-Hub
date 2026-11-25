@@ -18,22 +18,23 @@
  * Trivia's daily writer, Real or AI?'s daily candidates) runs in every state,
  * each held to its type's refill cap (stories.settings.types[<type>].refill_cap_usd).
  *
- * Photo bank (DECISIONS_LOG D49): the finder offers its vetted photos to the
- * bank in the shared database (nothing happens while its `capture` switch is
- * off); the worker drains the bank's queue after a pass that built or
- * published, and before it exits.
+ * Photo bank (DECISIONS_LOG D49): a Morning Download build offers its news-finder photos (picks and runner-ups,
+ * lib/news-photos/bank-offer.ts) to the bank built here on the source database; the worker drains it after a pass
+ * that built (15 s) and before it exits (30 s). Never blocking: a bank failure never fails a build.
  */
 import './stories_env';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { createIntakeJev } from '@/lib/intake/jev';
 import { INTAKE_TOPUP_CAP_USD } from '@/lib/intake/types';
 import { liveJevTransport } from '@/lib/reels/jev/client';
+import { createJevAsk } from '@/lib/social/jev/client';
+import { drainBank } from '@/lib/news-photos/bank-offer';
+import type { NewsChainDeps } from '@/lib/stories/build/common';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
-import { createPhotoBank } from '@/lib/media-library/bank';
-import { buildAiTrivia } from '@/lib/stories/build/ai-trivia';
-import { buildMorningDownload } from '@/lib/stories/build/morning-download';
-import { createLivePhotoFinder } from '@/lib/stories/photos';
-import { sharedSeriesBuilders } from '@/lib/stories/photos-shared';
 import { createLiveStoryInsightsClient } from '@/lib/stories/publish/insights';
 import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
@@ -42,7 +43,6 @@ import type { Series } from '@/lib/stories/render/types';
 import { nyDate, releaseBuildsAtStartup, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
-import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
 
@@ -50,6 +50,28 @@ import { newAnthropic } from '@/lib/anthropic-client';
 import { liveOpponentClient } from '@/lib/stories/trivia/opponent';
 
 const POLL_MS = 15_000;
+
+/** The news chain's live clients for one Morning Download build. */
+async function newsChain(client: ReturnType<typeof newAnthropic>, bank: NewsChainDeps['bank']): Promise<NewsChainDeps> {
+  const { TypeSafeClient } = await import('@typesafe-ai/sdk');
+  const { fetchImageLive, readPageImages, serperImages } = await import('@/lib/news-photos');
+  const { findPhotoUpscaler } = await import('@/lib/news-photos/band');
+  const key = process.env.SERPER_API_KEY;
+  return {
+    create: (p) => client.messages.create(p as never) as never,
+    jevAsk: createJevAsk(),
+    photo: {
+      jev: new TypeSafeClient({ defaultHeaders: { 'TypeSafe-Danger-Zone-Images': 'true' } }),
+      readPage: readPageImages(),
+      serper: key ? serperImages(key) : null,
+      fetchImage: fetchImageLive(),
+    },
+    upscaler: findPhotoUpscaler(),
+    tmpDir: fs.mkdtempSync(path.join(os.tmpdir(), 'md-band-')),
+    storage: createStoriesStorage(),
+    ...(bank ? { bank } : {}),
+  };
+}
 const once = process.argv.includes('--once');
 const requestArg = process.argv.indexOf('--request');
 
@@ -57,7 +79,14 @@ async function main() {
   const db: StoriesDb = process.env.STORIES_DB === 'local' ? (await openLocalStoriesDb(DEFAULT_LOCAL_DIR)).db : liveStoriesDb;
   const sourceDb = liveStoriesDb;
   const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
-  const bank = createPhotoBank({ query: (text, params) => sourceDb.query(text, params), log: (line) => log(`photo bank: ${line}`) });
+  // The photo bank (D49) lives in the hub's Supabase (the source database). Not built: builds run without it.
+  let bank: NewsChainDeps['bank'] = null;
+  try {
+    const { createPhotoBank } = await import('@/lib/media-library/bank');
+    bank = createPhotoBank({ query: (text, params) => sourceDb.query(text, params), log: (line) => log(`photo bank: ${line}`) });
+  } catch (err) {
+    log(`photo bank not built: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   if (requestArg > 0) {
     const series = process.argv[requestArg + 1] as Series;
@@ -86,13 +115,8 @@ async function main() {
       renderer ??= await openRenderer();
       const settings = await loadSettings(db);
       const client = newAnthropic();
-      // Once per build: series on the shared photo finder get wrapped builders; none, and today's deps are unchanged.
-      const builders = await sharedSeriesBuilders({
-        query: sourceDb,
-        // Free vs. Paid is retired (Real or AI? replaces it, and makes its own images): neither is here.
-        builders: { morning_download: buildMorningDownload, ai_trivia: (d) => buildAiTrivia(d) },
-        log: (line) => log(`photo finder: ${line}`),
-      });
+      // No series uses the old Stories photo finder any more (Morning Download has the news chain's finder, AI Trivia
+      // and Real or AI? draw no finder photo), so it and the shared-finder builders that wrapped it are not built.
       return {
         db,
         sourceDb,
@@ -100,13 +124,19 @@ async function main() {
         write: liveWriterCreate(),
         // AI Trivia's opponent (AT-74/75): GPT-5 nano (OPENAI_API_KEY), Llama 3.1 8B on fal (FAL_API_KEY) if it is retired.
         opponent: liveOpponentClient(),
-        // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
-        // A trivia build's picks are logged under its own run kind (SS-28).
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()), ...(series === 'ai_trivia' ? { runKind: 'ai_trivia' as const } : {}) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
-        ...(builders ? { builders } : {}),
+        // Morning Download's news chain (WIRING-CONTRACT Owner D): Jev shortlist, Opus rerank, the news photo finder
+        // (Serper only when its key is set), the band upscaler when installed, the W12 writer.
+        ...(series === 'morning_download' ? { news: await newsChain(client, bank) } : {}),
+        // Morning Download video (MD-LFD D16–D19): on where yt-dlp, ffmpeg and the Serper and Jev keys are present.
+        video: async (setId: string) => {
+          const { liveStoryVideo, videoAvailable } = await import('@/lib/stories/video');
+          const can = videoAvailable();
+          if (!can.ok) { log(`video: off (${can.why})`); return null; }
+          return liveStoryVideo({ setId, storage: createStoriesStorage(), anthropic: client as never, log: (line) => log(line) });
+        },
       };
     },
     meta: () => createLiveStoriesMetaClient(),
@@ -123,7 +153,7 @@ async function main() {
       try {
         const r = await tick(deps);
         if (r.built || r.scheduled || r.published || r.insights) log(`pass: ${JSON.stringify(r)}`);
-        if (r.built || r.published) await bank.drain(15_000);
+        if (r.built) await drainBank(bank, 15_000);
       } catch (err) {
         log(`pass failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
       }
@@ -131,7 +161,7 @@ async function main() {
       await new Promise((r) => setTimeout(r, POLL_MS));
     } while (!stopping);
   } finally {
-    await bank.drain(30_000);
+    await drainBank(bank, 30_000);
     await (renderer as Renderer | null)?.close();
   }
 }

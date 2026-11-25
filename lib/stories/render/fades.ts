@@ -20,6 +20,9 @@ export function fadeStops(mode: 'top' | 'window', backdrop: Backdrop): FadeStops
     : [[0, 1], [0.62, 1], [0.82, 0.55], [0.99, 0]];
 }
 
+/** A contained band photo: opaque down to where the copy starts, then a short fade of the blur fill (Photo.contained). */
+export const CONTAINED_FADE: FadeStops = [[0, 1], [0.88, 1], [0.94, 0]];
+
 export function fadeMask(stops: FadeStops): string {
   return `linear-gradient(180deg, ${stops.map(([t, a]) => `rgba(0, 0, 0, ${a}) ${Math.round(t * 1000) / 10}%`).join(', ')})`;
 }

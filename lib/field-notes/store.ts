@@ -442,6 +442,33 @@ export async function listSelectableTips(q: HubQuery, scoreVersion: string = FIE
   return rows.map(rowToTip);
 }
 
+/**
+ * The found tips waiting in the pool (not seeds), each ranked by the score selection would use: 0 for one it can never
+ * pick (no score, an old question set, set aside after MAX_TIP_ATTEMPTS). For the pool cap (tip-pool.ts); a read only.
+ */
+export async function listWaitingFoundTips(q: HubQuery, scoreVersion: string = FIELD_NOTES_SCORE.version): Promise<Array<{ id: string; rank: number }>> {
+  const { rows } = await q<{ id: string; rank: string | number }>(
+    `SELECT id::text AS id,
+            CASE WHEN attempts < $1 AND score_version = $2 THEN coalesce(score, 0) ELSE 0 END AS rank
+       FROM field_notes.tips
+      WHERE source_kind <> 'seed' AND status = 'candidate'
+      ORDER BY created_at DESC, id`,
+    [MAX_TIP_ATTEMPTS, scoreVersion],
+  );
+  return rows.map((r) => ({ id: r.id, rank: Number(r.rank) }));
+}
+
+/** Expire these waiting found tips with a reason (the pool cap). Only candidates that are not seeds change. Returns how many. */
+export async function trimTips(q: HubQuery, ids: readonly string[], reason: string): Promise<number> {
+  if (!ids.length) return 0;
+  const { rows } = await q(
+    `UPDATE field_notes.tips SET status = 'expired', reject_reason = $2, updated_at = now()
+      WHERE id = ANY($1::uuid[]) AND status = 'candidate' AND source_kind <> 'seed' RETURNING id`,
+    [[...ids], reason],
+  );
+  return rows.length;
+}
+
 /** Source links that already made a post, so selection never repeats them (nor, for a GitHub link, its repo). */
 export async function postedSourceUrls(q: HubQuery): Promise<string[]> {
   const { rows } = await q<{ source_url: string }>(`SELECT source_url FROM field_notes.tips WHERE status IN ('drafted', 'approved', 'posted') AND source_url IS NOT NULL`);

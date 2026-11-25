@@ -117,7 +117,7 @@ export async function loadCostPage(email: string, params: Params, now: Date): Pr
     const [reads, { rows: stages }, loaded, sets, cacheRows, watchUsd, readiness] = await Promise.all([
       readCosts(liveHubQuery, eq ?? Promise.reject(new Error('Explainers database not available'))),
       liveHubQuery<{ id: string; s: Record<string, number> | null; claude: number; jev: number | null; total: number }>(
-        `SELECT id::text, record->'result'->'costByStage' AS s, claude_usd::float8 AS claude, (record->'jev'->>'costUsd')::float8 AS jev, total_usd::float8 AS total
+        `SELECT id::text, cost_by_stage AS s, claude_usd::float8 AS claude, jev_usd::float8 AS jev, total_usd::float8 AS total
            FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
       ),
       loadForPage(email),

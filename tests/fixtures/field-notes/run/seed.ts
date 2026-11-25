@@ -46,7 +46,6 @@ export const CANNED_SLIDES = [
   { headline: 'Find any old note in seconds', body: 'A built-in search called recall looks through everything you saved before and brings back the note you meant.', name: 'Recall search', tryIt: 'Open the search box and type a few words from the note.' },
   { headline: 'Share your setup with the whole team', body: 'A built-in option called share sends your saved settings to a teammate, so everyone starts from the same place.', name: 'Share option', tryIt: 'Open the settings menu and pick share.' },
 ];
-export const CANNED_CAPTION = 'Four tools worth trying this week. Save this post for your next long run.';
 
 let shared: Promise<{ pg: PGlite; query: HubQuery }> | null = null;
 
@@ -198,7 +197,6 @@ export function stubClaude(o: { usage?: Usage; failWith?: string; supported?: nu
             : {
                 slides: ids.slice(0, n).map((tipId, i) => ({ tipId, ...CANNED_SLIDES[i]! })),
                 skipped: ids.slice(n).map((tipId) => ({ tipId, missing: 'the source does not say what the helper is or what it does for the reader' })),
-                caption: CANNED_CAPTION,
               };
           return message([{ type: 'tool_use', id: 'tu', name: tool, input: last }], 'tool_use', o.usage ?? {});
         }

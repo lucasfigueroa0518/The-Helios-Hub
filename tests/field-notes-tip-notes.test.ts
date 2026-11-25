@@ -28,10 +28,10 @@ test('the posts query reads each tip\'s leaf, want and tier', () => {
 });
 
 test('two tips and two how-to-try lines make two tip notes, in order, with plain labels', () => {
-  const caption = buildFieldNotesCaption('Two quick ones.', [
+  const caption = buildFieldNotesCaption([
     { name: 'Claude Code /review', tryIt: 'Type `/review` in a repo.' },
     { name: 'llm-cli', tryIt: 'Run `pip install llm`.' },
-  ]);
+  ], 'slug');
   const notes = fieldNotesTipNotes({
     caption,
     tips: [
@@ -40,8 +40,8 @@ test('two tips and two how-to-try lines make two tip notes, in order, with plain
     ],
   });
   assert.deepEqual(notes, [
-    { subject: 'Review in one command', kind: 'Coding agent feature', want: 'Faster', knowHow: 'Middle know-how', name: 'Claude Code /review', tryIt: 'Type `/review` in a repo.' },
-    { subject: 'A model in your terminal', kind: 'Free alternative to a paid tool', want: 'Cheaper', knowHow: 'Higher know-how', name: 'llm-cli', tryIt: 'Run `pip install llm`.' },
+    { subject: 'Review in one command', kind: 'Coding agent feature', want: 'Faster', knowHow: 'Middle know-how', name: 'Claude Code /review', tryIt: 'Type /review in a repo.' },
+    { subject: 'A model in your terminal', kind: 'Free alternative to a paid tool', want: 'Cheaper', knowHow: 'Higher know-how', name: 'llm-cli', tryIt: 'Run pip install llm.' },
   ]);
 });
 

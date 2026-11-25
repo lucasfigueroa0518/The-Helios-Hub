@@ -42,7 +42,8 @@ export type SetBuilderDeps = {
   write: WriterCreate;
   /** AI Trivia's opponent (AT-74/75): GPT-5 nano on OpenAI, Llama 3.1 8B on fal. Absent: no opponent. */
   opponent?: import('@/lib/stories/trivia/opponent').OpponentClient;
-  photos: PhotoFinder;
+  /** The old Stories photo finder: only the retired Free vs. Paid builder used it. Absent (the worker): no finder photos. */
+  photos?: PhotoFinder;
   renderer: Renderer;
   /** AI Trivia's video renderer (lib/stories/trivia/render); tests stub it. Default: renderTriviaClips. */
   triviaRender?: RenderClips;
@@ -59,6 +60,10 @@ export type SetBuilderDeps = {
   };
   /** Tests swap a series builder for a stub. */
   builders?: Partial<Record<Series, (d: BuildDeps) => Promise<BuildResult>>>;
+  /** Morning Download's video finder for one set (MD-LFD D16–D19, lib/stories/video.ts). Absent: photos only. */
+  video?: (setId: string) => Promise<import('@/lib/stories/video').StoryVideoDeps | null>;
+  /** Morning Download's news chain clients (shortlist, rerank, photos, writer). Absent: Morning Download skips. */
+  news?: import('./common').NewsChainDeps;
 };
 
 export type SetBuildOutcome = { status: 'ready' | 'skipped' | 'failed'; detail: string; flagged?: boolean };
@@ -82,7 +87,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     await markSkipped(deps.db, setId, `daily cap reached ($${today.toFixed(2)} of $${cap})`);
     return { status: 'skipped', detail: 'daily cap reached' };
   }
-  const photoUsdBefore = deps.photos.usd;
+  const photoUsdBefore = deps.photos?.usd ?? 0;
   try {
     const series = got.set.series;
     const poolReadAt = new Date();
@@ -90,13 +95,19 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     const jev = createStoriesJev(deps.jevTransport, deps.db);
     const order = ORDER_OF[series];
     const onIntake = order ? modes?.[order] === 'intake' : false;
-    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, ...(deps.opponent ? { opponent: deps.opponent } : {}), photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}) };
+    const video = series === 'morning_download' && deps.video ? await deps.video(setId).catch((err) => (deps.log?.(`video: off for this set: ${err instanceof Error ? err.message : String(err)}`), null)) : null;
+    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, ...(deps.opponent ? { opponent: deps.opponent } : {}), ...(deps.photos ? { photos: deps.photos } : {}), settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}), ...(video ? { video } : {}), ...(series === 'morning_download' && deps.news ? { news: deps.news } : {}) };
     const builder = deps.builders?.[series] ?? BUILDERS[series];
     if (!builder) {
       await markSkipped(deps.db, setId, `${series} is retired: no new sets are built`);
       return { status: 'skipped', detail: `${series} is retired` };
     }
-    const result = await builder(bd);
+    const result = await builder(bd).finally(async () => {
+      // The video finder's spend (Haiku, Jev, Serper) counts whether or not the build posts.
+      const spent = video?.spent();
+      const lines = spent ? ([['anthropic', spent.anthropic], ['jev', spent.jev], ['web_search', spent.search]] as const) : [];
+      for (const [vendor, usd] of lines) if (usd > 0) await recordCost(deps.db, { setId, vendor, component: 'md-video-finder', usd }).catch(() => {});
+    });
     if (!result.ok) {
       await deps.db.query(`UPDATE stories.sets SET payload = payload || $2::jsonb WHERE id = $1`, [setId, JSON.stringify({ candidates: result.candidates.length })]);
       await markSkipped(deps.db, setId, result.skip);
@@ -109,7 +120,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
       // The series' set is built from the pool: hand placements for this series (under its type, SS-1) are used up and its ideas compete by score again.
       await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, verticalOfSeries(series), `stories:pool:${series}:`, poolReadAt);
     }
-    const photoUsd = deps.photos.usd - photoUsdBefore;
+    const photoUsd = (deps.photos?.usd ?? 0) - photoUsdBefore;
     if (photoUsd > 0) await recordCost(deps.db, { setId, vendor: 'jev', component: 'photo-finder', usd: photoUsd });
     const r = await runRenderStage({ db: deps.db, storage: deps.storage, renderer: deps.renderer, review: deps.review, setId, ...(deps.triviaRender ? { triviaRender: deps.triviaRender } : {}) });
     return { status: 'ready', detail: r.log.join('; '), flagged: r.flagged };

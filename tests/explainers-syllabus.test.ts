@@ -1,7 +1,8 @@
 /**
  * The Explainer Reels syllabus (lib/explainers/ideas/syllabus.ts), offline: unique terms and akas,
  * prerequisites that resolve and come earlier in file order, levels numbered 1..n, no empty units,
- * 350 to 420 topics, a computer-science share of 25% to 35%, and a distinct angle on every topic.
+ * 350 to 420 topics, a computer-science share of 25% to 35%, a distinct angle on every topic, and the reel framing
+ * (one short question per angle, a plain takeaway per topic).
  * Pure data checks; no model, no database.
  */
 import assert from 'node:assert/strict';
@@ -69,6 +70,33 @@ test('every topic has a non-empty angle, and no two angles are the same', () => 
     assert.ok(t.angle.trim().length > 0, `"${t.term}" has an empty angle`);
     const key = norm(t.angle);
     assert.ok(!seen.has(key), `"${t.term}" repeats the angle of "${seen.get(key)}"`);
+    seen.set(key, t.term);
+  }
+});
+
+// Framing for the reel (Lucas, 2026-11-24): the angle asks about one thing that happens, never a category, comparison,
+// debate or double question; the takeaway says what the thing does in 15 words or fewer, never what it is not.
+const words = (s: string) => s.trim().split(/\s+/).length;
+const BANNED_ANGLE = /\brather than\b|\binstead of\b|\bcounts? as\b|\bversus\b|\bvs\.?\b|\bdifference between\b|\bdisagree\b|,\s*and (why|how|what|when|where|who)\b/i;
+const BANNED_TAKEAWAY = /\brather than\b|\binstead of\b|\bunlike\b|,\s*not\b/i;
+
+test('every angle is one short question about one thing, never a comparison or a boundary', () => {
+  for (const t of topics) {
+    assert.ok(t.angle.endsWith('?') && t.angle.split('?').length === 2, `"${t.term}": the angle is one question: ${t.angle}`);
+    assert.ok(words(t.angle) <= 16, `"${t.term}": the angle runs ${words(t.angle)} words (16 at most)`);
+    assert.ok(!BANNED_ANGLE.test(t.angle), `"${t.term}": the angle compares or draws a boundary: ${t.angle}`);
+  }
+});
+
+test('every topic has a distinct takeaway of 15 words or fewer that says what the thing does', () => {
+  const seen = new Map<string, string>();
+  for (const t of topics) {
+    assert.equal(typeof t.takeaway, 'string', `"${t.term}" has no takeaway`);
+    assert.ok(/[.!]$/.test(t.takeaway), `"${t.term}": the takeaway is one sentence: ${t.takeaway}`);
+    assert.ok(words(t.takeaway) <= 15, `"${t.term}": the takeaway runs ${words(t.takeaway)} words (15 at most)`);
+    assert.ok(!BANNED_TAKEAWAY.test(t.takeaway), `"${t.term}": the takeaway says what it is not: ${t.takeaway}`);
+    const key = norm(t.takeaway);
+    assert.ok(!seen.has(key), `"${t.term}" repeats the takeaway of "${seen.get(key)}"`);
     seen.set(key, t.term);
   }
 });

@@ -43,6 +43,8 @@ export type FrameReport = { index: number; role: string; problems: string[]; jpe
 export type RenderResult = { ok: boolean; frames: FrameReport[]; problems: string[] };
 export type Renderer = {
   render(frames: Frame[], opts?: { outDir?: string; name?: string }): Promise<RenderResult>;
+  /** A video story frame's layers (MD-LFD D16). Optional so test renderers need not draw them. */
+  layers?(frame: Frame): Promise<VideoLayers>;
   close(): Promise<void>;
 };
 
@@ -63,6 +65,7 @@ function withUrls(frame: Frame): Frame {
   const d = frame.data;
   if (d.role === 'paid' || d.role === 'free') return { ...frame, data: { ...d, logo: fix(d.logo) } };
   if (d.role === 'closer' || d.role === 'intro') return frame;
+  if (d.role === 'opener') return { ...frame, data: { ...d, photo: fix(d.photo), ...(d.peek ? { peek: d.peek.map((p) => (p ? fix(p)! : null)) } : {}) } };
   return { ...frame, data: { ...d, photo: fix(d.photo) } } as Frame;
 }
 
@@ -120,7 +123,8 @@ export async function openRenderer(): Promise<Renderer> {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
 
-  async function render(frames: Frame[], opts: { outDir?: string; name?: string } = {}): Promise<RenderResult> {
+  /** A page with the frames laid out exactly as the JPEGs are: fonts and images loaded, text fitted, subjects avoided. */
+  async function openFrames(frames: Frame[]) {
     const page = await browser.newPage({ viewport: { width: FRAME_W, height: FRAME_H } });
     try {
       // tsx keeps function names with a __name helper; functions passed into the page need it defined.
@@ -149,7 +153,16 @@ export async function openRenderer(): Promise<Renderer> {
       await page.evaluate(`window.__fadeAlpha = (${fadeAlpha.toString()})`);
       const fit = (await page.evaluate(`[...document.querySelectorAll('.st-host')].map((h) => (${fitText.toString()})(h))`)) as TextFitFailure[][];
       const avoided = (await page.evaluate(`[...document.querySelectorAll('.st-host')].map((h) => (${avoidSubject.toString()})(h))`)) as AvoidResult[][];
+      return { page, fit, avoided };
+    } catch (err) {
+      await page.close();
+      throw err;
+    }
+  }
 
+  async function render(frames: Frame[], opts: { outDir?: string; name?: string } = {}): Promise<RenderResult> {
+    const { page, fit, avoided } = await openFrames(frames);
+    try {
       const measured = await page.evaluate(
         ({ tol, safeTop, safeBottom, frameH, maxAlpha }) => {
           const global: string[] = [];
@@ -247,8 +260,49 @@ export async function openRenderer(): Promise<Renderer> {
     }
   }
 
-  return { render, close: () => browser.close() };
+  /**
+   * A video story frame's three layers (MD-LFD D16, 2026-11-24), laid out exactly as its JPEG: `under` (the backdrop
+   * alone), `matte` (white where the photo shows, by its fade), `over` (shade, masthead, copy, credit on transparent),
+   * and the photo band's box. lib/video-finder/band.ts composeFrameVideo puts the clip between them.
+   */
+  async function layers(frame: Frame): Promise<VideoLayers> {
+    const { page } = await openFrames([frame]);
+    try {
+      await page.addStyleTag({ content: LAYER_CSS });
+      const host = (await page.$('.st-host'))!;
+      const box = await page.evaluate(() => {
+        const h = document.querySelector('.st-host')!.getBoundingClientRect();
+        const b = document.querySelector('.st-host .st-bleed')?.getBoundingClientRect();
+        return b ? { x: Math.round(b.left - h.left), y: Math.round(b.top - h.top), w: Math.round(b.width), h: Math.round(b.height) } : null;
+      });
+      if (!box) throw new Error('the frame has no photo band to play a video in');
+      const shot = async (layer: 'under' | 'matte' | 'over') => {
+        await page.evaluate((l) => document.querySelector('.st-host')!.setAttribute('data-layer', l), layer);
+        return host.screenshot({ type: 'png', omitBackground: layer === 'over' });
+      };
+      return { under: await shot('under'), matte: await shot('matte'), over: await shot('over'), box };
+    } finally {
+      await page.close();
+    }
+  }
+
+  return { render, layers, close: () => browser.close() };
 }
+
+export type VideoLayers = { under: Buffer; matte: Buffer; over: Buffer; box: { x: number; y: number; w: number; h: number } };
+
+/** Layer switches for a video frame (see layers()). Only active while a host carries data-layer. */
+const LAYER_CSS = `
+html, body { background: transparent !important; }
+.st-host[data-layer] { background: transparent !important; }
+.st-host[data-layer="under"] .st-frame > :not(.st-bg) { visibility: hidden !important; }
+.st-host[data-layer="matte"] .st-frame { background: #000 !important; }
+.st-host[data-layer="matte"] .st-frame * { visibility: hidden !important; }
+.st-host[data-layer="matte"] .st-frame .st-bleed, .st-host[data-layer="matte"] .st-frame .st-bleed .st-photo { visibility: visible !important; }
+.st-host[data-layer="matte"] .st-frame .st-bleed .st-photo { filter: brightness(0) invert(1); }
+.st-host[data-layer="over"] .st-frame { background: transparent !important; }
+.st-host[data-layer="over"] .st-frame .st-bg, .st-host[data-layer="over"] .st-frame .st-bleed .st-photo { visibility: hidden !important; }
+`;
 
 export type SheetOptions = { cols: number; scale?: number; labels?: string[]; title?: string };
 

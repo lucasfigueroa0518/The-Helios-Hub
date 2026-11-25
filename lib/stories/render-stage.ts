@@ -70,6 +70,7 @@ export async function runRenderStage(deps: RenderStageDeps): Promise<RenderStage
   if (VIDEO_SERIES.has(got.set.series)) return runVideoStage(deps, got, frames);
 
   const render = (f: Frame[]) => deps.renderer.render(f);
+  const log: string[] = [];
   const first = await render(frames);
   const out = await reviewSet({ frames, first, render, call: deps.review });
 
@@ -88,8 +89,15 @@ export async function runRenderStage(deps: RenderStageDeps): Promise<RenderStage
     const path = frameObjectPath(deps.setId, row.seq, row.role);
     await deps.storage.upload(path, r.jpeg, 'image/jpeg');
     const rv = out.reviews[i]!;
+    // A story with a clip (MD-LFD D16): the JPEG above is its poster; the MP4 plays the clip in the photo band.
+    const mp4 = await storyVideo(deps, frames[i]!, f).catch((err) => {
+      log.push(`frame ${i + 1}: the video failed, posting the still: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
+    if (mp4) await deps.storage.upload(frameObjectPath(deps.setId, row.seq, row.role, 'mp4'), mp4, 'video/mp4');
     await saveFrameRender(deps.db, row.id, {
-      storagePath: path,
+      ...(mp4 ? { media: 'video' as const, posterPath: path, mediaBytes: mp4.length } : {}),
+      storagePath: mp4 ? frameObjectPath(deps.setId, row.seq, row.role, 'mp4') : path,
       jpegBytes: r.bytes,
       review: { round1: rv.round1, change: rv.change, round2: rv.round2, note: rv.note, problems: r.problems },
       flagged: rv.flagged,
@@ -99,7 +107,36 @@ export async function runRenderStage(deps: RenderStageDeps): Promise<RenderStage
       photo: framePhoto(f.data) ?? null,
     });
   }
-  return finish(deps, out);
+  return finish(deps, { ...out, log: [...out.log, ...log] });
+}
+
+/**
+ * The MP4 of a story frame with a clip: the frame's layers from the renderer, the band clip from the bucket, ffmpeg
+ * between them (lib/video-finder/band.ts). Null when the frame has no clip, the review swapped its photo (the poster),
+ * or the renderer cannot draw layers.
+ */
+async function storyVideo(deps: RenderStageDeps, built: Frame, reviewed: Frame): Promise<Buffer | null> {
+  const d = reviewed.data;
+  if (d.role !== 'story' || built.data.role !== 'story' || !built.data.video || !deps.renderer.layers) return null;
+  if (d.photo?.src !== built.data.photo?.src) throw new Error('the review changed the poster');
+  const video = built.data.video;
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const p = await import('node:path');
+  const { composeFrameVideo } = await import('@/lib/video-finder/band');
+  const dir = fs.mkdtempSync(p.join(os.tmpdir(), 'md-video-frame-'));
+  try {
+    const l = await deps.renderer.layers({ ...reviewed, data: { ...d, video } });
+    const file = (name: string, b: Buffer) => { const f = p.join(dir, name); fs.writeFileSync(f, b); return f; };
+    const band = file('band.mp4', await deps.storage.download(video.path));
+    const out = p.join(dir, 'frame.mp4');
+    await composeFrameVideo({ under: file('under.png', l.under), matte: file('matte.png', l.matte), over: file('over.png', l.over) }, band, l.box, { w: 1080, h: 1920 }, video.seconds, out);
+    const mp4 = fs.readFileSync(out);
+    if (mp4.length > MAX_MP4_BYTES) throw new Error(`MP4 is ${mp4.length} bytes, over Instagram's 100 MB`);
+    return mp4;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 async function finish(deps: Pick<RenderStageDeps, 'db' | 'setId'>, out: ReviewOutcome): Promise<RenderStageResult> {

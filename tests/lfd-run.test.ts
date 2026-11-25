@@ -1,12 +1,18 @@
 // tests/lfd-run.test.ts
+/**
+ * The Last Few Days run on the news chain (wiring contract 2026-11-24, Owner E), offline: the chain's steps
+ * (shortlist, rerank, writer, photo finder) are stubbed through `deps.news`; vision and the caption answer through the
+ * stubbed `create`. No model, Jev, Serper or web call is made.
+ */
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
 
-import { runLastFewDays, type LfdRunDeps } from '@/lib/lfd/run';
-import type { JevAsk, JevResult } from '@/lib/social/jev/client';
-import type { PhotoFinder } from '@/lib/stories/photos';
+import { runLastFewDays, type LfdNewsChain, type LfdRunDeps } from '@/lib/lfd/run';
+import type { PhotoResult } from '@/lib/news-photos';
+import { heliosLines } from '@/lib/social/captions/helios-line';
+import type { JevAsk } from '@/lib/social/jev/client';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { resetSeed, seedCarouselRun, seedReelsIdea, seedScore } from './fixtures/lfd/seed';
@@ -24,17 +30,11 @@ const NOW = new Date('2026-10-13T07:00:00Z'); // Tuesday 3:00 AM NY
 
 type VisionStory = { headline: string; body: string; names: string[]; outlet: string };
 
-/**
- * Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects.
- * Vision calls (submit_verdict) are answered by `vision` (default: the photo passes) and counted apart.
- */
-function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory, photo: string | null) => string | null; caption?: () => unknown; captionNoUsage?: boolean } = {}) {
-  let calls = 0;
+/** Vision (submit_verdict) and caption (json_schema) calls; the writer is the news stub, never this. */
+function createStub(opts: { vision?: (s: VisionStory, photo: string | null) => string | null; caption?: () => unknown; captionNoUsage?: boolean } = {}) {
   const seen: VisionStory[] = [];
-  const bad = new Set<string>();
   const captionCalls: Anthropic.MessageCreateParamsNonStreaming[] = [];
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
-    // The caption call (caption-lines.ts) is the one json_schema call; it is counted apart from the writer.
     if ((p as { output_config?: { format?: unknown } }).output_config?.format) {
       captionCalls.push(p);
       const reply = opts.caption ? opts.caption() : CAPTION_REPLY;
@@ -51,49 +51,69 @@ function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: st
       const input = rejected ? { shows_story_subject: false, generic_stock: true, reason: rejected } : { shows_story_subject: true, generic_stock: false, reason: 'shows the subject' };
       return { id: 'v', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1000, output_tokens: 40, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input }] } as unknown as Anthropic.Message;
     }
-    calls += 1;
-    if (opts.failAfter !== undefined && calls > opts.failAfter) {
-      return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'text', text: 'no' }] } as unknown as Anthropic.Message;
-    }
-    const user = String((p.messages.at(-1) as { content: unknown }).content);
-    const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string; url: string }> };
-    if (opts.fail?.(material.stories.map((s) => s.url))) {
-      return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'text', text: 'no' }] } as unknown as Anthropic.Message;
-    }
-    const stories = material.stories.map((s) => ({
-      key: s.key, setup: opts.setup ?? '', headline: bad.has(s.key) ? `UNSUPPORTED ${s.key}` : `Story ${s.headline.slice(0, 40)}`, highlight: '', names: [],
-      body: 'It happened this week. The company says more is coming', photo: { kind: 'company', query: s.headline, subjects: [], alts: [] },
-    }));
-    return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 5, cache_read_input_tokens: 50 }, content: [{ type: 'tool_use', id: `t${calls}`, name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
+    throw new Error(`unexpected Claude call: ${JSON.stringify(p.tools?.map((t) => (t as { name: string }).name))}`);
   };
-  return { create, calls: () => calls, vision: () => seen, captionCalls: () => captionCalls };
+  return { create, vision: () => seen, captionCalls: () => captionCalls };
 }
 
 const CAPTION_REPLY = {
   opener: '⬅️ Swipe for a new Claude Haiku and a few niche things that happened.',
-  body: 'Anthropic put out Claude Haiku 5.5 this week.\n\nA few niche things happened too.',
+  body: ['Anthropic put out Claude Haiku 5.5 this week.', 'A niche thing happened.', 'Another niche thing happened.', 'A third niche thing happened.', 'A fourth niche thing happened.', 'A fifth niche thing happened.'].join('\n'),
   question: 'Which one caught your attention?',
-  helios_line: 'For a law firm, a faster small model means intake replies in minutes, and that is the kind of thing Helios builds.',
+};
+/** The caption ends on one of the code-written Helios lines, then the credits. */
+const endsOnHeliosLine = (caption: string, before: string) => heliosLines('lfd').some((l) => caption.includes(`${before}\n\n${l}\n\nSources:`));
+
+/** Jev: only the last-post same-event check is left in the run (the shortlist is stubbed). */
+const jev: JevAsk = async () => ({ answers: { same_event: { noul: 0.1 } }, usage: { input_tokens: 10, output_tokens: 0 }, model: 's' });
+
+/** Shortlist score by headline: Haiku first, then Niche Thing 0, 1, 2, … */
+const scoreOf = (h: string) => (h.includes('Haiku') ? 10 : Number(h.match(/Thing (\d+)/)?.[1] ?? 50) * -0.1 + 5);
+
+type NewsOpts = {
+  unsupported?: (headline: string) => boolean;
+  writeFail?: (headlines: string[]) => boolean;
+  /** The photo the finder picks for a story (null: none). Default: one search photo per story. */
+  photo?: (s: { headline: string; url: string }, extra: string[], attempt: number) => string | null;
+  rerank?: LfdNewsChain['rerank'];
 };
 
-const jev = (major: (headline: string) => number): JevAsk => async (req, meta): Promise<JevResult> => {
-  const usage = { input_tokens: 10, output_tokens: 0 };
-  if (meta.version.startsWith('major-news')) {
-    const s = major((req.state as { headline: string }).headline);
-    return { answers: { happened: { noul: s }, news_kind: { noul: s }, blockbuster_entity: { noul: s }, global_relevance: { noul: s }, political_relevance: { noul: s }, speculative: { noul: 0 } }, usage, model: 's' };
-  }
-  if (meta.version.startsWith('md-grounding')) {
-    const h = (req.state as { headline: string }).headline;
-    return { answers: { supported: { noul: h.includes('UNSUPPORTED') ? 0.1 : 0.9 } }, usage, model: 's' };
-  }
-  return { answers: { same_event: { noul: 0.1 } }, usage, model: 's' };
-};
-
-const photos = (noPhotoFor: (query: string) => boolean = () => false): PhotoFinder => ({
-  usd: 0,
-  find: async () => null,
-  findSet: async (reqs) => reqs.map((r, i) => (noPhotoFor(r.query) ? null : { src: `https://p/${encodeURIComponent(r.query)}-${i}.jpg`, credit: 'C', kind: 'scene' })),
-});
+/** The chain stubbed: the shortlist orders by scoreOf, the rerank keeps it, the writer echoes, the finder answers `photo`. */
+function newsStub(o: NewsOpts = {}) {
+  const calls = { writes: 0, written: [] as string[][], angles: [] as Array<Record<string, string>>, photos: [] as string[], photoExtras: [] as Array<{ url: string; extra: string[]; duplicates: string[] }> };
+  const attempts = new Map<string, number>();
+  const news: LfdNewsChain = {
+    shortlist: async (stories) => ({ ranked: stories.map((s) => ({ ...s, cool: 0, value: 0, final: scoreOf(s.headline) })).sort((a, b) => b.final - a.final), costUsd: 0 }),
+    rerank: o.rerank ?? (async (items) => ({ graded: items.map((s) => ({ ...s, grade: { cool: 5, value: 5, duplicate_of: null, top_tier: false, crowds: [], angle: `angle: ${s.headline}` } })), costUsd: 0 })),
+    write: async (_f, stories, angles) => {
+      calls.writes += 1;
+      calls.written.push(stories.map((s) => s.headline));
+      calls.angles.push(angles);
+      if (o.writeFail?.(stories.map((s) => s.headline))) throw new Error('no write_stories call (stop: refusal)');
+      const bad = stories.filter((s) => o.unsupported?.(s.headline));
+      return {
+        written: stories.filter((s) => !bad.includes(s)).map((s) => ({ key: s.key, chosen: 'editor' as const, angle: angles[s.key] ?? '', headline: `Story ${s.headline.slice(0, 40)}`, body: 'It happened this week. The company says more is coming.', highlight: '', names: [] })),
+        dropped: bad.map((s) => ({ key: s.key, reason: 'a claim is still unsupported after the rewrite' })),
+        over: [],
+        costUsd: 0,
+        log: [],
+      };
+    },
+    findPhoto: async (s, x): Promise<PhotoResult> => {
+      calls.photos.push(s.url);
+      calls.photoExtras.push({ url: s.url, extra: x.extra.map((c) => c.src), duplicates: s.duplicateUrls });
+      const n = (attempts.get(s.url) ?? 0) + 1;
+      attempts.set(s.url, n);
+      const extra = x.extra.map((c) => c.src);
+      const wanted = o.photo ? o.photo({ headline: s.headline, url: s.url }, extra, n) : `https://p/${encodeURIComponent(s.headline)}.jpg`;
+      const src = wanted && !(await x.usedReason(wanted)) ? wanted : null;
+      if (!src) return { id: s.id, tier: 'none', pick: null, brief: null, costUsd: 0, log: ['no candidate cleared'] };
+      const source = extra.includes(src) ? 'extra' as const : 'search' as const;
+      return { id: s.id, tier: 'good', pick: { src, source, credit: source === 'extra' ? 'Reuters' : 'C', tier: 'good', clarity: 8, jpeg: Buffer.alloc(0), width: 1200, height: 800 }, brief: null, costUsd: 0, log: [`grade good ${src}`] };
+    },
+  };
+  return { news, calls };
+}
 
 async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
   const query = over.query ?? (await openHubTestDb()).query;
@@ -104,12 +124,11 @@ async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
     }
     await seedCarouselRun(query, '2026-10-12T07:00:00Z', [{ id: 'https://big.com/haiku', headline: 'Anthropic Releases Claude Haiku 5.5', source: 'The Verge' }]);
   }
-  const uploads: string[] = [];
   return {
     query,
-    jev: jev((h) => (h.includes('Haiku') ? 1 : 0)),
-    create: writerStub().create,
-    photos: photos(),
+    jev,
+    create: createStub().create,
+    news: newsStub().news,
     fetchFeeds: async () => [],
     fetchBody: async () => null,
     readPage: async (url) => ({ ok: false, url, error: 'stub: no page' }),
@@ -127,7 +146,7 @@ async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
       }
       return { ok: true, violations: [], problems: [], slideText: [] };
     },
-    upload: async (p) => { uploads.push(p); },
+    upload: async () => {},
     now: NOW,
     trigger: 'manual',
     capUsd: 1,
@@ -136,35 +155,58 @@ async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
   };
 }
 
-test('a run picks the major headline first, fills to 6, and saves a review post', async () => {
+type Rec = {
+  window: { after: string; through: string };
+  pool: { reels: number; carousel: number; feed: number; judged: number };
+  picks: Array<{ key: string; lane: string; headline: string; origin: string; major: number | null; net: number | null; rerank: unknown }>;
+  queues: { major: unknown[]; builder: unknown[]; rundown: Array<{ key: string; headline: string; major: number | null; net: number | null }> };
+  drops: Array<{ key: string; lane: string; headline: string; reason: string; detail?: string }>;
+  rerank: { shortlisted: number; reranked: number; kept: Array<{ key: string }>; duplicates: Array<{ key: string; into: string }>; error?: string };
+  writer: { usd: number; over: string[] };
+  vision: { checked: number; rejected: number; usd: number };
+  writeFailure?: string;
+  feedError?: string;
+};
+const recordOf = async (d: LfdRunDeps, runId: string) => (await d.query<{ record: Rec }>(`SELECT record FROM lfd.runs WHERE id = $1`, [runId])).rows[0]!.record;
+type Saved = { key: string; url: string; headline: string; setup: string; lane: string; photo: { src: string; credit: string }; photoAsk: { query: string }; photoSource: string; photoTrace: string[]; meme?: { templateId: string; object: string }; video?: { object: string; band: string; seconds: number } };
+const storiesOf = async (d: LfdRunDeps) => (await d.query<{ stories: Saved[] }>(`SELECT stories FROM lfd.posts`)).rows[0]!.stories;
+
+test('a run walks the rerank order, fills to 6, and saves a review post', async () => {
   const d = await deps();
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ status: string; stories: Array<{ headline: string; lane: string }>; slide_objects: string[]; short: boolean; idea_ids: string[] }>(`SELECT status, stories, slide_objects, short, idea_ids FROM lfd.posts`);
+  const { rows } = await d.query<{ status: string; stories: Saved[]; slide_objects: string[]; short: boolean; idea_ids: string[] }>(`SELECT status, stories, slide_objects, short, idea_ids FROM lfd.posts`);
   assert.equal(rows[0]!.status, 'review');
-  assert.equal(rows[0]!.stories.length, 6);
-  assert.equal(rows[0]!.stories[0]!.lane, 'major');
-  assert.match(rows[0]!.stories[0]!.headline, /Haiku/);
+  assert.deepEqual(rows[0]!.stories.map((s) => s.url), ['https://big.com/haiku', ...[0, 1, 2, 3, 4].map((i) => `https://n.com/${i}`)]);
+  assert.ok(rows[0]!.stories.every((s) => s.setup === ''), 'no setups (WC10)');
   assert.equal(rows[0]!.slide_objects.length, 8);
   assert.ok(rows[0]!.slide_objects.every((p) => p.startsWith('lfd/lfd-2026-10-13/')));
   assert.ok(rows[0]!.idea_ids.includes('https://big.com/haiku'));
   assert.equal(rows[0]!.short, false);
 });
 
-test('a story that fails the fact check twice is replaced by the next in line', async () => {
-  const w = writerStub();
-  const d = await deps({
-    create: w.create,
-    jev: async (req, meta) => {
-      if (meta.version.startsWith('md-grounding') && meta.subjectId.endsWith('n.com/0')) return { answers: { supported: { noul: 0.1 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' };
-      return jev(() => 0)(req, meta);
-    },
-  });
+test('the rerank editor angles reach the writer under short keys; one writer call for the round', async () => {
+  const s = newsStub();
+  const d = await deps({ news: s.news });
   const res = await runLastFewDays(d);
-  assert.ok(res.ok);
-  const { rows } = await d.query<{ stories: Array<{ key: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.key.endsWith('n.com/0')));
-  assert.equal(rows[0]!.stories.length, 6);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(s.calls.writes, 1);
+  assert.deepEqual(Object.keys(s.calls.angles[0]!), ['s1', 's2', 's3', 's4', 's5', 's6']);
+  assert.equal(s.calls.angles[0]!.s1, 'angle: Anthropic Releases Claude Haiku 5.5');
+});
+
+test('a story the writer drops for an unsupported claim is replaced from further down the rerank order', async () => {
+  const s = newsStub({ unsupported: (h) => h.includes('Niche Thing 0') });
+  const d = await deps({ news: s.news });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const urls = (await storiesOf(d)).map((x) => x.url);
+  assert.ok(!urls.includes('https://n.com/0'));
+  assert.equal(urls.length, 6);
+  assert.equal(urls.at(-1), 'https://n.com/5', 'the next story down fills the slot');
+  assert.equal(s.calls.writes, 2, 'one writer call per round');
+  const rec = await recordOf(d, res.runId);
+  assert.ok(rec.drops.some((x) => x.reason === 'not-grounded' && x.key.endsWith('n.com/0')));
 });
 
 test('a thin body is fetched; still thin means the story is dropped and replaced', async () => {
@@ -172,8 +214,10 @@ test('a thin body is fetched; still thin means the story is dropped and replaced
   await d.query(`UPDATE reels.sources SET body = 'teaser' WHERE canonical_url = 'https://n.com/1'`);
   const res = await runLastFewDays({ ...d, fetchBody: async () => 'still short' });
   assert.ok(res.ok);
-  const { rows } = await d.query<{ stories: Array<{ key: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.key.endsWith('n.com/1')));
+  const urls = (await storiesOf(d)).map((x) => x.url);
+  assert.ok(!urls.includes('https://n.com/1'));
+  assert.equal(urls.length, 6);
+  assert.ok((await recordOf(d, res.runId)).drops.some((x) => x.reason === 'thin-text' && x.key.endsWith('n.com/1')));
 });
 
 test('ideas used by an earlier post are not used again', async () => {
@@ -183,8 +227,7 @@ test('ideas used by an earlier post are not used again', async () => {
   const second = await runLastFewDays({ ...d, now: new Date('2026-10-16T07:00:00Z') });
   const { rows } = await d.query<{ idea_ids: string[] }>(`SELECT idea_ids FROM lfd.posts ORDER BY ny_date`);
   assert.ok(second.ok, JSON.stringify(second));
-  const overlap = rows[1]!.idea_ids.filter((id) => rows[0]!.idea_ids.includes(id));
-  assert.deepEqual(overlap, []);
+  assert.deepEqual(rows[1]!.idea_ids.filter((id) => rows[0]!.idea_ids.includes(id)), []);
 });
 
 test('fewer than 5 stories still posts, marked short', async () => {
@@ -193,44 +236,12 @@ test('fewer than 5 stories still posts, marked short', async () => {
     const idea = await seedReelsIdea(query, { headline: `Only ${i}`, url: `https://o.com/${i}` });
     await seedScore(query, idea, { nyDate: '2026-10-12', origin: 'timely', net: 0.5 });
   }
-  const d = await deps({ query });
-  const res = await runLastFewDays(d);
+  const res = await runLastFewDays(await deps({ query }));
   assert.ok(res.ok);
   assert.equal(res.short, true);
 });
 
-const failFirst = (substr: string): JevAsk => async (req, meta) => {
-  if (meta.version.startsWith('md-grounding') && meta.subjectId.includes(substr)) return { answers: { supported: { noul: 0.1 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' };
-  return jev((h) => (h.includes('Haiku') ? 1 : 0))(req, meta);
-};
-
-test('a post carries at most 2 setups across rounds, on the two earliest slides', async () => {
-  // n.com/4 is not among the first two picks (so it holds no setup) and fails the fact check twice,
-  // so round 2 writes a replacement that also comes back with a setup: 3 raw setups, 2 allowed.
-  const w = writerStub({ setup: 'Setup:' });
-  const d = await deps({ create: w.create, jev: failFirst('n.com/4') });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  assert.ok(w.calls() >= 3, `expected a replacement round, got ${w.calls()} writer calls`);
-  const { rows } = await d.query<{ stories: Array<{ key: string; setup: string }> }>(`SELECT stories FROM lfd.posts`);
-  const stories = rows[0]!.stories;
-  assert.ok(!stories.some((s) => s.key.endsWith('n.com/4')));
-  assert.deepEqual(stories.map((s) => s.setup !== ''), stories.map((_, i) => i < 2));
-  assert.equal(stories.at(-1)!.setup, '');
-});
-
-test('a write failure in a replacement round still posts what is ready', async () => {
-  const w = writerStub({ failAfter: 1 });
-  const d = await deps({ create: w.create, jev: failFirst('n.com/0') });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ record: { writeFailure?: string } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId]);
-  assert.ok(rows[0]!.record.writeFailure);
-  const posts = await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts`);
-  assert.equal(posts.rows[0]!.n, 1);
-});
-
-test('the safety net counts only eligible stories', async () => {
+test('the safety net widens the window when it holds fewer than 5 stories', async () => {
   const { query } = await openHubTestDb();
   for (let i = 0; i < 3; i++) {
     const idea = await seedReelsIdea(query, { headline: `In Window ${i}`, url: `https://w.com/${i}` });
@@ -240,37 +251,11 @@ test('the safety net counts only eligible stories', async () => {
     const idea = await seedReelsIdea(query, { headline: `Earlier ${i}`, url: `https://e.com/${i}` });
     await seedScore(query, idea, { nyDate: `2026-10-0${9 - i}`, origin: 'timely', net: 0.5 });
   }
-  await seedCarouselRun(query, '2026-10-12T07:00:00Z', [
-    { id: 'https://c.com/1', headline: 'Minor Carousel One', source: 'The Verge' },
-    { id: 'https://c.com/2', headline: 'Minor Carousel Two', source: 'The Verge' },
-  ]);
   const d = await deps({ query });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ record: { safetyNet?: boolean } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId]);
-  assert.equal(rows[0]!.record.safetyNet, true);
-  assert.ok(res.stories >= 5, String(res.stories));
-});
-
-test('the safety net re-gather never judges the same story twice', async () => {
-  const { query } = await openHubTestDb();
-  for (let i = 0; i < 3; i++) {
-    const idea = await seedReelsIdea(query, { headline: `In Window ${i}`, url: `https://w.com/${i}` });
-    await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.5 });
-  }
-  for (let i = 0; i < 3; i++) {
-    const idea = await seedReelsIdea(query, { headline: `Earlier ${i}`, url: `https://e.com/${i}` });
-    await seedScore(query, idea, { nyDate: `2026-10-0${9 - i}`, origin: 'timely', net: 0.5 });
-  }
-  const judged: string[] = [];
-  const base = jev(() => 0);
-  const d = await deps({ query, jev: async (req, meta) => { if (meta.version.startsWith('major-news')) judged.push(meta.subjectId); return base(req, meta); } });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ record: { safetyNet?: boolean } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId]);
-  assert.equal(rows[0]!.record.safetyNet, true);
-  assert.equal(judged.length, new Set(judged).size, `repeat judgments: ${judged.join(', ')}`);
-  assert.ok(judged.some((k) => k.includes('e.com')), 'the widened window judges its new stories');
+  assert.equal(((await d.query<{ record: { safetyNet?: boolean } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId])).rows[0]!.record).safetyNet, true);
+  assert.equal(res.stories, 6);
 });
 
 test('a failure while recording a failed run does not throw', async () => {
@@ -287,21 +272,9 @@ test('a failure while recording a failed run does not throw', async () => {
   assert.match((res as { error: string }).error, /db down/);
 });
 
-type Rec = {
-  window: { after: string; through: string };
-  pool: { reels: number; carousel: number; feed: number; judged: number };
-  jevCalls: number;
-  picks: Array<{ key: string; lane: string; headline: string; origin: string; major: number | null; net: number | null }>;
-  queues: { major: Array<{ key: string; headline: string; major: number | null; net: number | null }>; rundown: Array<{ key: string; headline: string; major: number | null; net: number | null }> };
-  drops: Array<{ key: string; lane: string; headline: string; reason: string }>;
-  claudeCache: { readTokens: number; creationTokens: number };
-  writeFailure?: string;
-  feedError?: string;
-};
-const recordOf = async (d: LfdRunDeps, runId: string) => (await d.query<{ record: Rec }>(`SELECT record FROM lfd.runs WHERE id = $1`, [runId])).rows[0]!.record;
-
-test('a failed batch write falls back to one call per story and still saves 6', async () => {
-  const d = await deps({ create: writerStub({ fail: (urls) => urls.length > 1 }).create });
+test('a writer call that fails falls back to one call per story and still saves 6', async () => {
+  const s = newsStub({ writeFail: (hs) => hs.length > 1 });
+  const d = await deps({ news: s.news });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
   assert.equal(res.stories, 6);
@@ -309,21 +282,44 @@ test('a failed batch write falls back to one call per story and still saves 6', 
 });
 
 test('a story whose own write keeps failing is replaced; the post is saved', async () => {
-  const d = await deps({ create: writerStub({ fail: (urls) => urls.includes('https://n.com/2') }).create });
+  const d = await deps({ news: newsStub({ writeFail: (hs) => hs.some((h) => h.includes('Niche Thing 2')) }).news });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
   assert.equal(res.stories, 6);
-  const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/2'));
-  const rec = await recordOf(d, res.runId);
-  assert.ok(rec.drops.some((x) => x.reason === 'write-failed' && x.key.endsWith('n.com/2')));
+  assert.ok(!(await storiesOf(d)).some((x) => x.url === 'https://n.com/2'));
+  assert.ok((await recordOf(d, res.runId)).drops.some((x) => x.reason === 'write-failed' && x.key.endsWith('n.com/2')));
 });
 
 test('nothing written at all in the first round fails the run', async () => {
-  const d = await deps({ create: writerStub({ fail: () => true }).create });
+  const d = await deps({ news: newsStub({ writeFail: () => true }).news });
   const res = await runLastFewDays(d);
   assert.equal(res.ok, false);
   assert.match((res as { error: string }).error, /writing failed/);
+});
+
+test('a failed rerank keeps the shortlist order and the run record says so', async () => {
+  const d = await deps({ news: newsStub({ rerank: async () => { throw new Error('opus down'); } }).news });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal((await storiesOf(d))[0]!.url, 'https://big.com/haiku');
+  assert.match((await recordOf(d, res.runId)).rerank.error ?? '', /opus down/);
+});
+
+test('a reranked duplicate never posts; its id rides on the story it duplicates and its page feeds the photo finder', async () => {
+  const s = newsStub({
+    rerank: async (items) => ({
+      graded: items.map((x) => ({ ...x, grade: { cool: 5, value: 5, duplicate_of: x.id.endsWith('n.com/1') ? items.find((y) => y.id.endsWith('n.com/0'))!.id : null, top_tier: false, crowds: [], angle: '' } })),
+      costUsd: 0,
+    }),
+  });
+  const d = await deps({ news: s.news });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Saved[]; idea_ids: string[] }>(`SELECT stories, idea_ids FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((x) => x.url === 'https://n.com/1'));
+  assert.ok(rows[0]!.idea_ids.some((id) => id.includes('n.com/1')), 'the duplicate is spent with its story');
+  assert.deepEqual(s.calls.photoExtras.find((x) => x.url === 'https://n.com/0')?.duplicates, ['https://n.com/1']);
+  assert.equal((await recordOf(d, res.runId)).rerank.duplicates.length, 1);
 });
 
 test('the run record carries what the Ideas view needs', async () => {
@@ -333,15 +329,13 @@ test('the run record carries what the Ideas view needs', async () => {
   const rec = await recordOf(d, res.runId);
   assert.ok(rec.window.after && rec.window.through);
   assert.deepEqual(Object.keys(rec.pool).sort(), ['carousel', 'feed', 'judged', 'reels']);
-  assert.ok(rec.jevCalls > 0);
   assert.equal(rec.picks.length, 6);
-  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'lead', 'major', 'net', 'origin']);
-  assert.equal(rec.picks[0]!.lane, 'major');
-  assert.ok(rec.queues.major.length >= 1 && rec.queues.major.length <= 10);
+  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'major', 'net', 'origin', 'rerank']);
   assert.ok(rec.queues.rundown.length >= 1 && rec.queues.rundown.length <= 10);
   assert.deepEqual(Object.keys(rec.queues.rundown[0]!).sort(), ['headline', 'key', 'major', 'net']);
   assert.deepEqual(rec.drops, []);
-  assert.ok(rec.claudeCache.readTokens > 0 && rec.claudeCache.creationTokens > 0);
+  assert.equal(rec.rerank.shortlisted, 9);
+  assert.equal(rec.rerank.kept.length, 9);
   assert.equal(rec.feedError, undefined);
 });
 
@@ -352,31 +346,20 @@ test('a feed fetch failure is recorded, not swallowed', async () => {
   assert.match((await recordOf(d, res.runId)).feedError ?? '', /feeds down/);
 });
 
-test('stories still pending after the last round are recorded as unfinished; no survivors fails the run', async () => {
-  const { query } = await openHubTestDb();
-  for (let i = 0; i < 30; i++) {
-    const idea = await seedReelsIdea(query, { headline: `Story Number ${i}`, url: `https://m.com/${i}` });
-    await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.9 - i / 100 });
-  }
-  const d = await deps({ query, jev: failFirst('m.com/') });
+test('no survivors fails the run and saves no post', async () => {
+  const d = await deps({ news: newsStub({ unsupported: () => true }).news });
   const res = await runLastFewDays(d);
   assert.equal(res.ok, false);
   assert.match((res as { error: string }).error, /no stories survived/);
-  const rec = await recordOf(d, res.runId);
-  const unfinished = rec.drops.filter((x) => x.reason === 'unfinished');
-  assert.ok(unfinished.length > 0);
-  assert.ok(unfinished.every((x) => x.headline.startsWith('Story Number')));
-  assert.ok(rec.drops.some((x) => x.reason === 'not-grounded' && x.headline));
+  assert.ok((await recordOf(d, res.runId)).drops.some((x) => x.reason === 'not-grounded'));
   assert.equal((await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts`)).rows[0]!.n, 0);
 });
 
 test('an image that still fails at the final render drops its story; a post never ships a broken image', async () => {
   const base = await deps();
   let checks = 0;
-  const uploads: string[] = [];
   const d: LfdRunDeps = {
     ...base,
-    upload: async (p, b, t) => { uploads.push(p); return base.upload(p, b, t); },
     fitCheck: async (post, opts) => {
       checks += 1;
       const r = await base.fitCheck(post, opts);
@@ -388,14 +371,14 @@ test('an image that still fails at the final render drops its story; a post neve
   assert.equal(checks, 3, 'the final render is redrawn without the broken story');
   const rec = await recordOf(d, res.runId);
   const broken = rec.drops.filter((x) => x.reason === 'image-failed');
-  assert.equal(broken.length, 2);
-  assert.ok(broken.some((x) => /final render/.test((x as { detail?: string }).detail ?? '')));
-  const { rows } = await d.query<{ stories: Array<{ key: string }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  assert.equal(broken.length, 2, 'the first story found no other photo; its replacement failed at the final render');
+  assert.ok(broken.some((x) => /final render/.test(x.detail ?? '')));
+  const { rows } = await d.query<{ stories: Saved[]; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
   assert.ok(!rows[0]!.stories.some((s) => broken.some((b) => b.key === s.key)));
   assert.ok(!rows[0]!.render_problems.some((p) => /image failed to load/.test(p)));
 });
 
-test('a story slide whose image failed to load is replaced; every render problem is kept', async () => {
+test('a story slide whose image failed to load gets another photo; every render problem is kept', async () => {
   const base = await deps();
   let checks = 0;
   const d: LfdRunDeps = {
@@ -410,159 +393,43 @@ test('a story slide whose image failed to load is replaced; every render problem
         violations: [{ slide: 4, element: 'h2.lfd-headline', text: 'Wide', over: { left: 0, top: 0, right: 12, bottom: 0 } }],
       };
     },
+    news: newsStub({ photo: (s, _e, n) => `https://p/${encodeURIComponent(s.headline)}-${n}.jpg` }).news,
   };
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(checks, 2, 'one re-render after the replacement');
+  assert.equal(checks, 2, 'one re-render after the new photo');
   assert.equal(res.stories, 6);
-  const rec = await recordOf(d, res.runId);
-  const broken = rec.drops.filter((x) => x.reason === 'image-failed');
-  assert.equal(broken.length, 1);
-  const { rows } = await d.query<{ stories: Array<{ key: string }>; fit_problems: string[]; render_problems: string[] }>(`SELECT stories, fit_problems, render_problems FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.key === broken[0]!.key));
+  const { rows } = await d.query<{ stories: Saved[]; fit_problems: string[]; render_problems: string[] }>(`SELECT stories, fit_problems, render_problems FROM lfd.posts`);
+  const again = rows[0]!.stories.find((s) => s.url === 'https://n.com/0')!;
+  assert.match(again.photo.src, /-2\.jpg$/, 'slide 3 (n.com/0) took a second photo');
+  assert.match(again.photoTrace[0]!, /photo failed to load/);
   assert.deepEqual(rows[0]!.fit_problems, ['slide 2 text fit: p.lfd-body "x" (overflow, min 31px)']);
   assert.ok(!rows[0]!.render_problems.some((p) => /image failed to load/.test(p)), rows[0]!.render_problems.join('\n'));
   assert.ok(rows[0]!.render_problems.includes('Roboto font did not load'));
   assert.ok(rows[0]!.render_problems.some((p) => /^slide 4 bounds: h2\.lfd-headline/.test(p)));
 });
 
-test('a saved story keeps the writer photo ask apart from the photo, with where the photo came from and its trail', async () => {
-  const d = await deps({
-    photos: {
-      usd: 0,
-      find: async () => null,
-      findSet: async (reqs, trace) => {
-        trace?.push(...reqs.map((r) => [`company: "${r.query}"`, 'article photo → winner']));
-        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
-      },
-    },
-  });
+test('a saved story keeps its photo, where it came from and its trail; no writer photo ask', async () => {
+  const d = await deps();
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  type Saved = { headline: string; photoAsk: { kind: string; query: string }; photo: { src: string }; photoSource: string; photoTrace: string[] };
-  const { rows } = await d.query<{ stories: Saved[] }>(`SELECT stories FROM lfd.posts`);
-  for (const s of rows[0]!.stories) {
-    assert.equal(s.photoAsk.kind, 'company');
-    assert.ok(s.photoAsk.query, 'the ask keeps its query');
-    assert.ok(s.photo.src.startsWith('https://p/'), 'photo is the result, not the ask');
+  for (const s of await storiesOf(d)) {
+    assert.equal(s.photoAsk.query, '');
+    assert.ok(s.photo.src.startsWith('https://p/'));
     assert.equal(s.photoSource, 'finder');
-    assert.equal(s.photoTrace[0], `company: "${s.photoAsk.query}"`);
+    assert.ok(s.photoTrace.some((l) => l.startsWith('photo: grade good')));
   }
 });
 
-test('a story whose only photo is the icon-scene fallback is replaced as no-photo', async () => {
-  const d = await deps({
-    photos: {
-      usd: 0,
-      find: async () => null,
-      findSet: async (reqs, trace) => {
-        trace?.push(...reqs.map((r) => (r.sourceUrls[0] === 'https://n.com/0' ? ['icon scene (newspaper) → "stack of newspapers"'] : ['article photo → winner'])));
-        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
-      },
-    },
-  });
+test('a story with no usable media is skipped and its slot filled from further down', async () => {
+  const s = newsStub({ photo: (x) => (x.url === 'https://n.com/0' ? null : `https://p/${encodeURIComponent(x.headline)}.jpg`) });
+  const d = await deps({ news: s.news });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(res.stories, 6);
-  const rec = await recordOf(d, res.runId);
-  const drop = rec.drops.find((x) => x.reason === 'no-photo');
-  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
-  const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
-});
-
-test('a story whose article has a usable lead image uses it; the finder only sees the others', async () => {
-  const asked: string[] = [];
-  const d = await deps({
-    readPage: async (url) => (url === 'https://n.com/2'
-      ? { ok: true, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [{ src: 'https://n.com/2/lead.jpg', caption: null, credit: 'Reuters', alt: null, from: 'figure', width: 1400 }] }
-      : { ok: false, url, error: 'stub' }),
-    photos: {
-      usd: 0,
-      find: async () => null,
-      findSet: async (reqs) => {
-        asked.push(...reqs.map((r) => r.sourceUrls[0]!));
-        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
-      },
-    },
-  });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  assert.ok(!asked.includes('https://n.com/2'), 'the finder is not asked for the story with a lead image');
-  const { rows } = await d.query<{ stories: Array<{ url: string; photo: { src: string; credit: string }; photoSource: string; photoTrace: string[] }> }>(`SELECT stories FROM lfd.posts`);
-  const lead = rows[0]!.stories.find((s) => s.url === 'https://n.com/2')!;
-  assert.deepEqual(lead.photo, { src: 'https://n.com/2/lead.jpg', credit: 'Reuters', kind: 'scene' });
-  assert.equal(lead.photoSource, 'lead');
-  assert.match(lead.photoTrace[0]!, /^lead image: article figure/);
-  assert.ok(rows[0]!.stories.filter((s) => s.url !== 'https://n.com/2').every((s) => s.photoSource === 'finder'));
-});
-
-test('the same lead image is never used twice in one post', async () => {
-  const shared = { src: 'https://cdn.com/same.jpg', caption: null, credit: 'AP', alt: null, from: 'figure' as const, width: 1400 };
-  const reads: string[] = [];
-  const d = await deps({ readPage: async (url) => { reads.push(url); return { ok: true, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [shared] }; } });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(reads.length, new Set(reads).size, 'each article page is read once per run');
-  const { rows } = await d.query<{ stories: Array<{ photo: { src: string }; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.equal(rows[0]!.stories.filter((s) => s.photo.src === shared.src).length, 1);
-  assert.equal(rows[0]!.stories.filter((s) => s.photoSource === 'lead').length, 1);
-});
-
-type VisionRec = { vision: { checked: number; rejected: number; usd: number } };
-
-test('a story slide the vision check rejects is replaced and re-rendered; the drop says why', async () => {
-  const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') ? 'a stack of newspapers' : null) });
-  const base = await deps({ create: w.create });
-  const before = ['https://big.com/haiku', ...[0, 1, 2, 3, 4].map((i) => `https://n.com/${i}`)];
-  let renders = 0;
-  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
-  assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(renders, 2, 'one re-render after the replacement');
-  assert.equal(res.stories, 6);
-  const rec = await recordOf(base, res.runId) as unknown as Rec & VisionRec;
-  const drop = rec.drops.find((x) => x.reason === 'vision-rejected') as { key: string; detail?: string } | undefined;
-  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
-  assert.equal(drop.detail, 'a stack of newspapers');
-  const { rows } = await base.query<{ stories: Array<{ url: string; photo: { src: string } }>; render_problems: string[]; render: { slides: Array<{ lfdCover?: { photos: Array<{ url: string }> } }> } }>(`SELECT stories, render_problems, render FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
-  assert.deepEqual(rows[0]!.render_problems, []);
-  // The cover mosaic is rebuilt from the final stories: it shows every story photo, the replacement's included.
-  const cover = rows[0]!.render.slides[0]!.lfdCover!.photos.map((p) => p.url);
-  assert.deepEqual(cover, rows[0]!.stories.map((s) => s.photo.src));
-  assert.ok(cover.includes(rows[0]!.stories.find((s) => !before.includes(s.url))!.photo.src), 'the replacement photo is on the cover');
-  assert.equal(rec.vision.rejected, 1);
-  // 6 checked on the first render; the second render checks only the replacement (unchanged slides keep their verdict).
-  assert.equal(rec.vision.checked, 7);
-  assert.equal(w.vision().length, 7);
-  assert.ok(rec.vision.usd > 0);
-});
-
-test('a vision failure on the re-render is recorded in render_problems, not replaced again', async () => {
-  const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') || s.headline.includes('Niche Thing 5') ? 'generic office scene' : null) });
-  const base = await deps({ create: w.create });
-  let renders = 0;
-  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
-  assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(renders, 2);
-  const rec = await recordOf(base, res.runId) as unknown as Rec & VisionRec;
-  assert.equal(rec.drops.filter((x) => x.reason === 'vision-rejected').length, 1);
-  const { rows } = await base.query<{ stories: Array<{ url: string; headline: string }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
-  const kept = rows[0]!.stories.find((s) => s.url === 'https://n.com/5');
-  assert.ok(kept, 'the replacement stays in the post');
-  assert.deepEqual(rows[0]!.render_problems, [`vision: ${kept.headline}: generic office scene`]);
-  assert.equal(rec.vision.rejected, 2);
-});
-
-test('every run records its vision check', async () => {
-  const w = writerStub();
-  const d = await deps({ create: w.create });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  const rec = await recordOf(d, res.runId) as unknown as Rec & VisionRec;
-  assert.deepEqual({ checked: rec.vision.checked, rejected: rec.vision.rejected }, { checked: 6, rejected: 0 });
-  assert.ok(rec.vision.usd > 0);
-  assert.deepEqual(w.vision().map((s) => Object.keys(s).sort()), Array.from({ length: 6 }, () => ['body', 'headline', 'names', 'outlet']));
+  const urls = (await storiesOf(d)).map((x) => x.url);
+  assert.deepEqual(urls, ['https://big.com/haiku', ...[1, 2, 3, 4, 5].map((i) => `https://n.com/${i}`)]);
+  assert.equal(s.calls.writes, 1, 'a skipped story is never written');
+  assert.ok((await recordOf(d, res.runId)).drops.some((x) => x.reason === 'no-photo' && x.key.endsWith('n.com/0')));
 });
 
 /** n.com/2's article has a credited lead image; everything else has no page. */
@@ -570,50 +437,78 @@ const leadFor2 = async (url: string) => (url === 'https://n.com/2'
   ? { ok: true as const, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [{ src: 'https://n.com/2/lead.jpg', caption: null, credit: 'Reuters', alt: null, from: 'figure' as const, width: 1400 }] }
   : { ok: false as const, url, error: 'stub' });
 
-test('a lead image the vision check rejects falls back to the finder for the same story', async () => {
-  const asked: string[][] = [];
-  const w = writerStub({ vision: (_s, photo) => (photo?.endsWith('/lead.jpg') ? 'a headline card from the outlet' : null) });
-  const base = await deps({
-    create: w.create,
-    readPage: leadFor2,
-    photos: {
-      usd: 0,
-      find: async () => null,
-      findSet: async (reqs) => {
-        asked.push(reqs.map((r) => r.sourceUrls[0]!));
-        for (const r of reqs) assert.ok(r.exclude.has('https://n.com/2/lead.jpg') || r.sourceUrls[0] !== 'https://n.com/2', 'the rejected lead is excluded');
-        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
-      },
-    },
-  });
+test('the article lead image goes to the photo finder as an extra candidate; a picked lead is saved as the lead', async () => {
+  const s = newsStub({ photo: (x, extra) => extra[0] ?? `https://p/${encodeURIComponent(x.headline)}.jpg` });
+  const d = await deps({ readPage: leadFor2, news: s.news });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.deepEqual(s.calls.photoExtras.find((x) => x.url === 'https://n.com/2')?.extra, ['https://n.com/2/lead.jpg']);
+  const lead = (await storiesOf(d)).find((x) => x.url === 'https://n.com/2')!;
+  assert.deepEqual(lead.photo, { src: 'https://n.com/2/lead.jpg', credit: 'Reuters', kind: 'scene' });
+  assert.equal(lead.photoSource, 'lead');
+  assert.match(lead.photoTrace[0]!, /^lead image: article figure/);
+});
+
+test('the same photo is never used twice in one post', async () => {
+  const reads: string[] = [];
+  const s = newsStub({ photo: (_x, _e, n) => (n === 1 ? 'https://cdn.com/same.jpg' : null) });
+  const d = await deps({ news: s.news, readPage: async (url) => { reads.push(url); return { ok: false, url, error: 'stub' }; } });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(reads.length, new Set(reads).size, 'each article page is read once per run');
+  const stories = await storiesOf(d);
+  assert.equal(stories.filter((x) => x.photo.src === 'https://cdn.com/same.jpg').length, 1);
+});
+
+test('a slide the vision check rejects gets one more photo search; with none it is replaced, the drop says why', async () => {
+  const w = createStub({ vision: (s) => (s.headline.includes('Niche Thing 0') ? 'a stack of newspapers' : null) });
+  const base = await deps({ create: w.create, news: newsStub({ photo: (x, _e, n) => (x.url === 'https://n.com/0' && n > 1 ? null : `https://p/${encodeURIComponent(x.headline)}.jpg`) }).news });
+  let renders = 0;
+  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(renders, 2, 'one re-render after the replacement');
+  assert.equal(res.stories, 6);
+  const rec = await recordOf(base, res.runId);
+  const drop = rec.drops.find((x) => x.reason === 'vision-rejected');
+  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
+  assert.match(drop.detail ?? '', /a stack of newspapers; no other photo was found/);
+  const { rows } = await base.query<{ stories: Saved[]; render_problems: string[]; render: { slides: Array<{ lfdCover?: { photos: Array<{ url: string }> } }> } }>(`SELECT stories, render_problems, render FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
+  assert.ok(rows[0]!.stories.some((s) => s.url === 'https://n.com/5'), 'the next story down took the slot');
+  assert.deepEqual(rows[0]!.render_problems, []);
+  // The cover mosaic is rebuilt from the final stories.
+  assert.deepEqual(rows[0]!.render.slides[0]!.lfdCover!.photos.map((p) => p.url), rows[0]!.stories.map((s) => s.photo.src));
+  assert.equal(rec.vision.rejected, 1);
+  // 6 checked on the first render; the second render checks only the replacement (unchanged slides keep their verdict).
+  assert.equal(rec.vision.checked, 7);
+  assert.equal(w.vision().length, 7);
+});
+
+test('a vision failure on the re-render is recorded in render_problems, not replaced again', async () => {
+  const w = createStub({ vision: (s) => (s.headline.includes('Niche Thing 0') || s.headline.includes('Niche Thing 5') ? 'generic office scene' : null) });
+  const base = await deps({ create: w.create, news: newsStub({ photo: (x, _e, n) => (x.url === 'https://n.com/0' && n > 1 ? null : `https://p/${encodeURIComponent(x.headline)}.jpg`) }).news });
   let renders = 0;
   const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
   assert.ok(res.ok, JSON.stringify(res));
   assert.equal(renders, 2);
-  assert.deepEqual(asked.at(-1), ['https://n.com/2'], 'the extra round asks the finder for that story only');
   const rec = await recordOf(base, res.runId);
-  assert.deepEqual(rec.drops, []);
-  const { rows } = await base.query<{ stories: Array<{ url: string; photo: { src: string }; photoSource: string; photoTrace: string[] }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
-  const story = rows[0]!.stories.find((s) => s.url === 'https://n.com/2');
-  assert.ok(story, 'the story stays in the post');
-  assert.equal(story.photoSource, 'finder');
-  assert.ok(story.photo.src.startsWith('https://p/'));
-  assert.match(story.photoTrace[0]!, /lead image rejected by vision: a headline card from the outlet/);
-  assert.deepEqual(rows[0]!.render_problems, []);
+  assert.equal(rec.drops.filter((x) => x.reason === 'vision-rejected').length, 1);
+  const { rows } = await base.query<{ stories: Saved[]; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  const kept = rows[0]!.stories.find((s) => s.url === 'https://n.com/5');
+  assert.ok(kept, 'the replacement stays in the post');
+  assert.deepEqual(rows[0]!.render_problems, [`vision: ${kept.headline}: generic office scene`]);
+  assert.equal(rec.vision.rejected, 2);
 });
 
-test('a rejected lead image with no finder photo drops the story as vision-rejected and replaces it', async () => {
-  const w = writerStub({ vision: (_s, photo) => (photo?.endsWith('/lead.jpg') ? 'the outlet logo' : null) });
-  const base = await deps({ create: w.create, readPage: leadFor2, photos: photos((q) => q.includes('Niche Thing 2')) });
-  const res = await runLastFewDays(base);
+test('every run records its vision check', async () => {
+  const w = createStub();
+  const d = await deps({ create: w.create });
+  const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(res.stories, 6);
-  const rec = await recordOf(base, res.runId);
-  const drop = rec.drops.find((x) => x.reason === 'vision-rejected') as { key: string; detail?: string } | undefined;
-  assert.ok(drop && drop.key.endsWith('n.com/2'), JSON.stringify(rec.drops));
-  assert.match(drop.detail ?? '', /the outlet logo/);
-  const { rows } = await base.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/2'));
+  const rec = await recordOf(d, res.runId);
+  assert.deepEqual({ checked: rec.vision.checked, rejected: rec.vision.rejected }, { checked: 6, rejected: 0 });
+  assert.ok(rec.vision.usd > 0);
+  assert.deepEqual(w.vision().map((s) => Object.keys(s).sort()), Array.from({ length: 6 }, () => ['body', 'headline', 'names', 'outlet']));
 });
 
 test('a run the worker claimed is adopted, never inserted twice', async () => {
@@ -628,47 +523,8 @@ test('a run the worker claimed is adopted, never inserted twice', async () => {
   assert.deepEqual([runs.n, runs.status], [1, 'ok']);
 });
 
-test('Jev decides the slide order: a rundown story it scores highest leads the major headline; scores are saved', async () => {
-  const base = jev((h) => (h.includes('Haiku') ? 1 : 0));
-  const d = await deps({
-    jev: async (req, meta) => {
-      if (meta.version.startsWith('lfd-lead')) {
-        const s = meta.subjectId.endsWith('n.com/3') ? 0.9 : meta.subjectId.includes('haiku') ? 0.6 : 0.1;
-        return { answers: { stop_scroll: { noul: s }, talked_about: { noul: s }, human_drama: { noul: s }, routine: { noul: 0 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' };
-      }
-      return base(req, meta);
-    },
-  });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ stories: Array<{ headline: string; lane: string; lead: number | null }> }>(`SELECT stories FROM lfd.posts`);
-  assert.equal(rows[0]!.stories[0]!.lane, 'rundown');
-  assert.match(rows[0]!.stories[1]!.headline, /Haiku/);
-  assert.ok(Math.abs(rows[0]!.stories[0]!.lead! - 0.9) < 1e-9);
-  const run = (await d.query<{ record: { lead: { by: string }; picks: Array<{ lead: number | null }> } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
-  assert.equal(run.lead.by, 'jev');
-  assert.ok(run.picks.every((p) => typeof p.lead === 'number'));
-});
-
-test('if a lead judgment fails, the post keeps the lane order and the run record says so', async () => {
-  const base = jev((h) => (h.includes('Haiku') ? 1 : 0));
-  const d = await deps({
-    jev: async (req, meta) => {
-      if (meta.version.startsWith('lfd-lead') && meta.subjectId.endsWith('n.com/2')) throw new Error('jev down');
-      return base(req, meta);
-    },
-  });
-  const res = await runLastFewDays(d);
-  assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ stories: Array<{ headline: string; lane: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.match(rows[0]!.stories[0]!.headline, /Haiku/);
-  const run = (await d.query<{ record: { lead: { by: string; error: string } } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
-  assert.equal(run.lead.by, 'fallback');
-  assert.match(run.lead.error, /jev down/);
-});
-
-test('the caption is written once by the model, ends on the Helios line, and its closing is recorded', async () => {
-  const w = writerStub();
+test('the caption is written once by the model, ends on the code Helios line, and its question is recorded', async () => {
+  const w = createStub();
   const recorded: Array<[string, string, boolean]> = [];
   const closings = { recent: async () => [{ closing: 'Last week Helios said real estate.', buildLine: false, createdAt: NOW }], record: async (id: string, c: string, b: boolean) => { recorded.push([id, c, b]); } };
   const d = await deps({ create: w.create, closings });
@@ -678,27 +534,26 @@ test('the caption is written once by the model, ends on the Helios line, and its
   assert.match(String(w.captionCalls()[0]!.messages[0]!.content), /Last week Helios said real estate/);
   const { rows } = await d.query<{ caption: string; render: { caption: string } }>(`SELECT caption, render FROM lfd.posts`);
   assert.match(rows[0]!.caption, /^⬅️ Swipe for a new Claude Haiku/);
-  assert.ok(rows[0]!.caption.includes(`${CAPTION_REPLY.question}\n\n${CAPTION_REPLY.helios_line}\n\nSources:`));
+  assert.ok(endsOnHeliosLine(rows[0]!.caption, CAPTION_REPLY.question), rows[0]!.caption);
   assert.equal(rows[0]!.render.caption, rows[0]!.caption);
-  assert.doesNotMatch(rows[0]!.caption, /Do you realize what just happened/);
-  assert.deepEqual(recorded, [[res.runId, CAPTION_REPLY.helios_line, false]]);
+  assert.deepEqual(recorded, [[res.runId, CAPTION_REPLY.question, false]]);
   const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; version: string; usd: number } };
   assert.equal(rec.caption.by, 'model');
-  assert.equal(rec.caption.version, 'lfd-caption-v2');
+  assert.equal(rec.caption.version, 'lfd-caption-v3');
   assert.ok(rec.caption.usd > 0);
 });
 
 test('a failed caption call or a rejected reply ships the template caption and records no closing', async () => {
-  for (const reply of [new Error('run cap'), { ...CAPTION_REPLY, helios_line: 'No brand named here.' }]) {
+  for (const reply of [new Error('run cap'), { ...CAPTION_REPLY, question: 'Would Helios pick this one?' }]) {
     resetSeed();
     const recorded: string[] = [];
     const closings = { recent: async () => { throw new Error('table missing'); }, record: async (_id: string, c: string) => { recorded.push(c); } };
-    const d = await deps({ create: writerStub({ caption: () => reply }).create, closings });
+    const d = await deps({ create: createStub({ caption: () => reply }).create, closings });
     const res = await runLastFewDays(d);
     assert.ok(res.ok, JSON.stringify(res));
     const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
     assert.match(rows[0]!.caption, /^Do you realize what just happened in AI in the last few days\?/);
-    assert.match(rows[0]!.caption, /Follow Helios/);
+    assert.ok(heliosLines('lfd').some((l) => rows[0]!.caption.includes(l)), 'the template carries the code Helios line');
     assert.deepEqual(recorded, []);
     const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; reason: string } };
     assert.equal(rec.caption.by, 'template');
@@ -709,7 +564,7 @@ test('a failed caption call or a rejected reply ships the template caption and r
 test('model lines that cannot fit ship the template: telemetry says template and no closing is recorded', async () => {
   const recorded: string[] = [];
   const closings = { recent: async () => [], record: async (_id: string, c: string) => { recorded.push(c); } };
-  const d = await deps({ create: writerStub({ caption: () => ({ ...CAPTION_REPLY, body: 'x'.repeat(2200) }) }).create, closings });
+  const d = await deps({ create: createStub({ caption: () => ({ ...CAPTION_REPLY, body: Array.from({ length: 6 }, () => 'x'.repeat(2200)).join('\n') }) }).create, closings });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
   const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
@@ -721,12 +576,14 @@ test('model lines that cannot fit ship the template: telemetry says template and
 });
 
 test('a caption reply with no usage does not fail the run', async () => {
-  const d = await deps({ create: writerStub({ captionNoUsage: true }).create });
+  const d = await deps({ create: createStub({ captionNoUsage: true }).create });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
   const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
   assert.match(rows[0]!.caption, /^⬅️ Swipe for a new Claude Haiku/);
 });
+
+// ── Memes: the ladder's second rung (D16/D19) and the one-meme-story scan. ──
 
 async function stubMemePng(): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
@@ -745,95 +602,266 @@ function memesHook(o: { clears: (headline: string, assumeShort?: boolean) => boo
   };
 }
 
-test('a finder miss that clears the meme gate stays with the meme as the photo', async () => {
+type MemeRec = Rec & { memes: { rescued: Array<{ key: string; headline: string }>; scanned: Array<{ headline: string }>; added: { headline: string } | null } };
+
+test('a story that clears the meme gate posts its meme before any photo is looked for; vision never judges it', async () => {
   const made: string[] = [];
-  const d = await deps({
-    photos: photos((q) => q.includes('Niche Thing 0')),
-    memes: memesHook({ clears: (h) => h.includes('Niche Thing 0'), made }),
-  });
+  const s = newsStub();
+  const w = createStub();
+  const d = await deps({ create: w.create, news: s.news, memes: memesHook({ clears: (h) => h.includes('Niche Thing 0'), made }) });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  const rec = await recordOf(d, res.runId) as unknown as Rec & { memes: { rescued: Array<{ headline: string }>; added: unknown } };
-  assert.equal(rec.drops.filter((x) => x.reason === 'no-photo').length, 0);
-  assert.ok(rec.memes.rescued.some((x) => x.headline.includes('Niche Thing 0')), JSON.stringify(rec.memes));
-  const { rows } = await d.query<{ stories: Array<{ url: string; photoSource: string; photo: { src: string }; meme?: { templateId: string; object: string } }>; render: { slides: Array<{ photoUrl?: string }> } }>(`SELECT stories, render FROM lfd.posts`);
-  const kept = rows[0]!.stories.find((s) => s.url === 'https://n.com/0');
-  assert.ok(kept, 'the story stays');
+  assert.ok(!s.calls.photos.includes('https://n.com/0'), 'no photo search for the meme story');
+  const rec = await recordOf(d, res.runId) as MemeRec;
+  assert.ok(rec.memes.rescued.some((x) => x.key.endsWith('n.com/0')), JSON.stringify(rec.memes));
+  const { rows } = await d.query<{ stories: Saved[]; render: { slides: Array<{ photoUrl?: string }> } }>(`SELECT stories, render FROM lfd.posts`);
+  const kept = rows[0]!.stories.find((x) => x.url === 'https://n.com/0')!;
   assert.equal(kept.photoSource, 'meme');
   assert.equal(kept.meme?.templateId, 'drake');
   assert.match(kept.photo.src, /^storage:lfd\/.+\/meme-engine-/);
   assert.equal(kept.meme?.object, kept.photo.src.slice('storage:'.length));
   assert.ok(!JSON.stringify(rows[0]!.render).includes('data:image'), 'the saved render does not keep the PNG');
-  assert.ok(made.length >= 1);
+  assert.ok(!w.vision().some((v) => v.headline.includes('Niche Thing 0')));
+  assert.deepEqual(made.filter((k) => k.endsWith('n.com/0')).length, 1);
 });
 
-test('a finder miss that fails the meme gate is still dropped as no-photo', async () => {
-  const d = await deps({
-    photos: photos((q) => q.includes('Niche Thing 0')),
-    memes: memesHook({ clears: () => false }),
-  });
+test('written copy that fails the gate takes the photo rung', async () => {
+  const s = newsStub();
+  const d = await deps({ news: s.news, memes: memesHook({ clears: (h, short) => Boolean(short) && h.includes('Niche Thing 0') }) });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  const rec = await recordOf(d, res.runId);
-  const drop = rec.drops.find((x) => x.reason === 'no-photo');
-  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
-  const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
+  const kept = (await storiesOf(d)).find((x) => x.url === 'https://n.com/0')!;
+  assert.equal(kept.photoSource, 'finder');
+  assert.ok(kept.photoTrace.some((l) => /did not clear the gate/.test(l)));
 });
 
-test('a vision-rejected story that clears the gate is kept and skipped on the next vision pass', async () => {
-  const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') ? 'a stack of newspapers' : null) });
-  const base = await deps({
-    create: w.create,
-    memes: memesHook({ clears: (h) => h.includes('Niche Thing 0') }),
-  });
-  let renders = 0;
-  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
-  assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(renders, 2);
-  const rec = await recordOf(base, res.runId) as unknown as Rec & VisionRec & { memes: { rescued: Array<{ key: string }> } };
-  assert.equal(rec.drops.filter((x) => x.reason === 'vision-rejected').length, 0);
-  assert.ok(rec.memes.rescued.some((x) => x.key.endsWith('n.com/0')));
-  const { rows } = await base.query<{ stories: Array<{ url: string; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
-  assert.equal(rows[0]!.stories.find((s) => s.url === 'https://n.com/0')?.photoSource, 'meme');
-});
-
-test('when the lineup has no 92% story, the scan adds the first unused major that clears', async () => {
-  const { query } = await openHubTestDb();
-  await seedCarouselRun(query, '2026-10-12T07:00:00Z', [
-    { id: 'https://big.com/alpha', headline: 'Alpha Ships A Thing', source: 'The Verge' },
-    { id: 'https://big.com/beta', headline: 'Beta Ships A Thing', source: 'The Verge' },
-    { id: 'https://big.com/gamma', headline: 'Gamma Ships A Thing', source: 'The Verge' },
-    { id: 'https://big.com/launch', headline: 'Launch New Model Today', source: 'The Verge' },
-  ]);
-  const idea = await seedReelsIdea(query, { headline: 'Niche Thing Happens', url: 'https://n.com/0' });
-  await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.9 });
+test('when no slide is a meme, the scan gates the next stories down; the first that clears takes the lowest photo slide', async () => {
   const made: string[] = [];
-  const d = await deps({
-    query,
-    jev: jev((h) => (/Alpha|Beta|Gamma|Launch/.test(h) ? 1 : 0)),
-    memes: memesHook({ clears: (h) => h.includes('Launch'), made }),
-  });
+  const d = await deps({ memes: memesHook({ clears: (h) => h.includes('Niche Thing 6'), made }) });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  assert.equal(res.stories, 5);
-  assert.equal(res.short, false);
-  const rec = await recordOf(d, res.runId) as unknown as Rec & { memes: { added: { headline: string } | null; scanned: Array<{ headline: string }> } };
-  assert.ok(rec.memes.added?.headline.includes('Launch'), JSON.stringify(rec.memes));
-  const { rows } = await d.query<{ stories: Array<{ url: string; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
-  const added = rows[0]!.stories.find((s) => s.url === 'https://big.com/launch');
-  assert.ok(added);
-  assert.equal(added.photoSource, 'meme');
-  assert.ok(made.some((k) => k.includes('launch') || k.includes('big.com/launch')));
+  assert.equal(res.stories, 6);
+  const rec = await recordOf(d, res.runId) as MemeRec;
+  assert.ok(rec.memes.added?.headline.includes('Niche Thing 6'), JSON.stringify(rec.memes));
+  assert.deepEqual(rec.memes.scanned.map((x) => x.headline), ['Niche Thing 5 Happens', 'Niche Thing 6 Happens']);
+  const urls = (await storiesOf(d)).map((x) => x.url);
+  assert.ok(urls.includes('https://n.com/6'));
+  assert.ok(!urls.includes('https://n.com/4'), 'the lowest-ranked photo slide gave up its place');
+  assert.ok(rec.drops.some((x) => x.reason === 'meme-story' && x.key.endsWith('n.com/4')));
+  assert.equal(made.length, 1);
 });
 
-test('when the lineup already has a passer, the scan does not make leftover memes', async () => {
+test('when the lineup already has a meme, the scan does not run', async () => {
   const made: string[] = [];
   const d = await deps({ memes: memesHook({ clears: (h) => h.includes('Haiku'), made }) });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  const rec = await recordOf(d, res.runId) as unknown as Rec & { memes: { scanned: unknown[]; added: unknown } };
+  const rec = await recordOf(d, res.runId) as MemeRec;
   assert.deepEqual(rec.memes.scanned, []);
   assert.equal(rec.memes.added, null);
-  assert.equal(made.length, 0, 'no meme generated; a photo story that passes waits for the post-hoc stage');
+  assert.equal(made.length, 1);
+});
+
+// ── Real footage (MD-LFD D16–D19): the video dep stubbed; no finder, ffmpeg or Instagram call is made. ──
+
+type VideoRec = Rec & {
+  video?: { checked: Array<{ key: string; tier: string; where: string }>; slides: Array<{ key: string; ok: boolean; fallback?: string }>; costUsd: number };
+  memes?: { added: { headline: string } | null };
+};
+
+/** A video dep whose finder answers by headline (`tier`) and whose slide maker fails for `failFor` URLs. */
+async function videoHook(o: { tier: (headline: string) => 'golden' | 'good' | 'none'; failFor?: (url: string) => boolean; asked?: string[] }): Promise<NonNullable<LfdRunDeps['video']>> {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const sharp = (await import('sharp')).default;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lfd-video-test-'));
+  const poster = path.join(dir, 'poster.jpg');
+  fs.writeFileSync(poster, await sharp({ create: { width: 8, height: 8, channels: 3, background: '#335577' } }).jpeg().toBuffer());
+  let usd = 0;
+  return {
+    capUsd: 0.5,
+    find: async (s) => {
+      o.asked?.push(s.url);
+      usd += 0.02;
+      const tier = o.tier(s.headline);
+      const clip = tier === 'none' ? null : { file: path.join(dir, 'clip.mp4'), poster, sourceUrl: `https://youtube.com/watch?v=${encodeURIComponent(s.url)}`, title: 't', channel: 'Reuters', site: 'youtube', start: 0, len: 8, muted: false, lowRes: false };
+      return { tier, clip, brief: null, candidates: 3, trace: [], costUsd: 0.02 };
+    },
+    slide: async ({ clip }) => {
+      if (o.failFor?.(clip.sourceUrl)) throw new Error('ffmpeg exploded');
+      return { mp4: Buffer.from('mp4'), band: Buffer.from('band'), still: Buffer.from('still'), seconds: 8, fit: 'crop', usd: 0.001 };
+    },
+    spent: () => ({ usd, jevUsd: usd / 2 }),
+  };
+}
+
+test('video: a golden clip takes the slide before any photo; the MP4, band and poster are stored and the run counts the spend', async () => {
+  const uploads: Array<{ path: string; type?: string; body: string }> = [];
+  const asked: string[] = [];
+  const s = newsStub();
+  const d = await deps({
+    news: s.news,
+    video: await videoHook({ tier: (h) => (h.includes('Niche Thing 0') ? 'golden' : 'none'), asked }),
+    upload: async (p, b, t) => { uploads.push({ path: p, type: t, body: b.toString() }); },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Saved[]; slide_objects: string[]; render: unknown }>(`SELECT stories, slide_objects, render FROM lfd.posts`);
+  const stories = rows[0]!.stories;
+  const v = stories.find((x) => x.url === 'https://n.com/0')!;
+  assert.equal(v.photoSource, 'video');
+  assert.equal(v.photo.credit, 'Video: Reuters');
+  assert.match(v.photo.src, /^storage:lfd\/.+\/video-[0-9a-f]{12}\.jpg$/);
+  assert.match(v.video!.object, /^lfd\/.+\/video-[0-9a-f]{12}\.mp4$/);
+  assert.equal(v.video!.band, v.video!.object.replace(/\.mp4$/, '-band.mp4'));
+  assert.ok(!JSON.stringify(rows[0]!.render).includes('data:image'), 'the saved render keeps the poster address, not its bytes');
+  assert.ok(!s.calls.photos.includes('https://n.com/0'), 'no photo is looked for once the clip won');
+  assert.ok(uploads.some((u) => u.path === v.video!.object && u.type === 'video/mp4'));
+  const i = stories.indexOf(v);
+  assert.equal(uploads.filter((u) => u.path === rows[0]!.slide_objects[i + 1]).at(-1)?.body, 'still', 'the slide JPEG is a frame of the MP4');
+  assert.ok(stories.filter((x) => x !== v).every((x) => x.photoSource !== 'video' && !x.video));
+  const rec = await recordOf(d, res.runId) as VideoRec;
+  assert.ok(rec.video!.checked.some((c) => c.key.endsWith('n.com/0') && c.tier === 'golden' && c.where === 'lineup'));
+  assert.deepEqual(rec.video!.slides.filter((x) => x.ok).map((x) => x.key.endsWith('n.com/0')), [true]);
+  const run = (await d.query<{ claude_usd: string; jev_usd: string }>(`SELECT claude_usd::text, jev_usd::text FROM lfd.runs WHERE id = $1`, [res.runId])).rows[0]!;
+  const finds = asked.length * 0.02;
+  assert.ok(Math.abs(Number(run.claude_usd) - (0.1 + finds / 2)) < 1e-6, `claude ${run.claude_usd}`);
+  assert.ok(Math.abs(Number(run.jev_usd) - (0.01 + finds / 2)) < 1e-6, `jev ${run.jev_usd}`);
+});
+
+test('video: golden beats a meme that clears the gate; the meme guarantee fills another slot', async () => {
+  const made: string[] = [];
+  const d = await deps({
+    memes: memesHook({ clears: (h) => h.includes('Niche Thing 0') || h.includes('Niche Thing 6'), made }),
+    video: await videoHook({ tier: (h) => (h.includes('Niche Thing 0') ? 'golden' : 'none') }),
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const stories = await storiesOf(d);
+  assert.equal(stories.find((x) => x.url === 'https://n.com/0')?.photoSource, 'video');
+  assert.ok(!made.some((k) => k.endsWith('n.com/0')), 'no meme is made for the video story');
+  const rec = await recordOf(d, res.runId) as VideoRec;
+  assert.ok(rec.memes!.added?.headline.includes('Niche Thing 6'), JSON.stringify(rec.memes));
+  assert.equal(stories.find((x) => x.url === 'https://n.com/6')?.photoSource, 'meme');
+});
+
+for (const withMeme of [false, true]) {
+  test(`video: a slide whose MP4 fails takes the next rung (${withMeme ? 'a meme that clears' : 'a photo'}); the post never fails`, async () => {
+    let renders = 0;
+    const base = await deps({
+      // The written copy clears (not the article preview), so the lineup's ladder still picks the video first.
+      ...(withMeme ? { memes: memesHook({ clears: (h, short) => !short && h.includes('Niche Thing 0') }) } : {}),
+      video: await videoHook({ tier: (h) => (h.includes('Niche Thing 0') ? 'golden' : 'none'), failFor: (u) => u.includes('n.com%2F0') }),
+    });
+    const res = await runLastFewDays({ ...base, fitCheck: async (p, o) => { renders += 1; return base.fitCheck(p, o); } });
+    assert.ok(res.ok, JSON.stringify(res));
+    assert.equal(renders, 2, 'rendered again with the fallback');
+    const x = (await storiesOf(base)).find((y) => y.url === 'https://n.com/0')!;
+    assert.equal(x.photoSource, withMeme ? 'meme' : 'finder');
+    assert.equal(x.video, undefined);
+    const rec = await recordOf(base, res.runId) as VideoRec;
+    assert.deepEqual(rec.video!.slides.map((y) => [y.ok, y.fallback]), [[false, withMeme ? 'meme' : 'photo']]);
+  });
+}
+
+test('video: a good clip never moves a story; the rerank order fills the post', async () => {
+  const d = await deps({ video: await videoHook({ tier: (h) => (h.includes('Niche Thing 6') ? 'golden' : h.includes('Niche Thing 5') ? 'good' : 'none') }) });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const urls = (await storiesOf(d)).map((x) => x.url);
+  assert.deepEqual(urls, ['https://big.com/haiku', ...[0, 1, 2, 3, 4].map((i) => `https://n.com/${i}`)], 'no boost past the rerank order (WC2)');
+});
+
+test('video: no video dep leaves the run record without a video section', async () => {
+  const d = await deps();
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal((await recordOf(d, res.runId) as VideoRec).video, undefined);
+});
+
+/** The AI cover's fal fetch stub (no network): one queued image that completes on the first poll. */
+async function aiCoverStub() {
+  const sharp = (await import('sharp')).default;
+  const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 0, g: 90, b: 200 } } }).png().toBuffer();
+  const photo = await sharp({ create: { width: 64, height: 48, channels: 3, background: { r: 90, g: 90, b: 90 } } }).jpeg().toBuffer();
+  const queue = 'https://queue.fal.run/openai/gpt-image-2.6/flare/edit';
+  const tools: string[] = [];
+  const json = (v: unknown) => new Response(JSON.stringify(v), { headers: { 'content-type': 'application/json' } });
+  const fetchImpl = async (url: string) => {
+    if (url === queue) { tools.push('submit'); return json({ request_id: 'r1', status_url: `${queue}/requests/r1/status`, response_url: `${queue}/requests/r1` }); }
+    if (url.endsWith('/requests/r1/status')) { tools.push('status'); return json({ status: 'COMPLETED' }); }
+    if (url.endsWith('/requests/r1')) { tools.push('result'); return json({ images: [{ url: 'https://fal.test/cover.png', width: 1536, height: 1152 }] }); }
+    if (url === 'https://fal.test/cover.png') return new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } });
+    return new Response(new Uint8Array(photo), { headers: { 'content-type': 'image/jpeg' } });
+  };
+  /** The run's create, plus the cover writer's write_cover_prompt call. */
+  const withWriter = (create: LfdRunDeps['create']): LfdRunDeps['create'] => async (p) => {
+    if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'write_cover_prompt') {
+      return { id: 'w', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 800, output_tokens: 300, cache_creation_input_tokens: 0, cache_read_input_tokens: 2000 }, content: [{ type: 'tool_use', id: 't', name: 'write_cover_prompt', input: { prompt: '1. Capture: 35mm', references: [1, 2] } }] } as unknown as Anthropic.Message;
+    }
+    return create(p);
+  };
+  return { aiCover: { fal: { apiKey: 'test-key', fetch: fetchImpl }, fetch: fetchImpl, wait: { sleep: async () => {} } }, tools, withWriter };
+}
+
+test('the AI cover: drawn on the final render, stored, recorded, its image cost in the run spend; the next post rotates the hook', async () => {
+  const s = await aiCoverStub();
+  const drawn: Array<string | undefined> = [];
+  const base = await deps();
+  const d = await deps({
+    query: base.query,
+    create: s.withWriter(createStub().create),
+    aiCover: s.aiCover,
+    fitCheck: async (p, opts) => {
+      drawn.push(p.slides[0]!.lfdCover?.image?.url);
+      return base.fitCheck(p, opts);
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.deepEqual(s.tools, ['submit', 'status', 'result']);
+  assert.match(drawn.at(-1) ?? '', /^data:image\/jpeg;base64,/, 'the last render draws the AI image');
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { hook: string; direction: string; prompt: string; image: string; fallback: string | null; imageUsd: number } };
+  assert.equal(rec.cover.direction, 'Unaware', 'no two_sides answer counts as no');
+  assert.equal(rec.cover.hook, 'Do you realize what just happened in AI in the last few days?');
+  assert.equal(rec.cover.fallback, null);
+  assert.match(rec.cover.image, /^storage:lfd\/lfd-2026-10-13\/cover-ai-/);
+  const { rows } = await d.query<{ render: { slides: Array<{ altText: string; lfdCover?: { image?: { url: string }; hook?: { text: string } } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.image!.url, rec.cover.image, 'the post row keeps the stored image, not a data URL');
+  assert.match(rows[0]!.render.slides[0]!.altText, /^Do you realize what just happened in AI in the last few days\?/);
+  const run = (await d.query<{ claude_usd: string }>(`SELECT claude_usd::text FROM lfd.runs WHERE id = $1`, [res.runId])).rows[0]!;
+  assert.ok(Math.abs(Number(run.claude_usd) - (0.1 + rec.cover.imageUsd)) < 1e-6, `claude ${run.claude_usd}`);
+
+  // The next day's post takes the next hook.
+  const next = await runLastFewDays({ ...d, now: new Date(NOW.getTime() + 86_400_000) });
+  assert.ok(next.ok, JSON.stringify(next));
+  const rec2 = (await recordOf(d, next.runId)) as unknown as { cover: { hook: string } };
+  assert.match(rec2.cover.hook, /^\d+ things happened in AI you need to know\.$/);
+});
+
+test('a lineup with a meme still gets the AI cover; the meme keeps its own story slide', async () => {
+  const s = await aiCoverStub();
+  const base = await deps();
+  const d = await deps({ query: base.query, create: s.withWriter(createStub().create), aiCover: s.aiCover, memes: memesHook({ clears: (h) => h.includes('Niche Thing 0') }) });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { image: string | null; fallback: string | null } };
+  assert.equal(rec.cover.fallback, null);
+  assert.match(rec.cover.image ?? '', /^storage:/);
+  const { rows } = await d.query<{ render: { slides: Array<{ lfdCover?: { image?: { url: string }; meme?: unknown } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.ok(rows[0]!.render.slides[0]!.lfdCover!.image, 'the cover is the AI image');
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.meme, undefined, 'no meme on the cover');
+});
+
+test('without the AI cover wired the post keeps today’s cover, with the rotated hook and the reason recorded', async () => {
+  const d = await deps();
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { fallback: string; image: string | null } };
+  assert.match(rec.cover.fallback, /not wired/);
+  assert.equal(rec.cover.image, null);
+  const { rows } = await d.query<{ render: { slides: Array<{ lfdCover?: { image?: unknown; hook?: { text: string } } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.image, undefined);
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.hook!.text, 'Do you realize what just happened in AI in the last few days?');
 });

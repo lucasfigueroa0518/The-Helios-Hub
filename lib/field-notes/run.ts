@@ -50,6 +50,7 @@ import { createFieldNotesBudget, FieldNotesBudgetExhausted } from './budget';
 import { buildFieldNotesCaption, withSourceLinks } from './caption';
 import { FIELD_NOTES_SLIDE_PREFIX, MAX_SCORED_PER_RUN } from './config';
 import { asIntakeQuery, saveIntakeTips, type FieldNotesIntakeDeps, type FieldNotesIntakeMode } from './intake';
+import { planStoredTipPool, POOL_TRIM_REASON, type TipPoolOptions } from './tip-pool';
 import { draftToSlideInputs, layoutsToSlides, splitProblems } from './post';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -85,6 +86,7 @@ import {
   setTipStatus,
   setTipSubject,
   storedSourceUrls,
+  trimTips,
   type RunKind,
   type RunTrigger,
   type StoredTip,
@@ -269,7 +271,9 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // Nothing found is saved unscored, so it waits for the scoring questions to be approved.
     const config = d.config ?? FIELD_NOTES_SOURCES_CONFIG;
     if (config.questionsApproved && !input.skipRefill) {
-      const refill = await refillTips(d, refillBudget, record);
+      // The best-30 pool (tip-pool.ts): pinned and dragged tips are not counted or trimmed; archived ones rank 0.
+      const pool: TipPoolOptions = { protectedIds: new Set([...night.pins, ...night.placed.keys()]), archivedIds: night.archived };
+      const refill = await refillTips(d, refillBudget, record, pool);
       record.refill = { capUsd: refillBudget.capUsd, spentUsd: Number(refillBudget.spent().toFixed(6)), capped: refill.capped };
     }
     if (input.refillOnly) {
@@ -533,7 +537,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       nyDate,
       slides,
       photoIds,
-      caption: buildFieldNotesCaption(draft.caption, withSourceLinks(draft.slides, tips)),
+      caption: buildFieldNotesCaption(withSourceLinks(draft.slides, tips), slug),
       slideObjects,
       fitProblems: problems.fit,
       renderProblems: problems.render,
@@ -574,13 +578,13 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
  * Intake mode (Central Intake Phase 2, `d.intake` says 'intake'): no collect, no enrich, no scoring here; the order's
  * scored stories not yet stored are saved as candidates (intake.ts saveIntakeTips).
  */
-async function refillTips(d: FieldNotesEngineDeps, budget: FieldNotesBudget, record: FieldNotesRunRecord): Promise<{ capped: boolean }> {
+async function refillTips(d: FieldNotesEngineDeps, budget: FieldNotesBudget, record: FieldNotesRunRecord, pool: TipPoolOptions): Promise<{ capped: boolean }> {
   const q = d.query;
   // Intake mode: the intake already fetched and scored Field Notes' sources; save what is new to field_notes.tips.
   // A failed intake read falls back to the legacy path below (contract: switch + fallback).
   const mode: FieldNotesIntakeMode = d.intake ? await d.intake.readConsumerMode(asIntakeQuery(q), 'field-notes', d.now).catch(() => 'legacy' as const) : 'legacy';
   if (mode === 'intake') {
-    const fromIntake = await saveIntakeTips(q, d.intake!, d.now).catch((error: unknown) => {
+    const fromIntake = await saveIntakeTips(q, d.intake!, d.now, undefined, pool).catch((error: unknown) => {
       record.intake = { mode, fallback: errorText(error).slice(0, 200) };
       return null;
     });
@@ -627,6 +631,9 @@ async function refillTips(d: FieldNotesEngineDeps, budget: FieldNotesBudget, rec
       }
     }
   }
+  // The best-30 pool (tip-pool.ts): the legacy path saves every tip it paid to score (so none is scored twice), then
+  // the weakest waiting tips over the target expire.
+  const trimmed = await trimTips(q, (await planStoredTipPool(q, [], pool)).expire, POOL_TRIM_REASON);
   record.found = {
     collected: found.length,
     alreadyStored: found.length - fresh.length,
@@ -635,6 +642,7 @@ async function refillTips(d: FieldNotesEngineDeps, budget: FieldNotesBudget, rec
     scored,
     added,
     leftForLater: fresh.length - added,
+    trimmed,
     failures: failures.slice(0, 10),
     recentWants: await recentPostWants(q),
   };

@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { recreditCaption } from '@/lib/lfd/post';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { FitCheck } from '@/lib/social/render/fit-check';
@@ -24,7 +25,7 @@ import { generateBriefs } from './brief-from-body';
 import { openLocalMemesDb, type MemesDb } from './db';
 import type { MemeFill } from './fill';
 import { placeMemes, type Placement } from './lfd-placement';
-import { postWithMemes, type MemeImage, type SavedStory } from './lfd-sim/post';
+import { postWithMemes, readyFromSaved, type MemeImage, type SavedStory } from './lfd-sim/post';
 import { memeImageOf, trimLetterbox } from './lfd-sim/run';
 import { loadLabStory } from './lfd-source';
 import { fitOdds, gate, type OddsRow } from './odds';
@@ -104,7 +105,8 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
   const post = rows[0];
   if (!post || !Array.isArray(post.stories) || post.stories.length === 0) return { placed: 0, gated: 0, skipped: 'no post', costUsd: 0 };
   const stories = post.stories;
-  const pending = stories.filter((s) => !s.meme && s.photoSource !== 'meme');
+  // A video slide keeps its video (MD-LFD D19: video beats a meme that clears the gate).
+  const pending = stories.filter((s) => !s.meme && s.photoSource !== 'meme' && s.photoSource !== 'video');
   if (!pending.length) {
     d.log('lfd_memes_skipped', { postId, reason: 'already had memes' });
     return { placed: 0, gated: 0, costUsd: 0, skipped: 'already had memes' };
@@ -217,9 +219,12 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
     const meme: PostMeme = { templateId: pick.templateId, memeId: pick.memeId, rank: p.rank, role: p.role, position: p.position, object: objects.get(pick.memeId)!, text };
     return { ...s, meme };
   });
+  // Memes change the photos and order, never the words: keep the run's caption (model lines and Helios line)
+  // and rebuild only its credits. render.caption here is buildPost's template, so it must not overwrite a model caption.
+  const caption = recreditCaption(post.caption, stories.map(readyFromSaved), newStories.map(readyFromSaved)) ?? post.caption;
   await d.query(
     `UPDATE lfd.posts SET stories = $2::jsonb, render = $3::jsonb, caption = $4, slide_objects = $5::jsonb WHERE id = $1`,
-    [postId, JSON.stringify(newStories), JSON.stringify(savedRender), render.caption, JSON.stringify(slideObjects)],
+    [postId, JSON.stringify(newStories), JSON.stringify({ ...savedRender, caption }), caption, JSON.stringify(slideObjects)],
   );
   d.log('lfd_memes_placed', { postId, placed: placement.placed.map((p) => ({ story: p.key, rank: p.rank, role: p.role, position: p.position, template: picks.get(p.key)?.templateId })), costUsd });
   return { placed: placement.placed.length, gated: chosen.length, costUsd };

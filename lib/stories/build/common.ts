@@ -21,7 +21,8 @@ export type BuildDeps = {
   write: WriterCreate;
   /** AI Trivia's opponent (AT-74/75, lib/stories/trivia/opponent.ts): OpenAI and fal. Absent (tests): the set has no opponent. */
   opponent?: import('@/lib/stories/trivia/opponent').OpponentClient;
-  photos: PhotoFinder;
+  /** The old Stories photo finder: only the retired Free vs. Paid builder used it. Absent (the worker): no finder photos. */
+  photos?: PhotoFinder;
   settings: StoriesSettings;
   now: Date;
   setId: string;
@@ -30,6 +31,31 @@ export type BuildDeps = {
   pool?: OpenPool | null;
   /** The series reads the central intake (consumer switch 'intake'): Morning Download ranks by the stored scores and the lead queue. */
   intake?: boolean;
+  /** Morning Download's video finder (MD-LFD D16–D19, lib/stories/video.ts). Absent (tests, replays, no yt-dlp): photos only. */
+  video?: import('@/lib/stories/video').StoryVideoDeps;
+  /** Morning Download's news chain clients (WIRING-CONTRACT Owner D). Absent: Morning Download skips the set. */
+  news?: NewsChainDeps;
+};
+
+/**
+ * The clients of the locked news chain for one Morning Download build: the shortlist's Jev, one Anthropic create for
+ * the rerank, the photo brief and AI check and the writer, the photo finder's readers, the band upscaler and storage.
+ */
+export type NewsChainDeps = {
+  create: WriterCreate;
+  jevAsk: import('@/lib/social/jev/client').JevAsk;
+  /** lib/news-photos PhotoDeps without the per-story parts (create, usedReason): the image Jev, page reader, Serper, fetch. */
+  photo: Omit<import('@/lib/news-photos').PhotoDeps, 'create' | 'usedReason'>;
+  /** The photo upscaler (lib/news-photos/band.ts findPhotoUpscaler) or null: band frames are then not upscaled, and say so. */
+  upscaler: import('@/lib/news-photos/band').PhotoUpscaler | null;
+  tmpDir: string;
+  /** Where the band photo is stored (the stories bucket). */
+  storage: Pick<import('@/lib/stories/storage').StoriesStorage, 'upload' | 'sign'>;
+  /**
+   * The photo bank (D49): every story's pick and runner-ups are offered (lib/news-photos/bank-offer.ts); the worker
+   * drains it after the build. Absent or null (tests): nothing is offered.
+   */
+  bank?: import('@/lib/news-photos/bank-offer').PhotoBankSink | null;
 };
 
 /**
@@ -104,13 +130,26 @@ export async function nextBackdrop(db: StoriesDb, series: Series, setId: string)
   return last ? BACKDROPS[(BACKDROPS.indexOf(last) + 1) % BACKDROPS.length]! : BACKDROPS[0];
 }
 
+/** The last Morning Download set's cover headline (its opener's `promise`), so the next set can rotate on. */
+export async function lastOpenerPromise(db: StoriesDb, setId: string): Promise<string[] | null> {
+  const { rows } = await db.query<{ promise: string[] | null }>(
+    `SELECT f.copy->'promise' AS promise FROM stories.sets s JOIN stories.frames f ON f.set_id = s.id AND f.seq = 1
+      WHERE s.series = 'morning_download' AND s.id <> $1 AND s.status IN ('ready', 'approved', 'scheduled', 'publishing', 'published')
+      ORDER BY s.ny_date DESC, s.created_at DESC LIMIT 1`,
+    [setId],
+  );
+  const p = rows[0]?.promise;
+  return Array.isArray(p) ? p.map(String) : null;
+}
+
 /** Turn a frame list into numbered rows. */
 export function toFrames(data: FrameData[], backdrop: Backdrop, template: (d: FrameData) => string | null = () => null): NewFrame[] {
   return data.map((d, i) => ({ seq: i + 1, role: d.role, backdrop, copy: d, template: template(d), photo: 'photo' in d ? ((d as { photo?: Photo }).photo ?? null) : 'logo' in d ? ((d as { logo?: Photo }).logo ?? null) : null }));
 }
 
 /** Ask the finder, never failing the build over a photo (a type-led frame is fine). */
-export async function findPhoto(photos: PhotoFinder, req: PhotoRequest, log: string[]): Promise<Photo | null> {
+export async function findPhoto(photos: PhotoFinder | undefined, req: PhotoRequest, log: string[]): Promise<Photo | null> {
+  if (!photos) return null;
   try {
     return await photos.find(req);
   } catch (err) {

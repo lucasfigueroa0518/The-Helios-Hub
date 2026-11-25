@@ -139,19 +139,19 @@ test('end to end: a due slot is released, published as a feed reel, and marked; 
   const out = await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
   assert.equal(calls[0], `reel https://signed/jobs/${jobId}/video.mp4 feed=true`);
-  assert.equal(calls[1], 'caption AI 101 Episode 1:\n\nThe door between two programs.');
+  assert.equal(calls[1], 'caption The door between two programs.');
   const attempt = (await db.query<{ status: string; media_id: string; caption: string }>(`SELECT status, media_id, caption FROM social_hub.publish_attempts`)).rows[0]!;
-  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI 101 Episode 1:\n\nThe door between two programs.']);
+  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'The door between two programs.']);
   assert.equal((await db.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
   const again = await queuePublish(db, jobId, 'force');
   assert.equal(again.queued, false);
   assert.equal(await scheduleApproved(db, new Date(), () => 0), 0);
 });
 
-test('the episode number is how many explainers have published, stamped on the way out', async () => {
+test('captions post as written: no episode line, and an old baked-in one is dropped (caption voice)', async () => {
   const { db } = await scratchExplainersDb();
   const first = await renderedJob(db, { title: 'first', caption: 'First body.' });
-  const second = await renderedJob(db, { title: 'second', caption: 'Second body.' });
+  const second = await renderedJob(db, { title: 'second', caption: 'AI 101 Episode 4:\n\nSecond body.' });
   const captions: string[] = [];
   const meta = stubMeta({
     async createReel(input) {
@@ -163,10 +163,7 @@ test('the episode number is how many explainers have published, stamped on the w
   assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
   await queuePublish(db, second, 'approve');
   assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
-  assert.deepEqual(captions, [
-    'AI 101 Episode 1:\n\nFirst body.',
-    'AI 101 Episode 2:\n\nSecond body.',
-  ]);
+  assert.deepEqual(captions, ['First body.', 'Second body.']);
 });
 
 test('publish: an EXPIRED container and a near-full account quota both fail without posting', async () => {
