@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, type ComponentProps, type FocusEvent, type MouseEvent } from 'react';
 import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-reducer-types';
 
 import { isDataWarmablePath } from '@/lib/hub/warm-paths';
+import { PERF_NAV_ACK } from '@/lib/perf/flags';
 
 /**
  * On sight, a visible link prefetches the loading shell (AUTO). Hover and focus
@@ -25,6 +26,8 @@ const WAIT_MS = 10000;
 const START_GRACE_MS = 150;
 const FRESH_MS = 4 * 60 * 1000;
 const HOVER_DWELL_MS = 200;
+/** A pending link clears itself after this long even if the route never changes. */
+const PENDING_MAX_MS = 12000;
 
 type RscWatch = { url: string; done: Promise<void>; body: Promise<string> };
 
@@ -303,13 +306,29 @@ export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur,
     };
   }, [href, router, eager]);
 
+  // The pending mark is a plain DOM attribute: it paints on the next frame without a React render.
+  const pathname = usePathname();
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (anchor?.hasAttribute('data-pending')) anchor.removeAttribute('data-pending');
+  }, [pathname]);
+
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
     if (event.defaultPrevented || !href) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
     clearDwell();
-    const ready = warmNavigation(href, event.currentTarget, router);
+    const anchor = event.currentTarget;
+    if (PERF_NAV_ACK) {
+      // A second click on a link already on its way does nothing (no second push).
+      if (anchor.hasAttribute('data-pending')) return;
+      if (pathnameOf(href) !== window.location.pathname) {
+        anchor.setAttribute('data-pending', '');
+        window.setTimeout(() => anchor.removeAttribute('data-pending'), PENDING_MAX_MS);
+      }
+    }
+    const ready = warmNavigation(href, anchor, router);
     ready.then(() => {
       router.push(href);
     });

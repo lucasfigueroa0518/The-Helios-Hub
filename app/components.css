@@ -6834,3 +6834,10 @@ button.stat-tile {
   .inbox-fleet__meta { flex-direction: column; align-items: flex-start; }
 }
 
+
+/* Sub-10ms playbook INV-QUEUE (PERF_QUEUE_CV): off-screen cards skip rendering. A card keeps its
+   real height once rendered ("auto"); cards never on screen use the median height. */
+.send-queue-board-scroller--cv .send-queue-day-panel > div:last-child > button {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 133px;
+}
