@@ -46,7 +46,7 @@ html, body { width: 1080px; height: 1920px; overflow: hidden; background: #C93A0
 
 /* The opponent (AT-74): a speech bubble right next to the critter, which stands on the sign's right (critter.ts,
    feet at 80 % of the sign's width). The bubble's right edge stops short of the critter; its tail points at it. */
-.opp { position: absolute; left: -60px; right: calc(20% + 165px); bottom: calc(100% + 40px); text-transform: none; text-align: left; font-family: Roboto; text-wrap: nowrap; }
+.opp { position: absolute; left: -60px; right: calc(20% + 215px); bottom: calc(100% + 40px); text-transform: none; text-align: left; font-family: Roboto; text-wrap: nowrap; }
 .opp > * { position: absolute; right: 0; bottom: 0; }
 .bubble { border-radius: 36px; box-shadow: 0 12px 30px rgba(0, 0, 0, .22); }
 .bubble::after { content: ""; position: absolute; right: -22px; bottom: 26px; border: 16px solid transparent; border-left: 26px solid #fff; border-right: 0; }
