@@ -5,10 +5,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import type { Card } from '@/lib/seed/one-box/requests';
+import { RUNNER, type SeedVerticalKey } from '@/lib/seed/one-box/types';
 
-const STAGE_TEXT: Record<string, string> = { queued: 'Starting…', searching: 'Searching for a source…', reading: 'Reading the sources…', checking: 'Checking the match…', filing: 'Adding it to the queue…' };
+/** A stage's words. `checking` is the source match on Vercel; a worker's checks (Trivia, Real or AI?, AI Drama) read WORKER_STAGE_TEXT. */
+export const STAGE_TEXT: Readonly<Record<string, string>> = {
+  queued: 'Starting…', searching: 'Searching for a source…', reading: 'Reading the sources…', checking: 'Checking the match…', filing: 'Adding it to the queue…',
+  claimed: 'Starting…', writing: 'Writing…', making: 'Making the images…',
+};
+export const WORKER_STAGE_TEXT: Readonly<Record<string, string>> = { ...STAGE_TEXT, checking: 'Checking…' };
 
-/** The one-box state for a pool: its placeholder cards. Polls every 3 s while one is working. */
+export function stageText(c: Pick<Card, 'vertical' | 'stage'>): string {
+  const words = RUNNER[c.vertical as SeedVerticalKey] && RUNNER[c.vertical as SeedVerticalKey] !== 'vercel' ? WORKER_STAGE_TEXT : STAGE_TEXT;
+  return words[c.stage] ?? 'Working…';
+}
+
+/** How often the cards are read again: 3 s while one is genuinely running, 15 s while every working card waits in a worker's queue. */
+export function pollEveryMs(cards: readonly Card[]): number | null {
+  const working = cards.filter((c) => c.status === 'working');
+  if (!working.length) return null;
+  return working.some((c) => !c.cancellable) ? 3000 : 15000;
+}
+
+/** The one-box state for a pool: its placeholder cards, polled at pollEveryMs while one is working. */
 export function useOneBox(vertical: string, skip = false): { cards: Card[]; reload: () => void } {
   const router = useRouter();
   const [state, setState] = useState<{ cards: Card[] }>({ cards: [] });
@@ -28,12 +46,12 @@ export function useOneBox(vertical: string, skip = false): { cards: Card[]; relo
     }
   }, [vertical, router]);
   useEffect(() => { if (!skip) void load(); }, [load, skip]);
-  const working = state.cards.some((c) => c.status === 'working');
+  const every = pollEveryMs(state.cards);
   useEffect(() => {
-    if (!working) return;
-    const t = setInterval(() => void load(), 3000);
+    if (every == null) return;
+    const t = setInterval(() => void load(), every);
     return () => clearInterval(t);
-  }, [working, load]);
+  }, [every, load]);
   return { ...state, reload: () => void load() };
 }
 
@@ -49,7 +67,7 @@ export function SeedRequestCards({ cards, reload }: { cards: Card[]; reload: () 
     <div className="rh rh--scope" aria-live="polite">
       {cards.map((c) => (
         <div key={c.id} className={c.status === 'failed' ? 'rh-note rh-note--bad' : 'rh-note'} role="status">
-          <p><strong>{c.status === 'failed' ? 'Not added' : c.status === 'done' ? 'Added' : c.cancellable ? 'Queued' : STAGE_TEXT[c.stage] ?? 'Working…'}</strong> “{c.blurb.length > 120 ? `${c.blurb.slice(0, 120)}…` : c.blurb}”</p>
+          <p><strong>{c.status === 'failed' ? 'Not added' : c.status === 'done' ? 'Added' : c.cancellable ? 'Queued' : stageText(c)}</strong> “{c.blurb.length > 120 ? `${c.blurb.slice(0, 120)}…` : c.blurb}”</p>
           {c.message ? <p>{c.message}</p> : null}
           {c.status !== 'working' ? <button type="button" className="rh-btn" onClick={() => void remove(c.id)}>Dismiss</button> : null}
           {c.cancellable ? <button type="button" className="rh-btn" onClick={() => void remove(c.id)}>Cancel</button> : null}

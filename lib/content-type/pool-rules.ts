@@ -1,4 +1,5 @@
 import { leadDaysFor } from '@/lib/social-hub/lead';
+import { POOL_CAP } from '@/lib/social-hub/queue';
 import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { SERIES_NAME } from '@/lib/social-hub/slots/times';
 import type { StorySeries } from '@/lib/social-hub/slots/types';
@@ -88,4 +89,35 @@ export type PoolFreshness = 'evergreen' | 'time_sensitive';
  */
 export function poolFreshness(type: Vertical, series?: StorySeries | string | null): PoolFreshness {
   return leadDaysFor(type, isStoryVertical(type) ? storySeriesOf(series) : null) > 0 ? 'evergreen' : 'time_sensitive';
+}
+
+/**
+ * The types whose Seed switches off at the pool cap: their worker trims the pool to POOL_CAP open ideas and a seed would
+ * be cut (Explainers: lib/explainers/ideas/evaluate.ts; Morning Download: lib/stories/pool.ts). Every other type's list
+ * is a view capped at 30 over a longer pool. Trivia and Real or AI? are trimmed too, but to their own aims (50 and 40
+ * unused) and seeded rows are exempt from those caps, so their Seed is never off.
+ */
+export const SEED_CAPPED: ReadonlySet<Vertical> = new Set<Vertical>(['explainers', 'stories']);
+
+/**
+ * True when the pool screen's Seed is off because the pool is full. Explainers: the whole pool (`poolOpen`, uncapped),
+ * less what was just archived on screen (`hidden`). Morning Download: per series (`openIn`); with no series picked it is
+ * off only when every series is full.
+ */
+export function seedPoolFull(i: {
+  vertical: Vertical;
+  poolOpen: number;
+  hidden: number;
+  group: string | null;
+  groups: readonly string[];
+  openIn: (group: string) => number;
+  cap?: number;
+}): boolean {
+  const cap = i.cap ?? POOL_CAP;
+  if (!SEED_CAPPED.has(i.vertical)) return false;
+  if (isStoryVertical(i.vertical)) {
+    const full = (name: string) => i.openIn(name) >= cap;
+    return i.group ? full(i.group) : i.groups.length > 0 && i.groups.every(full);
+  }
+  return i.poolOpen - i.hidden >= cap;
 }

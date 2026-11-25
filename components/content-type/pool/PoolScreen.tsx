@@ -1,6 +1,5 @@
 'use client';
 
-import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check } from 'lucide-react';
@@ -20,7 +19,7 @@ import { PoolTabs, type PoolTab } from '@/components/content-type/pool/PoolTabs'
 import { PostPanel } from '@/components/content-type/pool/PostPanel';
 import { TYPE_CONFIG } from '@/lib/content-type/config';
 import type { TypeBenchItem, TypeCard, TypeHubModel } from '@/lib/content-type/model';
-import { madeRowState, type PoolRowState } from '@/lib/content-type/pool-rules';
+import { madeRowState, seedPoolFull, type PoolRowState } from '@/lib/content-type/pool-rules';
 import { poolBoard, poolIdeas, poolMade, poolRunway, poolSlotsPerDay, type PoolIdeaRow } from '@/lib/content-type/pool-view';
 import type { GenerateIdea } from '@/lib/content-type/queue-client';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
@@ -48,13 +47,6 @@ const LEAVE_MS = 200;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const article = (word: string) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
 const WHOLE_LIST = new Set(['last_few_days', 'ai_events']);
-/**
- * The types whose worker really trims the pool to POOL_CAP open ideas (Explainers: lib/explainers/ideas/evaluate.ts;
- * Stories, per series: lib/stories/pool.ts). Only these can be "full"; every other type's list is a view capped at 30
- * over a longer pool, so its length never switches Seed off.
- */
-const TRIMMED = new Set(['explainers', 'stories', 'ai_trivia', 'real_or_ai']);
-
 type Open = { kind: 'idea'; id: string } | { kind: 'post'; id: string } | null;
 type Toast = { kind: 'archive'; id: string; title: string } | { kind: 'note'; text: string } | null;
 type Ask = { id: string; title: string; reason: 'top' | 'over_cap'; costUsd: number | null } | null;
@@ -171,14 +163,12 @@ export function PoolScreen({ model, data, readOnly = false, make, generate, seed
   const board = useMemo(() => poolBoard(viewModel, startDay, 3, { ...(source ?? {}), now }), [viewModel, startDay, source, now]);
   const slotsPerDay = useMemo(() => poolSlotsPerDay(model, source ?? undefined), [model, source]);
   const runway = poolRunway(rows.length, slotsPerDay);
-  // Full: the real open count, not the list (which is capped at 30 for every type). Explainers: the whole pool
-  // (model.poolOpen, uncapped), less what was just archived here. Stories: per series; its list holds every open idea of
-  // a series up to the cap, so a series showing 30 is at the cap. Seed picks its series in the form, so with no series
-  // picked it is off only when every series is full.
-  const seriesFull = (name: string) => rows.filter((r) => r.idea.group === name).length >= POOL_CAP;
-  const full = !TRIMMED.has(vertical) ? false
-    : isStoryVertical(vertical) ? (group ? seriesFull(group) : model.groups.length > 0 && model.groups.every(seriesFull))
-      : model.poolOpen - hidden.size >= POOL_CAP;
+  // Full: the real open count, not the list (which is capped at 30 for every type); see seedPoolFull for which types
+  // switch Seed off at the cap (Trivia and Real or AI? never do).
+  const full = seedPoolFull({
+    vertical, poolOpen: model.poolOpen, hidden: hidden.size, group, groups: model.groups,
+    openIn: (name) => rows.filter((r) => r.idea.group === name).length,
+  });
 
   const stateOf = (row: PoolIdeaRow): PoolRowState => {
     if (making.has(row.idea.id)) return 'making';

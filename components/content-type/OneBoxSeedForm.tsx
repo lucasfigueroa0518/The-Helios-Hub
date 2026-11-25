@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { SeedFormProps } from '@/components/content-type/SeedButton';
 import { SEED_BUTTON, type SeedVertical } from '@/lib/content-type/seed-verticals';
 import { LIMIT_USD } from '@/lib/seed/one-box/budget';
+import { RUNNER } from '@/lib/seed/one-box/types';
 
 /**
  * One-box seeding (design 2026-11-04-one-box-seeding-design): a sentence or two, an optional link. The click opens a request;
@@ -22,6 +23,13 @@ export const ESTIMATE_CENTS = {
 export function submitLabel(v: SeedVertical, hasLink: boolean): string {
   const about = v === 'field_notes' && hasLink ? ESTIMATE_CENTS.fieldNotesWithLink : ESTIMATE_CENTS[v];
   return `Add · about ${about}¢ (${Math.round(LIMIT_USD[v] * 100)}¢ limit)`;
+}
+
+/** The toast after a submit: Vercel looks for the source at once; the worker types wait in its queue. */
+export function submittedText(v: SeedVertical): string {
+  return RUNNER[v] === 'vercel'
+    ? 'Looking for a source. It will appear in the queue when it is found.'
+    : "Queued for the worker. It will appear in the queue when it's made.";
 }
 
 const STORY_PLACEHOLDER = 'In a sentence or two, what is the story?';
@@ -70,7 +78,7 @@ export function OneBoxSeedForm({ vertical, done }: SeedFormProps & { vertical: S
       });
       const out = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(out.error ?? `Request failed (${res.status})`);
-      done('Looking for a source. It will appear in the queue when it is found.');
+      done(submittedText(vertical));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

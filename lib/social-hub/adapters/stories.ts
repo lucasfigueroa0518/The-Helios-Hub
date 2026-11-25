@@ -230,12 +230,12 @@ export function storyPosts(read: StoriesRead): HubPost[] {
   });
 }
 
-/** A Morning Download row from before the news score: score it now, as of its refresh, the way the refresh would have. */
 /** A person typed this one in: a `seed:` key (Morning Download) or payload.seed (Trivia, Real or AI?). */
 function isSeeded(row: StoryPoolRow): boolean {
   return row.key.startsWith('seed:') || row.seed === true;
 }
 
+/** A Morning Download row from before the news score: score it now, as of its refresh, the way the refresh would have. */
 function morningScore(row: StoryPoolRow): { score: number; breakdown: ScoreBreakdown } | null {
   const story = row.story;
   if (row.series !== 'morning_download' || row.breakdown || !story?.headline) return null;

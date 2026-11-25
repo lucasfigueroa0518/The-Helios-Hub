@@ -65,3 +65,57 @@ test('the submit is disabled while the box is empty', async () => {
   assert.match(await html('reels'), /<button type="submit"[^>]*disabled/);
 });
 test('AI Events still has no seed', () => assert.equal(isSeedable('ai_events'), false));
+
+// Final fixes 1: Trivia aims for 50 unused and Real or AI? for 40; their caps never cut seeds, so Seed stays on.
+test('the seed control is enabled for ai_trivia and real_or_ai with 50 open rows', async () => {
+  const { seedPoolFull } = await import('@/lib/content-type/pool-rules');
+  for (const vertical of ['ai_trivia', 'real_or_ai'] as const) {
+    const at = { vertical, poolOpen: 50, hidden: 0, group: vertical, groups: [vertical], openIn: () => 50 };
+    assert.equal(seedPoolFull(at), false, vertical);
+    assert.equal(seedPoolFull({ ...at, group: null }), false, `${vertical}, no series picked`);
+  }
+  // Morning Download and Explainers still switch Seed off at the cap.
+  assert.equal(seedPoolFull({ vertical: 'stories', poolOpen: 30, hidden: 0, group: 'morning_download', groups: ['morning_download'], openIn: () => 30 }), true);
+  assert.equal(seedPoolFull({ vertical: 'explainers', poolOpen: 30, hidden: 0, group: null, groups: [], openIn: () => 0 }), true);
+  assert.equal(seedPoolFull({ vertical: 'explainers', poolOpen: 30, hidden: 1, group: null, groups: [], openIn: () => 0 }), false);
+  assert.equal(seedPoolFull({ vertical: 'reels', poolOpen: 90, hidden: 0, group: null, groups: [], openIn: () => 0 }), false);
+});
+
+// Final fixes 7: the submit toast says who does the work.
+test('the submit toast: a source search on Vercel, the worker queue otherwise', async () => {
+  const { submittedText } = await form();
+  for (const v of ['reels', 'carousels', 'last_few_days', 'stories', 'explainers', 'field_notes'] as const) {
+    assert.equal(submittedText(v), 'Looking for a source. It will appear in the queue when it is found.', v);
+  }
+  for (const v of ['ai_trivia', 'real_or_ai', 'reel_ai_drama'] as const) {
+    assert.equal(submittedText(v), "Queued for the worker. It will appear in the queue when it's made.", v);
+  }
+});
+
+// Final fixes 8 and 9: the worker stages have words, and polling slows while every working card is only queued.
+test('every worker stage has its words; the old ones are kept', async () => {
+  const { STAGE_TEXT, stageText } = await import('@/components/content-type/SeedRequestCards');
+  assert.equal(STAGE_TEXT.claimed, 'Starting…');
+  assert.equal(STAGE_TEXT.writing, 'Writing…');
+  assert.equal(STAGE_TEXT.making, 'Making the images…');
+  assert.equal(stageText({ vertical: 'reel_ai_drama', stage: 'checking' }), 'Checking…');
+  assert.equal(stageText({ vertical: 'real_or_ai', stage: 'making' }), 'Making the images…');
+  assert.equal(stageText({ vertical: 'ai_trivia', stage: 'claimed' }), 'Starting…');
+  // The Vercel source match keeps its words.
+  assert.equal(stageText({ vertical: 'reels', stage: 'checking' }), 'Checking the match…');
+  assert.equal(stageText({ vertical: 'reels', stage: 'nope' }), 'Working…');
+  assert.equal(STAGE_TEXT.queued, 'Starting…');
+  assert.equal(STAGE_TEXT.searching, 'Searching for a source…');
+  assert.equal(STAGE_TEXT.reading, 'Reading the sources…');
+  assert.equal(STAGE_TEXT.filing, 'Adding it to the queue…');
+});
+test('polling: 3 s while a card is working and not queued, 15 s while every working card is queued, none otherwise', async () => {
+  const { pollEveryMs } = await import('@/components/content-type/SeedRequestCards');
+  const card = (status: 'working' | 'failed' | 'done', cancellable: boolean) => ({ id: 'x', vertical: 'ai_trivia', blurb: 'b', status, stage: cancellable ? 'queued' : 'writing', message: null, createdAt: '', cancellable });
+  assert.equal(pollEveryMs([card('working', false)]), 3000);
+  assert.equal(pollEveryMs([card('working', true), card('working', false)]), 3000);
+  assert.equal(pollEveryMs([card('working', true)]), 15000);
+  assert.equal(pollEveryMs([card('working', true), card('failed', false)]), 15000);
+  assert.equal(pollEveryMs([card('done', false)]), null);
+  assert.equal(pollEveryMs([]), null);
+});
