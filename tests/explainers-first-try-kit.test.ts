@@ -167,3 +167,22 @@ test('mount draws the frame through prepareScene when the job kit has scene-fit.
   assert.match(html, /const scene = prepareScene\(frameScene, \{ duration: 9, world: reelWorld \}\);/);
   assert.match(frameHtml('04-analogy', 9, 'room'), /import scene from '\.\/assets\/frames\/04-analogy\.js';/);
 });
+
+test('each composition namespaces its drawn ids, so frame 1 drawing frame 2 cannot steal its clip paths', async () => {
+  const { frameHtml }: any = await import('../explainers/world-kit/mount.mjs');
+  const html = frameHtml('02-define', 5, 'paper', { fit: true, world: true });
+  const src = html.match(/const ns = (\(s\) => .*?);\n/)?.[1];
+  assert.ok(src, 'the mount template namespaces ids');
+  assert.match(html, /world\.innerHTML = svg\(ns\(scene\.draw\(t\)\)\)/);
+  const ns = new Function(`return ${src}`)();
+  const drawn = '<defs><clipPath id="f02-c1"><path d="M0 0"/></clipPath><linearGradient id="f02-l1"/></defs><g clip-path="url(#f02-c1)" data-id="x"><path fill="url(#f02-l1)"/><use href="#f02-l1"/></g>';
+  const out = ns(drawn);
+  assert.match(out, / id="f02_define-f02-c1"/);
+  assert.match(out, /clip-path="url\(#f02_define-f02-c1\)"/);
+  assert.match(out, /fill="url\(#f02_define-f02-l1\)"/);
+  assert.match(out, /href="#f02_define-f02-l1"/);
+  assert.match(out, /data-id="x"/);
+  // frame 1 drawing the same scene gets different ids
+  const opener = frameHtml('01-opener', 1, 'paper', { fit: true, world: true }).match(/const ns = (\(s\) => .*?);\n/)?.[1];
+  assert.notEqual(new Function(`return ${opener}`)()(drawn), out);
+});
