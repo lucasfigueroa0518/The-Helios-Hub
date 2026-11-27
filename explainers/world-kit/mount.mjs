@@ -83,7 +83,11 @@ export function frameHtml(id, duration, ground = 'paper', { fit = false, world =
       const svg = (inner) => '<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>';
       document.getElementById('${key}-ground').innerHTML = svg(underlay('u${key}-', '${ground}'));
       const world = document.getElementById('${key}-world');
-      const draw = (t) => { world.innerHTML = svg(scene.draw(t)); };
+      // Every id this composition draws belongs to it alone. Frame 1 draws frame 2's scene and frame 3
+      // glimpses frame 4, each under that frame's own ids, so one id lived in two compositions and
+      // url(#…) resolved to the hidden copy first in the page: a clipped body vanished, a fill was lost.
+      const ns = (s) => s.replace(/(\\sid=")([^"]+)"/g, '$1${key}-$2"').replace(/url\\(#([^)]+)\\)/g, 'url(#${key}-$1)').replace(/(href=")#([^"]+)"/g, '$1#${key}-$2"');
+      const draw = (t) => { world.innerHTML = svg(ns(scene.draw(t))); };
       const clock = { t: 0 };
       const tl = gsap.timeline({ paused: true });
       tl.fromTo(clock, { t: 0 }, { t: ${duration}, duration: ${duration}, ease: 'none', onUpdate: () => draw(clock.t) }, 0);
