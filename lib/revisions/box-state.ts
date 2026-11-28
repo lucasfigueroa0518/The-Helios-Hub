@@ -5,6 +5,7 @@
  */
 import type { Vertical } from '@/lib/social-hub/types';
 
+import { BOX_HINTS, canChangeText } from './box-hints';
 import { VERTICAL_LABELS } from './labels';
 import type { FixKind, PartRef, RevisionRow, RevisionStatus } from './types';
 
@@ -209,6 +210,9 @@ export type BoxState = {
   canSubmit: boolean;
   /** The text area's prompt, with the type's own name. */
   prompt: string;
+  /** A sample sentence for this type (the placeholder), and what can be changed, in the type's words. */
+  example: string;
+  canChange: string;
   /** One line for screen readers when the state changes. */
   announce: string;
 };
@@ -264,10 +268,10 @@ function currentOf(r: BoxRow, now: Date, byId: ReadonlyMap<string, BoxRow>): Cur
       const hint = r.status === 'requested'
         ? `Waiting to start${ago ? `, asked ${ago}` : ''}. You can close this and come back.`
         : `Started ${ago || 'just now'}. Most changes take a few minutes. You can close this and come back.`;
-      return { kind: 'revising', id: r.id, instruction: r.instruction, queued: r.status === 'requested', hint };
+      return { kind: 'revising', id: r.id, instruction: askedFor(r, byId), queued: r.status === 'requested', hint };
     }
     case 'asking':
-      return { kind: 'asking', id: r.id, instruction: r.instruction, question: r.question?.trim() || 'Can you say a bit more about what to change?', replyTo: r.id };
+      return { kind: 'asking', id: r.id, instruction: askedFor(r, byId), question: r.question?.trim() || 'Can you say a bit more about what to change?', replyTo: r.id };
     case 'applied':
       return { kind: 'applied', id: r.id, summary: `Done: “${askedFor(r, byId)}”${r.part ? ` (${partLabel(r.part)})` : ''}.` };
     case 'blocked':
@@ -299,7 +303,9 @@ export function revisionBoxState(rows: readonly BoxRow[], opts: { vertical: Vert
   const now = opts.now ?? new Date();
   const lock = opts.lock ?? null;
   const prompt = `Describe what’s off in this ${VERTICAL_LABELS[opts.vertical]} post, in your words.`;
-  if (lock) return { lock, current: null, parts: [], polling: false, canSubmit: false, prompt, announce: lock };
+  const example = BOX_HINTS[opts.vertical].example;
+  const canChange = canChangeText(opts.vertical);
+  if (lock) return { lock, current: null, parts: [], polling: false, canSubmit: false, prompt, example, canChange, announce: lock };
 
   const sorted = newestFirst(rows);
   // An answered question is history: its reply row (newer) is what the box shows.
@@ -333,6 +339,8 @@ export function revisionBoxState(rows: readonly BoxRow[], opts: { vertical: Vert
     polling,
     canSubmit: current?.kind !== 'revising' && current?.kind !== 'asking',
     prompt,
+    example,
+    canChange,
     announce: current ? ANNOUNCE[current.kind] : '',
   };
 }

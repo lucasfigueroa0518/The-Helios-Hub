@@ -361,7 +361,7 @@ export function createStoriesDescription(deps: StoriesDeps, vertical: StoryVerti
       color: 'args.backdrop is the frame\'s new background color: one of black, white, orange or green.',
       layout:
         'args.crop is where the frame\'s photo is cropped to: one of top, center, bottom, left or right.',
-      photo: 'No args are needed; args.hint is an optional short description of the photo wanted (for example "Dario Amodei on stage").',
+      photo: 'No args are needed. args.hint is optional: name the subject or scene the person wants in a few words (for example "Dario Amodei on stage"); leave it out when they only asked for a different photo. Never write a sentence about the change as the hint.',
     },
 
     async load(q, refs) {

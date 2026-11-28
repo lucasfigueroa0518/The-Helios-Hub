@@ -356,3 +356,11 @@ test('a row swept after a worker restart shows as failed with its note, and the 
   assert.equal(swept.canSubmit, true);
   assert.equal(swept.polling, false);
 });
+
+test('after an answer, the running panel quotes the original sentence, not the one-word reply', () => {
+  const ask = row({ id: 'a', status: 'asking', instruction: 'make it better', question: 'Which part?', createdAt: new Date(NOW.getTime() - 120_000).toISOString() });
+  const reply = row({ id: 'b', status: 'running', instruction: 'Orange', parentId: 'a', startedAt: new Date(NOW.getTime() - 20_000).toISOString(), createdAt: new Date(NOW.getTime() - 60_000).toISOString() });
+  const s = box([ask, reply]);
+  assert.equal(s.current?.kind, 'revising');
+  assert.equal(s.current!.kind === 'revising' ? s.current.instruction : '', 'make it better');
+});
